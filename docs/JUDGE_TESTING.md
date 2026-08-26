@@ -5,8 +5,8 @@ FlyLab is public, requires no account, and exposes exactly eight imperative WebM
 - Live application: <https://flylab-neuroethology.d-lougen.chatgpt.site/>
 - Public source: <https://github.com/DJLougen/flylab>
 - Challenge-period source proof: [first public commit, August 26, 2026](https://github.com/DJLougen/flylab/commit/a45eb82ad29d62a1bf7afc0aff89f71a70384db9)
-- Release commit: [`2228833e0c10f9985ca5916dc47b01a4de2cf169`](https://github.com/DJLougen/flylab/commit/2228833e0c10f9985ca5916dc47b01a4de2cf169)
-- Release verification: [successful public CI run with 58 automated tests](https://github.com/DJLougen/flylab/actions/runs/33015936229)
+- Deployed application release: [`104846997773c6905ed4c6da26fea67e0676c148`](https://github.com/DJLougen/flylab/commit/104846997773c6905ed4c6da26fea67e0676c148)
+- Release verification: [successful public CI run with 59 automated tests](https://github.com/DJLougen/flylab/actions/runs/33017176540)
 
 The complete path takes about three minutes. It intentionally pauses once at a visible approval control that is absent from the WebMCP tool surface.
 
