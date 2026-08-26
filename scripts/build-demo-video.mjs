@@ -86,6 +86,49 @@ function narrationAudioPath(index) {
   return join(narrationDirectory, `${String(index).padStart(2, '0')}.wav`);
 }
 
+const narrationPlan = segments.map((segment, index) => ({
+  segment: index + 1,
+  audio_file: basename(narrationAudioPath(index)),
+  frame: segment.frame,
+  narration: segment.narration,
+  word_count: segment.narration.trim().split(/\s+/).length,
+}));
+
+if (process.argv.includes('--print-plan')) {
+  console.log(JSON.stringify({
+    schema_version: 'flylab.demo-narration-plan.v1',
+    segment_count: narrationPlan.length,
+    segments: narrationPlan,
+  }, null, 2));
+  process.exit(0);
+}
+
+if (process.argv.includes('--check')) {
+  const missingFrames = segments
+    .map((segment) => segment.frame)
+    .filter((frame) => !existsSync(join(framesDirectory, frame)));
+  const missingNarration = narrationPlan
+    .map((segment) => segment.audio_file)
+    .filter((file) => !existsSync(join(narrationDirectory, file)));
+  const uiApproved = process.env.FLYLAB_UI_APPROVED === '1';
+  const readyToBuild = uiApproved
+    && narrationRightsConfirmed
+    && missingFrames.length === 0
+    && missingNarration.length === 0;
+
+  console.log(JSON.stringify({
+    schema_version: 'flylab.demo-preflight.v1',
+    ready_to_build: readyToBuild,
+    ui_approved: uiApproved,
+    narration_rights_confirmed: narrationRightsConfirmed,
+    required_frame_count: segments.length,
+    missing_frames: missingFrames,
+    required_narration_count: narrationPlan.length,
+    missing_narration: missingNarration,
+  }, null, 2));
+  process.exit(readyToBuild ? 0 : 2);
+}
+
 function run(command, args, { capture = false } = {}) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(command, args, { stdio: capture ? ['ignore', 'pipe', 'pipe'] : ['ignore', 'ignore', 'pipe'] });

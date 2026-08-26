@@ -61,6 +61,22 @@ Use the entrant's own recording or a voice service whose terms expressly permit 
 
 The spoken script is the `narration` field for each segment in `scripts/build-demo-video.mjs`. Record one clip per segment without reading stage directions. The builder adds a short pause, derives caption timing from the actual clip duration, and normalizes the combined track to the validated loudness range.
 
+Print the numbered clip plan without producing any media:
+
+```bash
+npm run demo:narration-plan
+```
+
+Check every UI, frame, narration, and rights gate without producing any media:
+
+```bash
+FLYLAB_UI_APPROVED=1 \
+FLYLAB_NARRATION_RIGHTS_CONFIRMED=1 \
+npm run demo:preflight
+```
+
+Until approval and all sources exist, the preflight exits nonzero and prints the exact missing frame and narration filenames as `flylab.demo-preflight.v1` JSON.
+
 Build only after confirming the rights of every clip:
 
 ```bash

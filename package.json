@@ -11,6 +11,8 @@
     "build": "npm run licenses:check && vinext build && npm run licenses:check-build",
     "start": "vinext start",
     "assets:brain": "node scripts/build-banc-morphology.mjs",
+    "demo:narration-plan": "node scripts/build-demo-video.mjs --print-plan",
+    "demo:preflight": "node scripts/build-demo-video.mjs --check",
     "demo:video": "node scripts/build-demo-video.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "licenses:generate": "node scripts/generate-third-party-notices.mjs",
