@@ -121,7 +121,7 @@ The five labels are `measured`, `derived`, `connectome_inferred`, `simulation_pr
 - [Sen et al., *Current Biology* (2017)](https://doi.org/10.1016/j.cub.2017.02.008) — acute and stochastic adult MDN activation assays; Elsevier copyright.
 - [Feng et al., *Nature Communications* (2020)](https://doi.org/10.1038/s41467-020-19936-x) — MDN-induced backward-walking motor circuits; CC BY 4.0.
 - [Cande et al., *eLife* (2018)](https://doi.org/10.7554/eLife.34275) — broad descending-neuron screen; CC BY 4.0. The [Dryad version 1 dataset](https://doi.org/10.5061/dryad.fr89c0c) is CC0-1.0.
-- [Bates et al., *Nature* (2026)](https://doi.org/10.1038/s41586-026-10735-w) — BANC article context. The pinned [Dataverse version 3.0 / `banc_888` snapshot](https://doi.org/10.7910/DVN/7WTH1N) is CC BY 4.0.
+- [Bates et al., *Nature* (2026)](https://doi.org/10.1038/s41586-026-10735-w) — BANC article context. The pinned [Dataverse version 3.0 / `banc_888` snapshot](https://doi.org/10.7910/DVN/7WTH1N) is CC BY 4.0. FlyLab uses two unrestricted Feather inputs; the broader deposit has mixed file-level access.
 - [FlyEM MANC `manc:v1.2.1`](https://www.janelia.org/project-team/flyem/manc-connectome) — cross-dataset reference to a separate adult male specimen; CC BY 4.0.
 - [Wang-Chen et al., *Nature Methods* (2024)](https://doi.org/10.1038/s41592-024-02497-y) — NeuroMechFly v2/FlyGym reference. The pinned [FlyGym v2.1.0 release](https://github.com/NeLy-EPFL/flygym/releases/tag/v2.1.0) is Apache-2.0 and is not executed by this release.
 
@@ -152,7 +152,7 @@ See [DEMO.md](DEMO.md) for the generated 12-frame narration and cue sheet, and [
 - [x] Run `npm test`, `npm run lint`, and `npm run build` against the submitted commit.
 - [x] Confirm the workflow stops at human approval before the visible person-only approval click.
 - [x] Confirm live that editing a protocol clears approval, playback, analyses, and the follow-up proposal.
-- [ ] Confirm cancellation does not create a completed batch.
+- [x] Confirm cancellation does not create a completed batch through both live WebMCP protocol cancellation and the visible human cancel control.
 - [x] Confirm the result and evidence badges remain visible in the recording.
 - [x] Confirm the follow-up proposal is not executed.
 - [x] Confirm the saved bundle displays an ID and manifest hash.

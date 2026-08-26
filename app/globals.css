@@ -1308,6 +1308,30 @@ dd {
 .evidence-detail > a strong { color: var(--teal); font-size: 0.71rem; }
 .evidence-detail > a span { color: var(--muted-2); font-size: 0.65rem; line-height: 1.35; }
 .evidence-detail > a small { color: var(--muted); font-size: 0.58rem; }
+.evidence-modal-grid > nav .bundle-record { margin-top: 9px; border-color: rgba(110, 231, 210, 0.2); background: rgba(110, 231, 210, 0.035); }
+.bundle-boundary { margin-top: 10px; color: var(--muted-2); font-size: 0.72rem; line-height: 1.55; }
+.bundle-detail code { color: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.64rem; overflow-wrap: anywhere; }
+.evidence-download { margin-top: 22px; padding-top: 1px; border-top: 1px solid var(--line); }
+.evidence-download > p { color: var(--muted-2); font-size: 0.68rem; line-height: 1.55; }
+.evidence-download button {
+  width: 100%;
+  min-height: 58px;
+  margin-top: 13px;
+  padding: 11px 13px;
+  display: grid;
+  gap: 5px;
+  border: 1px solid rgba(110, 231, 210, 0.34);
+  border-radius: 8px;
+  background: rgba(110, 231, 210, 0.08);
+  color: var(--teal);
+  cursor: pointer;
+  text-align: left;
+}
+.evidence-download button:hover { border-color: rgba(110, 231, 210, 0.6); background: rgba(110, 231, 210, 0.12); }
+.evidence-download button:disabled { cursor: not-allowed; opacity: 0.45; }
+.evidence-download button strong { font-size: 0.72rem; }
+.evidence-download button small { color: var(--muted-2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.57rem; overflow-wrap: anywhere; }
+.evidence-download .integrity-note { margin-top: 11px; color: var(--muted); font-size: 0.61rem; }
 
 @keyframes pulse {
   50% { opacity: 0.35; transform: scale(0.78); }

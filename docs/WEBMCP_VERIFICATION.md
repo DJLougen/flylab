@@ -10,7 +10,9 @@ Run:
 npm test
 ```
 
-The WebMCP test suite supplies a compatible `modelContext`, verifies that exactly seven tools register, checks their closed schemas and current annotations, invokes a registered tool through its shared handler, and confirms that aborting the registration signal disposes all tools.
+The WebMCP test suite supplies a compatible `modelContext`, verifies that exactly seven tools register, checks their closed schemas and current annotations, invokes a registered tool through its shared handler, and confirms that aborting the registration signal disposes all tools. It also proves that a pre-cancelled invocation never starts its action.
+
+The cancellation regression test exercises the same prepare/check/commit helper used by `run_fly_simulation`. It waits until preparation has started, aborts the invocation, then releases the prepared batch. The promise rejects with `AbortError`, the commit callback is called zero times, and the completed-batch state remains `null`. A companion success case proves that an active invocation commits exactly once.
 
 These checks prove the registration code and tool contracts. They do not prove that a particular browser account has received the WebMCP rollout.
 
@@ -24,9 +26,20 @@ npm run verify:webmcp
 
 The command creates an isolated temporary Chrome profile, enables Chrome's official `WebMCPTesting` feature for that process, loads the public deployment, and checks that the real page exposes `document.modelContext.registerTool`, is origin-keyed, and reaches **7 tools live**. It then uses Chrome's WebMCP debugging protocol to enumerate the exact seven tool names and complete a live `find_fly_circuits` invocation. It closes the isolated browser and removes the temporary profile afterward. Set `CHROME_BIN` to override the Chrome executable or `FLYLAB_URL` to check another deployment.
 
-For an end-to-end verification of all seven tools and the approval boundary, run `FLYLAB_VERIFY_WORKFLOW=1 npm run verify:webmcp`. The isolated test first confirms that simulation is blocked with `APPROVAL_REQUIRED`, clicks the visible human-only approval control through the DOM, then runs, analyzes, compares, and saves a complete evidence bundle. After recording the bundle, it edits the visible protocol and verifies that approval, playback, analysis results, condition status, and the follow-up proposal are invalidated.
+For an end-to-end verification of all seven tools and the approval boundary, run `FLYLAB_VERIFY_WORKFLOW=1 npm run verify:webmcp`. The isolated test first confirms that simulation is blocked with `APPROVAL_REQUIRED` and clicks the visible human-only approval control through the DOM. Before the successful run, it exercises two post-start cancellation paths:
 
-Set `FLYLAB_CAPTURE_DIR` alongside the workflow flag to save ordered public-site captures, including bilateral and left-only Three.js circuit states plus the final protocol-edit invalidation state.
+1. It invokes `run_fly_simulation`, waits until the visible activity is **Simulation batch running**, calls Chrome's `WebMCP.cancelInvocation`, requires protocol status `Canceled`, and verifies that the primary action returns to **Run MDN-inspired drive**, playback remains disabled, all five conditions remain `approved`, and no results panel or completed batch appears.
+2. It starts another run, waits for the same visible running state, clicks **Cancel running simulation**, requires a non-completed invocation response, and verifies the same no-batch state.
+
+The test then runs, analyzes, compares, and saves a complete evidence bundle. After recording the bundle, it edits the visible protocol and verifies that approval, playback, analysis results, condition status, and the follow-up proposal are invalidated.
+
+Set `FLYLAB_CAPTURE_DIR` alongside the workflow flag to save ordered public-site captures, including bilateral and left-only Three.js circuit states plus the final protocol-edit invalidation state. Cancellation captures are excluded from that canonical sequence; opt into the two extra negative-state captures with `FLYLAB_CAPTURE_CANCELLATION=1`.
+
+## Cancellation architecture and Chrome 151 compatibility
+
+Registration lifetime and invocation lifetime are separate. The signal passed to `registerTool(..., { signal })` owns tool registration. A running simulation instead combines the invocation signal with a page-owned controller using `AbortSignal.any(...)`. The visible cancel button and browser cancellation compatibility path abort that page-owned controller. Simulation work is prepared without publishing it, the combined signal is checked, and the batch is then committed synchronously. Because JavaScript does not yield between that final check and the synchronous commit, a cancellation observed before the boundary cannot publish a completed batch.
+
+The current WebMCP draft and [Chrome imperative API guide](https://developer.chrome.com/docs/ai/webmcp/imperative-api) describe an invocation `AbortSignal` in the execute callback's second argument. Chrome 151's checked implementation predates that path for browser-driven calls: it invokes the JavaScript tool with the input alone and dispatches a synchronous `toolcancel` event from `CancelTool`. FlyLab conservatively handles `toolcancel` only when its `toolName` is `run_fly_simulation`, also listens for the draft's future `toolcanceled` spelling, and removes both listeners on unmount. The Chrome 151 fallback defers its page-owned abort by one browser task so Chrome can finish removing its pending invocation without re-entrant promise settlement changing the protocol response. Both the fallback and future native execution signal feed the same tested commit boundary. See the [Chrome 151 ModelContext implementation](https://chromium.googlesource.com/chromium/src/+/refs/branch-heads/7922/third_party/blink/renderer/core/script_tools/model_context.cc) and [DevTools WebMCP protocol](https://chromedevtools.github.io/devtools-protocol/tot/WebMCP/).
 
 ## Live discovery check
 

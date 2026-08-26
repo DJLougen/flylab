@@ -97,9 +97,9 @@ replicate_seed = base_seed + c × 1009 + r × 37
 
 The same normalized experiment inputs produce the same experiment ID. The same experiment and seed produce identical run IDs, trajectories, replicate summaries, batch ID, and run hash. Changing the seed changes the generated runs. This contract is covered by deterministic local tests.
 
-IDs and run hashes use a stable FNV-1a-derived identifier. Evidence payloads use SHA-256 when Web Crypto is available, with a labeled FNV-1a fallback otherwise. The evidence bundle stores the full payload in browser local storage on a best-effort basis and displays the bundle ID and manifest hash.
+IDs and run hashes use a stable FNV-1a-derived identifier. Evidence payloads use SHA-256 when Web Crypto is available, with a labeled FNV-1a fallback otherwise. Saving prepares a downloadable `flylab.evidence-export` schema-version-`1` JSON envelope and attempts to store the same envelope in browser local storage on a best-effort basis. The envelope contains bundle metadata, the complete payload, and the existing payload manifest hash; it does not introduce a second hash.
 
-The saved payload includes source records, evidence records, hypothesis, experiment, simulation batch, analyses, comparison, dataset manifest, model manifest, seeds, and assumptions. A timestamp records when the bundle was saved; it is not part of the scientific result.
+The saved payload includes source records, evidence records, hypothesis, experiment, simulation batch, analyses, comparison, dataset manifest, model manifest, seeds, and assumptions. A timestamp records when the bundle was saved; it is not part of the scientific result. The manifest hash covers `JSON.stringify(payload)` in its saved property order. It is useful for detecting payload changes, but it is not a digital signature, proof of authorship, or guarantee of immutability.
 
 ## Controls and metrics
 
@@ -153,7 +153,7 @@ Each claim remains scoped to the cited assay. Sufficiency under one protocol doe
 
 ### Structural connectome context
 
-[Bates et al., *Nature* (2026)](https://doi.org/10.1038/s41586-026-10735-w) is the primary article pointer for BANC. FlyLab pins the [BANC static dataset, Dataverse version 3.0 / snapshot `banc_888`](https://doi.org/10.7910/DVN/7WTH1N), licensed CC BY 4.0, and retains the two source-file identifiers plus MD5 and SHA-256 checksums. The bundled slice contains four proofread MDN rows, two LBL40 rows, and four selected directed MDN→LBL40 edge rows totaling 153 putative contacts.
+[Bates et al., *Nature* (2026)](https://doi.org/10.1038/s41586-026-10735-w) is the primary article pointer for BANC. FlyLab pins the [BANC static dataset, Dataverse version 3.0 / snapshot `banc_888`](https://doi.org/10.7910/DVN/7WTH1N), licensed CC BY 4.0, and retains the two source-file identifiers plus MD5 and SHA-256 checksums. Those two cited Feather inputs are unrestricted; the broader deposit has mixed file-level access. The bundled slice contains four proofread MDN rows, two LBL40 rows, and four selected directed MDN→LBL40 edge rows totaling 153 putative contacts.
 
 These are factual records from one adult female specimen, not a population estimate. FlyLab does not execute BANC neurons or interpret contact counts as physiological weights, connection probabilities, activity, or causal efficacy. The reconstruction is incomplete, and the stored `norm` field is preserved without a biological interpretation.
 

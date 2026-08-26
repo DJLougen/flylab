@@ -4,6 +4,7 @@ import { afterEach, describe, test } from 'node:test';
 import {
   flyLabToolContracts,
   installFlyLabWebMCP,
+  prepareCancellableCommit,
   type FlyLabToolAction,
 } from '../lib/webmcp.js';
 
@@ -141,6 +142,16 @@ describe('FlyLab WebMCP registration lifecycle', () => {
     assert.equal(result.structuredContent?.tool, 'find_fly_circuits');
     assert.equal(result.structuredContent?.summary, 'ok');
 
+    let cancelledActionCalls = 0;
+    actions.find_fly_circuits = async () => {
+      cancelledActionCalls += 1;
+      return {
+        summary: 'should not run',
+        data: {},
+        provenance: ['derived'],
+        stateRevision: 2,
+      };
+    };
     const callController = new AbortController();
     callController.abort();
     await assert.rejects(
@@ -150,6 +161,7 @@ describe('FlyLab WebMCP registration lifecycle', () => {
       ),
       { name: 'AbortError' },
     );
+    assert.equal(cancelledActionCalls, 0, 'a pre-cancelled invocation must not start its action');
 
     installation.dispose();
 
@@ -191,5 +203,55 @@ describe('FlyLab WebMCP registration lifecycle', () => {
     assert.equal(registrationSignals.length, 3);
     assert.equal(new Set(registrationSignals).size, 1);
     assert.ok(registrationSignals.every((signal) => signal.aborted));
+  });
+});
+
+describe('FlyLab cancellable commit boundary', () => {
+  test('cancellation after preparation starts prevents a completed batch commit', async () => {
+    const controller = new AbortController();
+    let completedBatch: { id: string } | null = null;
+    let commitCalls = 0;
+    let preparationStarted!: () => void;
+    let finishPreparation!: (batch: { id: string }) => void;
+    const started = new Promise<void>((resolve) => { preparationStarted = resolve; });
+    const prepared = new Promise<{ id: string }>((resolve) => { finishPreparation = resolve; });
+
+    const execution = prepareCancellableCommit({
+      signal: controller.signal,
+      prepare: async () => {
+        preparationStarted();
+        return prepared;
+      },
+      commit: (batch) => {
+        commitCalls += 1;
+        completedBatch = batch;
+        return batch;
+      },
+    });
+
+    await started;
+    controller.abort(new DOMException('Agent cancelled the running simulation', 'AbortError'));
+    finishPreparation({ id: 'batch_must_not_commit' });
+
+    await assert.rejects(execution, { name: 'AbortError' });
+    assert.equal(commitCalls, 0);
+    assert.equal(completedBatch, null);
+  });
+
+  test('commits a prepared result exactly once when the invocation remains active', async () => {
+    const controller = new AbortController();
+    let commitCalls = 0;
+
+    const result = await prepareCancellableCommit({
+      signal: controller.signal,
+      prepare: async () => ({ id: 'batch_complete' }),
+      commit: (batch) => {
+        commitCalls += 1;
+        return batch;
+      },
+    });
+
+    assert.deepEqual(result, { id: 'batch_complete' });
+    assert.equal(commitCalls, 1);
   });
 });

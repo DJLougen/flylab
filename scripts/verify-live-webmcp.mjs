@@ -128,7 +128,8 @@ async function readRuntimeStatus() {
     registerToolType: typeof document.modelContext?.registerTool,
     status: document.querySelector('.tool-status')?.textContent?.trim() ?? null,
     originAgentCluster: window.originAgentCluster === true,
-    location: window.location.href
+    location: window.location.href,
+    userAgent: navigator.userAgent
   })`;
   const response = await sendCommand('Runtime.evaluate', {
     expression,
@@ -261,18 +262,122 @@ async function verifyProtocolEditInvalidation() {
   return true;
 }
 
-async function invokeRegisteredTool(tools, toolName, input) {
+async function beginRegisteredToolInvocation(tools, toolName, input) {
   const tool = tools.find((candidate) => candidate.name === toolName);
   if (!tool?.frameId) throw new Error(`Chrome did not return a frame for ${toolName}.`);
-  const invocation = await sendCommand('WebMCP.invokeTool', {
+  return sendCommand('WebMCP.invokeTool', {
     frameId: tool.frameId,
     toolName,
     input,
   });
+}
+
+async function invokeRegisteredTool(tools, toolName, input) {
+  const invocation = await beginRegisteredToolInvocation(tools, toolName, input);
   return waitForEvent(
     'WebMCP.toolResponded',
     (event) => event.invocationId === invocation.invocationId,
   );
+}
+
+async function readSimulationCancellationState() {
+  const response = await sendCommand('Runtime.evaluate', {
+    expression: `JSON.stringify({
+      activity: document.querySelector('.activity-row strong')?.textContent?.trim() ?? null,
+      primaryAction: document.querySelector('.primary-action')?.textContent?.trim() ?? null,
+      resultPanelPresent: Boolean(document.querySelector('.results-panel')),
+      playbackDisabled: document.querySelector('button.play-button')?.disabled ?? null,
+      conditionStates: [...document.querySelectorAll('.condition-tabs small')].map((node) => node.textContent?.trim() ?? null),
+    })`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  const value = response?.result?.value;
+  return typeof value === 'string' ? JSON.parse(value) : null;
+}
+
+async function waitForSimulationToStart() {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const state = await readSimulationCancellationState();
+    if (state?.activity === 'Simulation batch running') return state;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error('The simulation action did not visibly enter its running phase.');
+}
+
+async function waitForSimulationCancellationToSettle() {
+  let state = null;
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    state = await readSimulationCancellationState();
+    if (state?.activity === 'Simulation cancelled' || state?.activity === 'Simulation batch complete') {
+      return state;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  return state;
+}
+
+function hasNoCompletedSimulationBatch(state) {
+  return state?.activity === 'Simulation cancelled'
+    && state?.primaryAction?.includes('Run MDN-inspired drive')
+    && state?.resultPanelPresent === false
+    && state?.playbackDisabled === true
+    && state?.conditionStates?.length === 5
+    && state.conditionStates.every((condition) => condition === 'approved');
+}
+
+async function verifyHumanRunningSimulationCancellation(tools, experimentId) {
+  const invocation = await beginRegisteredToolInvocation(tools, 'run_fly_simulation', {
+    experiment_id: experimentId,
+  });
+  await waitForSimulationToStart();
+
+  const responsePending = waitForEvent(
+    'WebMCP.toolResponded',
+    (event) => event.invocationId === invocation.invocationId,
+  );
+  await clickButton({ text: 'Cancel running simulation' });
+  const response = await responsePending;
+  const state = await waitForSimulationCancellationToSettle();
+  if (response.status === 'Completed' || !hasNoCompletedSimulationBatch(state)) {
+    throw new Error(`Human cancellation committed a completed simulation batch: ${JSON.stringify({ response, state })}`);
+  }
+  if (process.env.FLYLAB_CAPTURE_CANCELLATION === '1') {
+    await captureStage('human-cancelled-running-simulation-without-batch');
+  }
+  return {
+    invocation_status: response.status,
+    cancellation_phase: 'after_tool_invoked_and_running_before_commit',
+    completed_batch_committed: false,
+    control: 'visible Cancel running simulation button',
+  };
+}
+
+async function verifyRunningSimulationCancellation(tools, experimentId) {
+  const invocation = await beginRegisteredToolInvocation(tools, 'run_fly_simulation', {
+    experiment_id: experimentId,
+  });
+  await waitForSimulationToStart();
+  const responsePending = waitForEvent(
+    'WebMCP.toolResponded',
+    (event) => event.invocationId === invocation.invocationId,
+  );
+  await sendCommand('WebMCP.cancelInvocation', { invocationId: invocation.invocationId });
+  const response = await responsePending;
+  const state = await waitForSimulationCancellationToSettle();
+  if (response.status !== 'Canceled' || !hasNoCompletedSimulationBatch(state)) {
+    throw new Error(`Cancellation committed a completed simulation batch: ${JSON.stringify({ response, state })}`);
+  }
+  if (process.env.FLYLAB_CAPTURE_CANCELLATION === '1') {
+    await captureStage('webmcp-cancelled-running-simulation-without-batch');
+  }
+  return {
+    invocation_status: response.status,
+    cancellation_phase: 'after_tool_invoked_and_running_before_commit',
+    completed_batch_committed: false,
+    primary_action_after_cancel: state.primaryAction,
+    condition_states_after_cancel: state.conditionStates,
+  };
 }
 
 function decodedOutput(response) {
@@ -352,6 +457,9 @@ async function runFullWorkflow(tools, discoveryResponse) {
   }
   await captureStage('human-approved');
 
+  const webmcpCancellation = await verifyRunningSimulationCancellation(tools, experimentId);
+  const humanCancellation = await verifyHumanRunningSimulationCancellation(tools, experimentId);
+
   const runResponse = await invokeRegisteredTool(tools, 'run_fly_simulation', {
     experiment_id: experimentId,
   });
@@ -421,6 +529,16 @@ async function runFullWorkflow(tools, discoveryResponse) {
       'save_fly_evidence',
     ],
     preapproval_error: lockEnvelope.error.code,
+    cancellation: {
+      commit_boundary: 'prepare -> combined AbortSignal check -> synchronous state commit',
+      abort_sources: [
+        'execute callback AbortSignal',
+        'Chrome 151 toolcancel compatibility event',
+        'visible human cancel control',
+      ],
+      human_control: humanCancellation,
+      webmcp_protocol: webmcpCancellation,
+    },
     experiment_id: experimentId,
     batch_id: run.data.id,
     analysis_id: analysis.data.analysis.id,
@@ -499,6 +617,7 @@ try {
     invoked_tool: 'find_fly_circuits',
     invocation_status: response.status,
     origin_agent_cluster: true,
+    browser_user_agent: status.userAgent,
   };
   if (process.env.FLYLAB_VERIFY_VERBOSE === '1') {
     report.invocation_output = response.output;

@@ -37,6 +37,33 @@ export type FlyLabToolAction = (
   context: { signal: AbortSignal },
 ) => Promise<ToolActionResult>;
 
+function throwIfCancelled(signal: AbortSignal) {
+  if (signal.aborted) {
+    throw signal.reason ?? new DOMException('Tool cancelled', 'AbortError');
+  }
+}
+
+/**
+ * Prepares work without publishing it, then performs one synchronous commit.
+ *
+ * JavaScript runs the abort check and synchronous commit without yielding, so an
+ * invocation cancelled before this boundary cannot publish its prepared result.
+ */
+export async function prepareCancellableCommit<TPrepared, TCommitted>({
+  signal,
+  prepare,
+  commit,
+}: {
+  signal: AbortSignal;
+  prepare: (signal: AbortSignal) => TPrepared | Promise<TPrepared>;
+  commit: (prepared: TPrepared) => TCommitted;
+}): Promise<TCommitted> {
+  throwIfCancelled(signal);
+  const prepared = await prepare(signal);
+  throwIfCancelled(signal);
+  return commit(prepared);
+}
+
 const provenanceEnum = [
   'measured',
   'derived',
@@ -326,14 +353,16 @@ export async function installFlyLabWebMCP(actions: Record<string, FlyLabToolActi
           execute: async (rawInput: unknown, context?: { signal?: AbortSignal }) => {
             const signal = context?.signal ?? new AbortController().signal;
             try {
+              throwIfCancelled(signal);
               const input = validateToolInput(contract.name, rawInput);
               const action = actions[contract.name];
               if (!action) throw new FlyLabDomainError('SIMULATION_UNAVAILABLE', `${contract.name} is not connected.`);
               const result = await action(input, { signal });
-              if (signal.aborted) throw signal.reason ?? new DOMException('Tool cancelled', 'AbortError');
+              throwIfCancelled(signal);
               return toolSuccess(contract.name, result);
             } catch (error) {
-              if (signal.aborted) throw signal.reason ?? new DOMException('Tool cancelled', 'AbortError');
+              throwIfCancelled(signal);
+              if (error instanceof Error && error.name === 'AbortError') throw error;
               if (error instanceof FlyLabDomainError) return toolFailure(contract.name, error);
               console.error(`FlyLab tool failed: ${contract.name}`, error);
               throw new Error(`${contract.name} could not complete`);

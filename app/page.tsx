@@ -30,8 +30,17 @@ import {
 import {
   FlyLabDomainError,
   installFlyLabWebMCP,
+  prepareCancellableCommit,
   type FlyLabToolAction,
 } from '@/lib/webmcp';
+import {
+  EVIDENCE_EXPORT_MEDIA_TYPE,
+  createEvidenceExportEnvelope,
+  evidenceExportFilename,
+  serializeEvidenceExport,
+  type EvidenceBundleMetadata,
+  type EvidenceExportEnvelope,
+} from '@/lib/evidence-export';
 
 type Stage = 'discover' | 'hypothesize' | 'design' | 'run' | 'analyze' | 'continue' | 'saved';
 
@@ -44,16 +53,6 @@ interface ActivityItem {
   status: 'complete' | 'running' | 'waiting';
 }
 
-interface EvidenceBundle {
-  id: string;
-  title: string;
-  manifestHash: string;
-  savedAt: string;
-  includedIds: string[];
-  provenanceCounts: Record<ProvenanceLabel, number>;
-  boundary: string;
-}
-
 interface LabState {
   revision: number;
   stage: Stage;
@@ -64,7 +63,8 @@ interface LabState {
   batch: SimulationBatch | null;
   analyses: Analysis[];
   comparison: Comparison | null;
-  bundle: EvidenceBundle | null;
+  bundle: EvidenceBundleMetadata | null;
+  evidenceExport: EvidenceExportEnvelope | null;
   activity: ActivityItem[];
 }
 
@@ -79,6 +79,7 @@ const initialState: LabState = {
   analyses: [],
   comparison: null,
   bundle: null,
+  evidenceExport: null,
   activity: [
     {
       id: 'activity_ready',
@@ -147,6 +148,8 @@ export default function Home() {
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [selectedEvidenceId, setSelectedEvidenceId] = useState(EVIDENCE[0].id);
   const [autoBudget, setAutoBudget] = useState(2);
+  const [simulationRunning, setSimulationRunning] = useState(false);
+  const activeSimulationControllerRef = useRef<AbortController | null>(null);
 
   const commit = useCallback((producer: (current: LabState) => LabState) => {
     const next = producer(labRef.current);
@@ -269,6 +272,7 @@ export default function Home() {
         analyses: [],
         comparison: null,
         bundle: null,
+        evidenceExport: null,
       }, {
         title: 'Controlled trial designed',
         detail: `${experiment.conditions.length} arms · ${experiment.replicates} replicates each · awaiting human approval.`,
@@ -305,6 +309,14 @@ export default function Home() {
         ? { ...current.experiment, conditions: current.experiment.conditions.filter((condition) => requestedConditionIds.includes(condition.id)) }
         : current.experiment;
       if (!experiment.conditions.length) throw new FlyLabDomainError('NOT_FOUND', 'No requested condition IDs belong to this experiment.');
+      if (activeSimulationControllerRef.current) {
+        throw new FlyLabDomainError('SIMULATION_UNAVAILABLE', 'A FlyLab simulation batch is already running.', true);
+      }
+
+      const runController = new AbortController();
+      activeSimulationControllerRef.current = runController;
+      const runSignal = AbortSignal.any([signal, runController.signal]);
+      setSimulationRunning(true);
 
       commit((state) => pushActivity({ ...state, stage: 'run' }, {
         title: 'Simulation batch running',
@@ -312,9 +324,25 @@ export default function Home() {
         status: 'running',
       }));
       setNotice('Running the seeded FlyLab model. All resulting claims remain simulation predictions.');
+      let completed: { batch: SimulationBatch; stateRevision: number };
       try {
-        await waitFor(650, signal);
+        completed = await prepareCancellableCommit({
+          signal: runSignal,
+          prepare: async (runSignal) => {
+            await waitFor(650, runSignal);
+            return simulateExperiment(experiment);
+          },
+          commit: (batch) => {
+            const next = commit((state) => pushActivity({ ...state, stage: 'analyze', batch }, {
+              title: 'Simulation batch complete',
+              detail: `${batch.conditionRuns.reduce((count, run) => count + run.replicates.length, 0)} runs · ${batch.runHash}`,
+              status: 'complete',
+            }));
+            return { batch, stateRevision: next.revision };
+          },
+        });
       } catch (error) {
+        if (!runSignal.aborted) throw error;
         commit((state) => pushActivity({ ...state, stage: 'run' }, {
           title: 'Simulation cancelled',
           detail: 'No completed batch or result record was committed.',
@@ -322,13 +350,13 @@ export default function Home() {
         }));
         setNotice('Simulation cancelled. No results were committed.');
         throw error;
+      } finally {
+        if (activeSimulationControllerRef.current === runController) {
+          activeSimulationControllerRef.current = null;
+          setSimulationRunning(false);
+        }
       }
-      const batch = simulateExperiment(experiment);
-      const next = commit((state) => pushActivity({ ...state, stage: 'analyze', batch }, {
-        title: 'Simulation batch complete',
-        detail: `${batch.conditionRuns.reduce((count, run) => count + run.replicates.length, 0)} runs · ${batch.runHash}`,
-        status: 'complete',
-      }));
+      const { batch, stateRevision } = completed;
       setPlayhead(0);
       setPlaying(true);
       setNotice('Simulation complete. Inspect the replay, then quantify the behavior.');
@@ -336,7 +364,7 @@ export default function Home() {
         summary: 'Completed the approved deterministic simulation batch.',
         data: { ...batch, boundary: MODEL_MANIFEST.boundary, next_actions: ['analyze_fly_behavior'] },
         provenance: ['simulation_predicted'],
-        stateRevision: next.revision,
+        stateRevision,
       };
     },
 
@@ -436,7 +464,7 @@ export default function Home() {
       provenanceCounts.derived += 1;
       provenanceCounts.simulation_predicted += 1;
       provenanceCounts.agent_hypothesized += 1;
-      const bundle: EvidenceBundle = {
+      const bundle: EvidenceBundleMetadata = {
         id: `evidence_${stableHash({ manifestHash, title: payload.title })}`,
         title: payload.title,
         manifestHash,
@@ -445,16 +473,19 @@ export default function Home() {
         provenanceCounts,
         boundary: 'Simulation evidence bundle; not a new biological experiment.',
       };
-      try { localStorage.setItem(`flylab:${bundle.id}`, JSON.stringify({ bundle, payload })); } catch { /* local persistence is best effort */ }
-      const next = commit((state) => pushActivity({ ...state, stage: 'saved', bundle }, {
+      const evidenceExport = createEvidenceExportEnvelope(bundle, payload);
+      const serializedExport = serializeEvidenceExport(evidenceExport);
+      try { localStorage.setItem(`flylab:${bundle.id}`, serializedExport); } catch { /* local persistence is best effort */ }
+      const next = commit((state) => pushActivity({ ...state, stage: 'saved', bundle, evidenceExport }, {
         title: 'Evidence bundle saved',
-        detail: `${bundle.id} · reproducible lineage committed locally.`,
+        detail: `${bundle.id} · portable JSON ready in the evidence ledger.`,
         status: 'complete',
       }));
-      setNotice('Evidence bundle saved with sources, assumptions, versions, seeds, runs, and results.');
+      setSelectedEvidenceId(bundle.id);
+      setNotice('Evidence bundle saved. Download the portable JSON from the evidence ledger.');
       return {
         summary: 'Saved a manifest-hashed, provenance-rich FlyLab evidence snapshot.',
-        data: { bundle, local_reference: bundle.id, storage_scope: 'this browser origin' },
+        data: { bundle, local_reference: bundle.id, storage_scope: 'best-effort browser origin' },
         provenance: ['measured', 'derived', 'connectome_inferred', 'simulation_predicted', 'agent_hypothesized'],
         stateRevision: next.revision,
       };
@@ -480,6 +511,31 @@ export default function Home() {
       registration?.dispose();
     };
   }, [actions]);
+
+  useEffect(() => {
+    const cancelWebMCPRun = (event: Event) => {
+      const toolName = (event as Event & { toolName?: unknown }).toolName;
+      if (toolName !== 'run_fly_simulation') return;
+      const controller = activeSimulationControllerRef.current;
+      if (!controller) return;
+      // Chrome 151 dispatches this event from inside CancelTool. Defer the
+      // abort so Chrome can remove its pending invocation without re-entrant
+      // promise settlement changing cancelInvocation's protocol result.
+      window.setTimeout(() => {
+        if (activeSimulationControllerRef.current === controller) {
+          controller.abort(new DOMException('WebMCP simulation invocation cancelled', 'AbortError'));
+        }
+      }, 0);
+    };
+    // Chrome 151 dispatches `toolcancel`; the evolving draft tracks the
+    // equivalent future event as `toolcanceled` while execution signals land.
+    window.addEventListener('toolcancel', cancelWebMCPRun);
+    window.addEventListener('toolcanceled', cancelWebMCPRun);
+    return () => {
+      window.removeEventListener('toolcancel', cancelWebMCPRun);
+      window.removeEventListener('toolcanceled', cancelWebMCPRun);
+    };
+  }, []);
 
   useEffect(() => {
     playheadRef.current = playhead;
@@ -564,6 +620,12 @@ export default function Home() {
     await invoke('run_fly_simulation', { experiment_id: experiment.id });
   }, [invoke]);
 
+  const cancelRunningSimulation = useCallback(() => {
+    activeSimulationControllerRef.current?.abort(
+      new DOMException('Simulation cancelled by human', 'AbortError'),
+    );
+  }, []);
+
   const analyzeExperiment = useCallback(async () => {
     const batch = labRef.current.batch;
     if (!batch) return;
@@ -600,13 +662,34 @@ export default function Home() {
     });
   }, [invoke]);
 
+  const downloadEvidence = useCallback(() => {
+    const current = labRef.current;
+    if (!current.bundle || !current.evidenceExport) {
+      setNotice('Save an evidence bundle before downloading it.');
+      return;
+    }
+    const objectUrl = URL.createObjectURL(new Blob(
+      [serializeEvidenceExport(current.evidenceExport)],
+      { type: EVIDENCE_EXPORT_MEDIA_TYPE },
+    ));
+    const link = document.createElement('a');
+    link.href = objectUrl;
+    link.download = evidenceExportFilename(current.bundle.id);
+    link.hidden = true;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0);
+    setNotice(`Downloaded ${link.download}. Keep it with the analysis it supports.`);
+  }, []);
+
   const editExperiment = useCallback((field: 'activationLevel' | 'durationMs' | 'replicates', value: number) => {
     commit((current) => {
       if (!current.experiment) return current;
       const updated = { ...current.experiment, [field]: value, approved: false };
       updated.conditions = updated.conditions.map((condition) => condition.kind === 'perturbation' ? { ...condition, activationLevel: field === 'activationLevel' ? value : condition.activationLevel } : condition);
       updated.id = `exp_${stableHash({ hypothesis: updated.hypothesisId, field, value, seed: updated.seed, conditions: updated.conditions })}`;
-      return pushActivity({ ...current, stage: 'design', experiment: updated, batch: null, analyses: [], comparison: null, bundle: null }, {
+      return pushActivity({ ...current, stage: 'design', experiment: updated, batch: null, analyses: [], comparison: null, bundle: null, evidenceExport: null }, {
         title: 'Human edited protocol',
         detail: `${field} updated; prior approval and downstream runs were cleared.`,
         status: 'waiting',
@@ -616,6 +699,7 @@ export default function Home() {
   }, [commit, pushActivity]);
 
   const primaryAction = useMemo(() => {
+    if (simulationRunning) return { label: 'Cancel running simulation', action: cancelRunningSimulation, detail: 'discard prepared work · keep protocol approved' };
     if (!lab.hypothesis || !lab.experiment) return { label: 'Ask agent to investigate', action: investigate, detail: 'research → hypothesis → protocol' };
     if (!lab.experiment.approved) return { label: 'Approve experiment', action: approveExperiment, detail: `${lab.experiment.conditions.length} arms · ${lab.experiment.replicates} each` };
     if (!lab.batch) return { label: 'Run MDN-inspired drive', action: runExperiment, detail: `seed ${lab.experiment.seed.toLocaleString()}` };
@@ -623,7 +707,7 @@ export default function Home() {
     if (!lab.comparison) return { label: 'Choose next experiment', action: compareExperiment, detail: `bounded to ${autoBudget} proposed replicates` };
     if (!lab.bundle) return { label: 'Save evidence bundle', action: saveEvidence, detail: 'sources · assumptions · seeds · results' };
     return { label: 'Replay representative trial', action: () => { setPlayhead(0); setPlaying(true); }, detail: lab.bundle.id };
-  }, [analyzeExperiment, approveExperiment, autoBudget, compareExperiment, investigate, lab, runExperiment, saveEvidence]);
+  }, [analyzeExperiment, approveExperiment, autoBudget, cancelRunningSimulation, compareExperiment, investigate, lab, runExperiment, saveEvidence, simulationRunning]);
 
   const activeCondition = useMemo(() => {
     const run = lab.batch?.conditionRuns.find((condition) => condition.conditionId === selectedConditionId);
@@ -642,8 +726,9 @@ export default function Home() {
   }, [activeCondition, playhead]);
 
   const stageIndex = stages.findIndex((stage) => stage.id === (lab.stage === 'saved' ? 'continue' : lab.stage));
-  const selectedEvidence = EVIDENCE.find((record) => record.id === selectedEvidenceId) ?? EVIDENCE[0];
-  const selectedSources = SOURCES.filter((source) => selectedEvidence.sourceIds.includes(source.id));
+  const selectedBundle = lab.bundle?.id === selectedEvidenceId ? lab.bundle : null;
+  const selectedEvidence = EVIDENCE.find((record) => record.id === selectedEvidenceId) ?? (selectedBundle ? null : EVIDENCE[0]);
+  const selectedSources = selectedEvidence ? SOURCES.filter((source) => selectedEvidence.sourceIds.includes(source.id)) : [];
   const analysis = lab.analyses[0] ?? null;
   const bestResult = analysis?.conditions.find((condition) => condition.conditionId === 'condition_bilateral') ?? analysis?.conditions[0] ?? null;
   const siteToolStatus = {
@@ -881,21 +966,44 @@ export default function Home() {
             <div className="evidence-modal-grid">
               <nav aria-label="Evidence records">
                 {EVIDENCE.map((record) => (
-                  <button className={selectedEvidence.id === record.id ? 'active' : ''} type="button" onClick={() => setSelectedEvidenceId(record.id)} key={record.id}>
+                  <button className={selectedEvidence?.id === record.id ? 'active' : ''} type="button" onClick={() => setSelectedEvidenceId(record.id)} key={record.id}>
                     <Badge kind={record.provenance} /><strong>{record.label}</strong><small>{record.id}</small>
                   </button>
                 ))}
-                {lab.bundle && <button className="bundle-record" type="button"><Badge kind="derived" /><strong>{lab.bundle.title}</strong><small>{lab.bundle.id}</small></button>}
+                {lab.bundle && <button className={`bundle-record ${selectedBundle ? 'active' : ''}`} type="button" onClick={() => setSelectedEvidenceId(lab.bundle?.id ?? EVIDENCE[0].id)}><Badge kind="derived" /><strong>{lab.bundle.title}</strong><small>{lab.bundle.id}</small></button>}
               </nav>
-              <article className="evidence-detail">
-                <Badge kind={selectedEvidence.provenance} />
-                <h3>{selectedEvidence.claim}</h3>
-                <dl><div><dt>Context</dt><dd>{selectedEvidence.context}</dd></div><div><dt>Boundary</dt><dd>{selectedEvidence.caution}</dd></div></dl>
-                <h4>Primary source</h4>
-                {selectedSources.map((source) => (
-                  <a href={source.url} target="_blank" rel="noreferrer" key={source.id}><strong>{source.title}</strong><span>{source.citation}</span><small>{source.specimen} · {source.license}</small></a>
-                ))}
-              </article>
+              {selectedBundle ? (
+                <article className="evidence-detail bundle-detail">
+                  <Badge kind="derived" />
+                  <h3>{selectedBundle.title}</h3>
+                  <p className="bundle-boundary">{selectedBundle.boundary}</p>
+                  <dl>
+                    <div><dt>Bundle ID</dt><dd><code>{selectedBundle.id}</code></dd></div>
+                    <div><dt>Saved</dt><dd><time dateTime={selectedBundle.savedAt}>{new Date(selectedBundle.savedAt).toLocaleString()}</time></dd></div>
+                    <div><dt>Manifest hash</dt><dd><code>{selectedBundle.manifestHash}</code></dd></div>
+                    <div><dt>Included records</dt><dd>{selectedBundle.includedIds.length} source, evidence, protocol, run, analysis, and comparison identifiers</dd></div>
+                  </dl>
+                  <section className="evidence-download" aria-labelledby="evidence-download-title">
+                    <h4 id="evidence-download-title">Portable export</h4>
+                    <p>The versioned JSON contains this metadata and the complete payload used to calculate the manifest hash.</p>
+                    <button type="button" onClick={downloadEvidence} disabled={!lab.evidenceExport}>
+                      <strong>Download evidence JSON</strong>
+                      <small>{evidenceExportFilename(selectedBundle.id)}</small>
+                    </button>
+                    <p className="integrity-note">The manifest hash is a payload integrity check, not a digital signature or guarantee of immutability. Browser-local storage remains a best-effort convenience copy.</p>
+                  </section>
+                </article>
+              ) : selectedEvidence && (
+                <article className="evidence-detail">
+                  <Badge kind={selectedEvidence.provenance} />
+                  <h3>{selectedEvidence.claim}</h3>
+                  <dl><div><dt>Context</dt><dd>{selectedEvidence.context}</dd></div><div><dt>Boundary</dt><dd>{selectedEvidence.caution}</dd></div></dl>
+                  <h4>Primary source</h4>
+                  {selectedSources.map((source) => (
+                    <a href={source.url} target="_blank" rel="noreferrer" key={source.id}><strong>{source.title}</strong><span>{source.citation}</span><small>{source.specimen} · {source.license}</small></a>
+                  ))}
+                </article>
+              )}
             </div>
           </section>
         </div>
