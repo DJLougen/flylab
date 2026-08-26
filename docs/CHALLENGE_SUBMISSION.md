@@ -1,8 +1,8 @@
 # WebMCP Challenge submission
 
-The current agent-first candidate is deployed publicly and has passed the complete Chrome 151 WebMCP workflow against the live HTTPS URL. The repository is public and licensed under Apache-2.0. The prior 2:15.821 narrated v6 demo predates the agent-control-plane and Three.js arena-fly upgrades and is retained only as an earlier build artifact; it is not submission evidence. A fresh demo must be generated after the corrected interface is approved. Public YouTube upload and Devpost publication are still pending.
+The current agent-first candidate is deployed publicly and has passed the complete Chrome 151 WebMCP workflow against the live HTTPS URL. The repository is public, licensed under Apache-2.0, reproducible from a fresh public clone, and configured with public CI. The current 13-frame page sequence is verified, but the two headed-browser WebMCP proof composites and rights-cleared narration still require interface approval and recording. Public YouTube upload and Devpost publication are pending.
 
-Submission deadline: **September 3, 2026 at 1:00 p.m. PDT**, as shown by both OpenAI and the binding Devpost official rules.
+Submission deadline: **September 3, 2026 at 1:00 p.m. PDT**, as shown by the [OpenAI challenge page](https://openai.com/webmcp-challenge/) and the binding [Devpost official rules](https://webmcp.devpost.com/rules).
 
 FlyLab was created on August 26, 2026 during the challenge period. Its primary audience is a computational-neuroethology researcher or educator reviewing a source-backed virtual MDN experiment. The concrete failure it prevents is an agent silently continuing from stale page state or presenting a simulation result after its evidence lineage, protocol, or human approval has changed. Agent-tool builders are a secondary audience.
 
@@ -99,7 +99,7 @@ inspect shared page state
 - Visible human-approval boundary
 - Bounded next-experiment proposal
 - Exact-lineage evidence bundle with separately scoped hypothesis-support and model-method source closures, model manifests, and hash
-- 50 automated tests for the model, model-card parity, recovery state machine, claim-compatible evidence gating, evidence export, synchronized public agent manifest, and WebMCP contracts
+- 52 automated tests for the model, model-card parity, recovery state machine, claim-compatible evidence gating, evidence export, synchronized public agent manifest, WebMCP contracts, and publication-safe submission assets
 
 **Not claimed**
 
@@ -149,7 +149,7 @@ After human approval, the person sets the visible next-trial budget to five repl
 
 > Run the exact approved experiment. Analyze all five behavior metrics, rank conditions by backward distance using my visible next-trial budget, do not execute the proposed follow-up, and save the exact supporting evidence and comparison lineage.
 
-See [DEMO.md](DEMO.md) for replacement-demo proof requirements and the quarantined v6 record. [YOUTUBE_DESCRIPTION.md](YOUTUBE_DESCRIPTION.md) likewise preserves obsolete v6 metadata only as an archive until the approved agent-first demo is generated.
+See [DEMO.md](DEMO.md) for the current proof, narration-rights, build, and pre-upload requirements. [YOUTUBE_DESCRIPTION.md](YOUTUBE_DESCRIPTION.md) is the current metadata template and must be completed from the passing delivery report after the approved demo is generated.
 
 Judge-ready prerequisites, prompts, expected state transitions, and recovery checks are in [JUDGE_TESTING.md](JUDGE_TESTING.md).
 
@@ -166,6 +166,8 @@ Judge-ready prerequisites, prompts, expected state transitions, and recovery che
 - [x] Confirm Chrome with the official WebMCP testing feature accepts all eight registrations.
 - [ ] Confirm ChatGPT's in-app browser discovers exactly eight tools.
 - [x] Run `npm test`, `npm run lint`, and `npm run build` against the release candidate.
+- [x] Re-clone the public GitHub repository and pass dependency installation, all 52 tests, lint, and production build from only the published files.
+- [x] Add public CI for exact dependency installation, tests, lint, build, and dependency audit.
 - [x] Confirm the deployed workflow stops at the non-WebMCP review gate before the visible approval click.
 - [x] Confirm on the final deployment that editing a protocol clears approval, playback, analyses, and the follow-up proposal.
 - [x] Confirm on the final deployment that cancellation does not create a completed batch through both WebMCP protocol cancellation and the visible human cancel control.
@@ -178,6 +180,8 @@ Judge-ready prerequisites, prompts, expected state transitions, and recovery che
 - [x] Confirm no copy or narration claims actual FlyGym execution or new biological results.
 - [ ] Regenerate the narrated under-three-minute MP4 after approval of the final agent-first interface; show real WebMCP discovery/invocation, same-page state changes, the Three.js BANC reconstruction view, English captions, thumbnail, and gallery stills.
 - [x] Add an owner-approved Apache-2.0 `LICENSE` file that Devpost can detect at the top of the repository.
+- [x] Replace the untracked social illustration with a 1200 × 630 capture of FlyLab's own interface and document its origin.
+- [x] Remove macOS System Voice recording from the demo builder; require separately supplied narration and explicit publication-rights confirmation.
 - [x] Prepare concise judge instructions and a no-login Chrome fallback in [JUDGE_TESTING.md](JUDGE_TESTING.md).
 - [ ] Confirm the public app remains free and unrestricted through the end of judging on September 21, 2026 at 5:00 p.m. PT.
 - [ ] Confirm the replacement video contains no unauthorized music, third-party trademarks, or other protected media.

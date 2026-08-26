@@ -7,11 +7,10 @@ import { basename, join, resolve } from 'node:path';
 
 const framesDirectory = resolve(process.env.FLYLAB_DEMO_FRAMES ?? 'outputs/demo/v7/frames');
 const finalOutputDirectory = resolve(process.env.FLYLAB_DEMO_OUTPUT ?? 'outputs/demo/v7');
+const narrationDirectory = resolve(process.env.FLYLAB_NARRATION_DIR ?? 'outputs/demo/v7/narration');
 const ffmpeg = process.env.FFMPEG_BIN ?? '/opt/homebrew/bin/ffmpeg';
 const ffprobe = process.env.FFPROBE_BIN ?? '/opt/homebrew/bin/ffprobe';
-const say = process.env.SAY_BIN ?? '/usr/bin/say';
-const voice = process.env.FLYLAB_DEMO_VOICE ?? 'Samantha';
-const speechRate = process.env.FLYLAB_DEMO_RATE ?? '205';
+const narrationRightsConfirmed = process.env.FLYLAB_NARRATION_RIGHTS_CONFIRMED === '1';
 const finalOutputVideo = join(finalOutputDirectory, 'FlyLab-WebMCP-Demo.mp4');
 const finalOutputCaptions = join(finalOutputDirectory, 'FlyLab-WebMCP-Demo.srt');
 const finalOutputNarration = join(finalOutputDirectory, 'FlyLab-WebMCP-Demo-narration.txt');
@@ -51,7 +50,7 @@ const segments = [
   },
   {
     frame: '06-circuit-bilateral-active.png',
-    narration: 'The 3D circuit renders six BANC version eight eighty-eight L two skeleton reconstructions: four M D Ns and two L B L forties. Purple marks bilateral model targets; cyan marks four structural paths and one hundred fifty-three putative contacts.',
+    narration: 'The 3D circuit renders six BANC version eight eighty-eight L two skeleton reconstructions: four M D Ns and two L B L forties. Purple marks bilateral model targets; cyan marks four directed structural edges and one hundred fifty-three putative contacts.',
   },
   {
     frame: '07-circuit-left-active.png',
@@ -83,6 +82,10 @@ const segments = [
   },
 ];
 
+function narrationAudioPath(index) {
+  return join(narrationDirectory, `${String(index).padStart(2, '0')}.wav`);
+}
+
 function run(command, args, { capture = false } = {}) {
   return new Promise((resolvePromise, reject) => {
     const child = spawn(command, args, { stdio: capture ? ['ignore', 'pipe', 'pipe'] : ['ignore', 'ignore', 'pipe'] });
@@ -109,16 +112,22 @@ function timestamp(seconds) {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')},${String(remainingMilliseconds).padStart(3, '0')}`;
 }
 
-await mkdir(finalOutputDirectory, { recursive: true });
-await rm(finalOutputReport, { force: true });
-
-for (const binary of [ffmpeg, ffprobe, say]) {
+if (!narrationRightsConfirmed) {
+  throw new Error('Set FLYLAB_NARRATION_RIGHTS_CONFIRMED=1 only after supplying narration you own or are explicitly licensed to publish. The builder never records macOS System Voices.');
+}
+for (const binary of [ffmpeg, ffprobe]) {
   if (!existsSync(binary)) throw new Error(`Required demo binary was not found: ${binary}`);
 }
-for (const segment of segments) {
+for (let index = 0; index < segments.length; index += 1) {
+  const segment = segments[index];
   const frame = join(framesDirectory, segment.frame);
   if (!existsSync(frame)) throw new Error(`Missing demo frame: ${frame}`);
+  const audio = narrationAudioPath(index);
+  if (!existsSync(audio)) throw new Error(`Missing rights-cleared narration clip: ${audio}`);
 }
+
+await mkdir(finalOutputDirectory, { recursive: true });
+await rm(finalOutputReport, { force: true });
 
 const temporaryDirectory = await mkdtemp(join(tmpdir(), 'flylab-demo-'));
 const outputDirectory = join(temporaryDirectory, 'delivery');
@@ -131,16 +140,19 @@ const galleryDirectory = join(outputDirectory, 'gallery');
 await mkdir(galleryDirectory, { recursive: true });
 const renderedSegments = [];
 const captionEntries = [];
+const narrationInputHashes = [];
 let timeline = 0;
 
 try {
   for (let index = 0; index < segments.length; index += 1) {
     const segment = segments[index];
-    const textPath = join(temporaryDirectory, `${String(index).padStart(2, '0')}.txt`);
-    const audioPath = join(temporaryDirectory, `${String(index).padStart(2, '0')}.aiff`);
+    const audioPath = narrationAudioPath(index);
     const videoPath = join(temporaryDirectory, `${String(index).padStart(2, '0')}.mp4`);
-    await writeFile(textPath, `${segment.narration}\n`);
-    await run(say, ['-v', voice, '-r', speechRate, '-o', audioPath, '-f', textPath]);
+    narrationInputHashes.push({
+      segment: index + 1,
+      file: basename(audioPath),
+      sha256: createHash('sha256').update(await readFile(audioPath)).digest('hex'),
+    });
     const probe = await run(ffprobe, ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', audioPath], { capture: true });
     const speechDuration = Number(probe.stdout);
     if (!Number.isFinite(speechDuration)) throw new Error(`Could not measure narration segment ${index}.`);
@@ -307,6 +319,11 @@ try {
     size_bytes: Number(report.format?.size),
     sha256: videoSha256,
     artifact_sha256: artifactHashes,
+    narration_input: {
+      mode: 'externally_supplied_per_segment',
+      rights_confirmed_by_builder_invocation: true,
+      files: narrationInputHashes,
+    },
     integrated_loudness_lufs: integratedLoudnessLufs,
     streams: report.streams,
   };

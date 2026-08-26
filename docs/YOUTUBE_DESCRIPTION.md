@@ -1,34 +1,28 @@
-# YouTube upload metadata
+# YouTube upload metadata draft
 
 ## Publication status
 
-This copy belongs to the prior local v6 demo package. That video predates the corrected Three.js arena fly and must not be uploaded. Regenerate the video and update its duration, chapters, thumbnail, and wording before publication. The v7 builder also requires Chrome DevTools WebMCP inventory and invocation-history proof frames and includes the final protocol-edit recovery state. FlyLab's repository is licensed under Apache-2.0; the YouTube video and Devpost entry are not yet public.
-
-## Archived v6 metadata — do not use for upload
+Do not upload until the agent-first UI is explicitly approved, the two real-WebMCP proof composites exist, the rights-cleared narration is recorded, and `scripts/build-demo-video.mjs` produces a passing delivery report. Fill every bracketed value from that report or the verified public URLs.
 
 **Title**
 
-FlyLab — Human-in-the-Loop Neuroethology with WebMCP
+FlyLab — Agent-Native Neuroethology with WebMCP
 
 **Video file**
 
-`outputs/demo/v6/FlyLab-WebMCP-Demo.mp4`
+`outputs/demo/v7/FlyLab-WebMCP-Demo.mp4`
 
 **Runtime**
 
-2:15.821
+`[DELIVERY_REPORT_DURATION]` — must be below `00:03:00`
 
 **Thumbnail**
 
-`outputs/demo/v6/FlyLab-Devpost-Thumbnail.png` (1200 × 800; preview YouTube's 16:9 crop before publishing)
+`outputs/demo/v7/FlyLab-Devpost-Thumbnail.png` — native 1280 × 720
 
-**Caption file**
+**Captions**
 
-`outputs/demo/v6/FlyLab-WebMCP-Demo.srt`
-
-**Language**
-
-English
+`outputs/demo/v7/FlyLab-WebMCP-Demo.srt` plus the embedded English caption stream
 
 **Category**
 
@@ -36,7 +30,7 @@ Science & Technology
 
 **Visibility**
 
-Do not upload this artifact
+Public
 
 **Audience setting**
 
@@ -48,45 +42,35 @@ Not made for kids
 
 **License note**
 
-Choose the YouTube video-license setting deliberately during upload. That setting is separate from the repository's Apache-2.0 license.
+Choose the YouTube video-license setting deliberately. It is separate from the repository's Apache-2.0 license. Use only narration and media the entrant owns or is expressly permitted to publish.
 
 ## Description
 
 ```text
-FlyLab is an agent-operable, human-auditable virtual fruit-fly lab created August 26, 2026 for computational-neuroethology researchers, neuroscience educators, and agent-tool builders. It exposes one read-only WebMCP state inspector and seven browser-native scientific workflow actions.
+FlyLab is an agent-operable, human-auditable virtual fruit-fly lab created during the 2026 WebMCP Challenge for computational-neuroethology researchers, neuroscience educators, and agent-tool builders. It exposes one read-only WebMCP state inspector and seven browser-native scientific workflow actions.
 
 Try FlyLab: https://flylab-neuroethology.d-lougen.chatgpt.site
 Source repository: https://github.com/DJLougen/flylab
-Challenge entry: [DEVPOST_ENTRY_URL] (pending publication)
+Challenge entry: [DEVPOST_ENTRY_URL]
 
-The replacement demo must show real browser WebMCP discovery and invocations—not the guided example—including visible `webmcp agent · r#` activity, separate visible-UI edits/approval, and same-page mutations. The agent first inspects the shared page revision, artifact IDs, blocker, and exact next action. It then finds cited adult Moonwalker descending-neuron evidence, drafts a falsifiable hypothesis, prepares five controlled conditions, stops at a visible approval control absent from the WebMCP tool surface, runs a seeded reduced-order simulation, analyzes the predefined required behavior metrics, proposes one non-authorized follow-up, and saves a manifest-hashed exact-lineage evidence bundle. It inspects again after approval and after a protocol edit to demonstrate recovery.
+The agent inspects the shared page revision, artifact IDs, blocker, and exact next action; finds cited adult Moonwalker descending-neuron evidence; drafts a falsifiable hypothesis; and prepares five controlled conditions. It must stop at a visible supervisor approval control that is absent from the WebMCP tool surface. After approval and re-inspection, it runs a seeded reduced-order simulation, analyzes the complete predefined behavior panel, proposes—but cannot execute—one bounded follow-up, and saves a manifest-hashed exact-lineage evidence bundle. A later protocol edit clears approval and downstream results, proving that visible human changes remain authoritative.
 
-The Three.js circuit view displays six reconstruction-derived cells from the BANC v888 static dataset, Harvard Dataverse version 3.0 (https://doi.org/10.7910/DVN/7WTH1N), licensed CC BY 4.0: four MDNs and two LBL40 cells. FlyLab's six simplified L2 SWC render derivatives apply one shared coordinate transform and topology-preserving simplification; see THIRD_PARTY_NOTICES.md in the repository. Purple shows selected unitless model targets; cyan shows bundled connectome-inferred structural paths. Glow is model selection, not measured neural activity. The CNS shell is schematic.
+The Three.js circuit view displays six reconstruction-derived cells from the BANC v888 static dataset, Harvard Dataverse version 3.0 (https://doi.org/10.7910/DVN/7WTH1N), licensed CC BY 4.0: four MDNs and two LBL40 cells. FlyLab's six simplified L2 SWC derivatives use one shared coordinate transform and topology-preserving simplification; see THIRD_PARTY_NOTICES.md in the repository. Purple shows selected unitless model targets. Cyan shows four directed, connectome-inferred structural edges totaling 153 putative contacts. Glow is model selection, not measured neural activity. The CNS shell is schematic.
 
-FlyLab's displayed condition replay is a deterministic illustrative simulation prediction, not a raw replicate path, FlyGym execution, whole-brain dynamics, direct BANC simulation, or a wet-lab result. Metric cards aggregate separate simulation-generated per-run summaries and remain labeled derived plus simulation-predicted. Findings summarized from cited biological studies retain a separate measured-evidence label.
+FlyLab's condition replay is a deterministic illustrative simulation prediction, not a raw replicate path, FlyGym execution, whole-brain dynamics, direct BANC simulation, or a wet-lab result. Metric cards aggregate separate simulation-generated per-run summaries and remain labeled derived plus simulation-predicted. Findings summarized from cited biological studies retain a separate measured-evidence label.
 
 Chapters:
-00:00 Evidence boundaries in one shared lab
-00:10 Cited adult MDN circuit evidence
-00:29 Hypothesis, controls, and human approval
-00:47 Seeded reduced-order simulation replay
-00:57 Real BANC reconstructions in Three.js
-01:29 Derived behavior analysis and bounded follow-up
-01:51 Manifest-hashed evidence bundle
-02:04 Evidence ledger and human control
+[CHAPTERS_FROM_FINAL_DELIVERY]
 
 #WebMCP #Neuroscience #Drosophila #HumanInTheLoop
 ```
 
-The grouped chapter markers above keep every chapter at least ten seconds long. The millisecond-level start and end times for all 12 frames are in [DEMO.md](DEMO.md).
+## Publication verification
 
-## Archived v6 verification record
-
-The checks below describe the obsolete package only. Replacement paths, duration, chapters, captions, thumbnail, and hashes must be generated from the approved agent-first build before any upload.
-
-- Use `2:15.821` in any precise duration field; `2:16` is the reader-friendly description value.
-- The archived package contains a separate English `.srt` and an embedded caption stream; neither should be uploaded.
-- Its scientific-term caption checks, 1200 × 800 thumbnail crop, and duration record describe only the obsolete artifact.
-- Do not make the archived v6 video public or add it to the challenge entry.
-
-For the replacement v7 upload, use the newly generated `.srt` and native 1280 × 720 thumbnail, verify BANC, MDN, LBL40, FlyGym, and WebMCP in the processed captions, and open the published video in a signed-out browser to confirm playback, audio, captions, chapters, links, and visibility. Replace `[YOUTUBE_DEMO_URL]` only after that verification. Replace `[DEVPOST_ENTRY_URL]` only after the challenge entry is published and publicly accessible.
+- Match the runtime and chapter starts to the final delivery report; do not estimate them from the draft cue sheet.
+- Upload the generated `.srt` and verify the embedded and platform captions both preserve MDN, LBL40, BANC, FlyGym, and WebMCP.
+- Confirm public playback with audio in a signed-out browser.
+- Confirm the app, source, DOI, and challenge-entry links work.
+- Confirm the description includes the BANC CC BY 4.0 attribution and derivative changes.
+- Confirm the video contains no unauthorized music, system voice, trademark, or protected media.
+- Replace `[YOUTUBE_DEMO_URL]` in the submission record only after every check passes.

@@ -1,36 +1,40 @@
-# FlyLab WebMCP challenge demo (prior v6 artifact)
+# FlyLab WebMCP challenge demo plan
 
-## Artifact status
+## Status and release gate
 
-The v6 challenge demo is a generated, narrated sequence of 12 FlyLab interface captures. It includes two captures of the interactive Three.js circuit view, but it predates the corrected Three.js arena fly and is no longer submission-ready. Keep it as a reproducible prior artifact until a fresh capture set is generated after interface approval.
+The agent-first application is public and the canonical 13 page-state captures have passed visual and workflow QA. The final challenge video has **not** been generated or uploaded. Build it only after the interface owner explicitly approves the UI.
 
-The prior local package remains technically verified at **2:15.821**, below the challenge's three-minute limit. Do not upload it. Public YouTube upload and Devpost submission remain pending until the corrected interface has a regenerated, verified video.
+Two headed-browser proof composites and 15 rights-cleared narration clips are still required. The builder fails closed when any source is missing, when narration rights are not explicitly confirmed, or when the finished video is three minutes or longer.
 
-The replacement capture must begin with `00-eight-tools-live.png`, show the new agent control plane, and describe the current surface as **one read-only state inspector plus seven scientific workflow actions**. It must visibly show real browser WebMCP discovery/invocation—not the guided example—with `inspect_flylab_state` returning the page revision, artifact IDs, non-WebMCP review blocker, and exactly one next action before discovery, after approval, and after a protocol edit. Activity must visibly distinguish `webmcp agent · r#` from visible `human ui · r#` actions. The seven-tool wording below is archived historical narration and must not be reused.
+The [official challenge rules](https://webmcp.devpost.com/rules) require a public YouTube video under three minutes with audio that clearly shows the functioning project and explains how it uses WebMCP. The recording must not include unauthorized music, trademarks, or other protected media.
 
-The replacement package also requires two tightly cropped, unbranded WebMCP debugging proof frames: `proof-webmcp-tools.png`, showing the live eight-tool inventory, and `proof-webmcp-invocations.png`, showing the real invocation history with structured statuses. The invocation proof must be a three-panel composite of the initial, post-approval, and post-edit `inspect_flylab_state` calls so all three recovery checkpoints are legible at once. The headless deterministic verifier supplies `00-eight-tools-live.png` through `12-protocol-edit-invalidates-results.png`, then exits and removes its isolated browser profile. It cannot capture browser chrome or the debugging panel. Capture the proof material in a separate headed Chrome 149+ session with both WebMCP flags enabled, following the same canonical `0.65` workflow and opening **Application → WebMCP**. Crop out browser logos and unrelated interface branding. Prefer a 1440 × 900 final proof frame; the builder safely scales and pads other dimensions. The video builder fails closed if any frame is missing.
+## Canonical visual sequence
 
-The replacement sequence is therefore:
+The current sequence is designed for roughly 1:57, leaving ample room below the three-minute limit:
 
-```text
-live Chrome WebMCP inventory
-→ initial inspector and one next action
-→ discovery
-→ falsifiable hypothesis
-→ controlled protocol and non-WebMCP review block
-→ visible human approval and re-inspection
-→ seeded reduced-order replay
-→ bilateral and left-only BANC reconstruction views
-→ complete method-versioned analysis
-→ bounded, non-executed follow-up
-→ manifest-hashed evidence bundle and ledger
-→ protocol-edit invalidation and recovery
-→ Chrome WebMCP invocation history
-```
+| Target time | Scene | Required proof |
+| --- | --- | --- |
+| 0:00–0:07 | Live WebMCP inventory | `proof-webmcp-tools.png`; all eight page-registered tools, with no approval tool |
+| 0:07–0:15 | Shared control plane | `00-eight-tools-live.png`; revision, blocker, artifact IDs, and one next action |
+| 0:15–0:22 | Circuit discovery | `01-circuit-found.png`; measured evidence and primary sources |
+| 0:22–0:27 | Falsifiable hypothesis | `02-hypothesis-drafted.png`; `agent_hypothesized` label |
+| 0:27–0:35 | Controlled protocol | `03-protocol-locked.png`; five arms and exact review parameters |
+| 0:35–0:42 | Supervisor approval | `04-human-approved.png`; visible non-tool approval and post-approval state |
+| 0:42–0:48 | Seeded replay | `05-simulation-replay.png`; reduced-order, `simulation_predicted` output |
+| 0:48–1:01 | Bilateral circuit | `06-circuit-bilateral-active.png`; BANC skeletons and bilateral model targets |
+| 1:01–1:11 | Left-only circuit | `07-circuit-left-active.png`; laterality and activity boundary |
+| 1:11–1:18 | Behavior analysis | `08-behavior-analysis.png`; derived plus simulation-predicted metrics |
+| 1:18–1:27 | Bounded follow-up | `09-bounded-follow-up.png`; proposal with no execution authority |
+| 1:27–1:35 | Evidence bundle | `10-evidence-saved.png`; bundle ID and manifest hash |
+| 1:35–1:42 | Provenance record | `11-evidence-ledger.png`; modal title, label, boundary, and source all visible |
+| 1:42–1:50 | Human edit recovery | `12-protocol-edit-invalidates-results.png`; new revision and cleared lineage |
+| 1:50–1:57 | Invocation proof | `proof-webmcp-invocations.png`; initial, post-approval, and post-edit inspections |
 
-`scripts/build-demo-video.mjs` targets `outputs/demo/v7`, includes the recovery frame, produces a native 1280 × 720 thumbnail and a one-tile-per-shot contact sheet, verifies the under-three-minute H.264/AAC/caption streams and integrated loudness, and writes a SHA-256 delivery report for every promoted artifact. It removes the prior success report before rendering, stages outputs privately, promotes validated files, and writes the new success report last so a failed rebuild cannot retain stale certification. Do not reuse v6 timestamps or hashes.
+The two proof images must be tightly cropped and free of unrelated browser branding. The inventory proof must show all eight registered tool names. The invocation proof must make three `inspect_flylab_state` checkpoints legible: initial state, post-approval execution readiness, and post-edit recovery with cleared downstream IDs.
 
-Generate the clean page-state frames only after interface approval:
+## Generate page-state captures
+
+After UI approval, create the canonical captures directly from the public deployment:
 
 ```bash
 FLYLAB_DEMO_CAPTURE=1 \
@@ -39,152 +43,55 @@ FLYLAB_CAPTURE_DIR=outputs/demo/v7/frames \
 npm run verify:webmcp
 ```
 
-Clean capture mode uses the documented `0.65` model drive and omits negative cancellation tests and completed-lineage replay calls from the visible activity trail. The normal verifier remains the authoritative QA path and still exercises those cases with the full-precision `0.654321` protocol value.
+Clean capture mode uses the documented `0.65` unitless model drive. It omits negative cancellation tests and completed-lineage replay calls from the visible activity trail. The normal workflow verifier remains the authoritative QA path for those cases.
 
-Credits for the replacement video/description must identify the BANC v888 static dataset, Harvard Dataverse version 3.0, <https://doi.org/10.7910/DVN/7WTH1N>, CC BY 4.0; six simplified L2 SWC render derivatives; and FlyLab's shared coordinate-transform/topology-preserving-simplification changes. See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
+The headless verifier cannot capture browser debugging UI. Produce the two proof composites separately in a headed Chrome 149+ session with WebMCP testing and DevTools support enabled, using the same canonical protocol. Crop away browser logos and unrelated controls before placing them in `outputs/demo/v7/frames`.
 
-## Delivery assets
+## Narration rights and inputs
 
-| Asset | Path | Purpose |
-| --- | --- | --- |
-| Video | `outputs/demo/v6/FlyLab-WebMCP-Demo.mp4` | Archived only; do not upload |
-| Captions | `outputs/demo/v6/FlyLab-WebMCP-Demo.srt` | Archived caption record |
-| Narration | `outputs/demo/v6/FlyLab-WebMCP-Demo-narration.txt` | Spoken-script review |
-| Thumbnail | `outputs/demo/v6/FlyLab-Devpost-Thumbnail.png` | Archived crop; do not reuse for upload |
-| Gallery | `outputs/demo/v6/gallery/` | Archived stills; not submission-ready |
+The builder intentionally does not synthesize or record a macOS System Voice. Supply 15 WAV clips in scene order:
 
-Verified delivery properties:
+```text
+outputs/demo/v7/narration/00.wav
+...
+outputs/demo/v7/narration/14.wav
+```
 
-- Duration: `00:02:15.821`
-- Video: H.264, 1440 × 900, 30 fps
-- Audio: AAC, 48 kHz, stereo, integrated loudness `-15.9 LUFS`
-- Captions: embedded English `mov_text` stream plus a separate `.srt`
-- File size: 6,557,544 bytes
-- Video SHA-256: `f052192ddf4b78ffffb309c766eeca1a97c3c758ff4945273d3726349fe102f1`
+Use the entrant's own recording or a voice service whose terms expressly permit public and commercial publication. Do not include music unless the entrant owns it or has explicit permission to publish it. Keep documentation of the audio rights with the submission records.
 
-## Scientific reading of the circuit view
+The spoken script is the `narration` field for each segment in `scripts/build-demo-video.mjs`. Record one clip per segment without reading stage directions. The builder adds a short pause, derives caption timing from the actual clip duration, and normalizes the combined track to the validated loudness range.
 
-The Three.js view uses six real BANC v888 L2 skeleton reconstructions: four MDNs and two LBL40 cells. “Real” here refers to reconstruction geometry from the pinned BANC data, not recorded activity in the current FlyLab run.
+Build only after confirming the rights of every clip:
 
-- Purple indicates the MDN targets receiving the selected **unitless model drive**.
-- Cyan indicates bundled, connectome-inferred structural LBL40 paths and contacts.
-- Glow indicates model selection during replay. It is **not measured neural activity**, calcium signal, voltage, or biological signal propagation.
-- The translucent central-nervous-system shell is schematic.
-- Behavioral trajectories come from FlyLab's deterministic reduced-order model. They are `simulation_predicted`, not FlyGym execution, whole-brain dynamics, or wet-lab measurements.
-- The displayed condition replay is an illustrative simulation path. Behavior metrics aggregate separate simulation-generated per-run summaries; they are both `derived` and `simulation_predicted`.
-- The `measured` evidence label refers to findings summarized from cited biological studies; it does not describe the current model drive or generated trajectory.
+```bash
+FLYLAB_NARRATION_DIR=outputs/demo/v7/narration \
+FLYLAB_NARRATION_RIGHTS_CONFIRMED=1 \
+npm run demo:video
+```
 
-## Twelve-frame cue sheet and narration
+The delivery report records the SHA-256 hash of every narration input without copying the raw clips into the promoted gallery.
 
-The frame order, millisecond cues, and spoken text below match the final v6 caption file. Use the `.srt` as the edit-point source of truth.
+## Scientific wording boundaries
 
-### 1. Seven tools live — 0:00.000–0:10.478
+- Call the BANC table entries **four directed structural edges and 153 putative contacts**, not four neural pathways or measured connections.
+- “Real” refers only to the six pinned BANC v888 L2 reconstruction geometries.
+- Purple is unitless model-target selection; cyan is connectome-inferred structure.
+- Glow is not calcium, voltage, measured activity, or biological signal propagation.
+- The CNS shell and procedural arena fly are schematic.
+- Trajectories are deterministic reduced-order simulation predictions, not FlyGym execution, direct BANC simulation, whole-brain dynamics, or wet-lab measurements.
+- Behavior cards are derived aggregates of simulation-generated per-run summaries.
+- The `measured` label applies only to findings summarized from cited biological studies.
+- The follow-up is proposed but never executed.
 
-**Frame:** `00-seven-tools-live.png`
+Credits must identify the BANC v888 static dataset, Harvard Dataverse version 3.0, <https://doi.org/10.7910/DVN/7WTH1N>, CC BY 4.0; the six simplified L2 SWC derivatives; and FlyLab's shared coordinate-transform and topology-preserving-simplification changes. See [Third-party notices](../THIRD_PARTY_NOTICES.md).
 
-Show the shared laboratory, seven-tool activity rail, empty arena, evidence classes, and current MDN-inspired objective.
-
-> FlyLab keeps measured evidence, structural connectomes, model output, and new hypotheses visibly separate while a person and an agent share one virtual fruit-fly laboratory.
-
-### 2. Circuit evidence found — 0:10.478–0:21.377
-
-**Frame:** `01-circuit-found.png`
-
-Show the Discover step completed with linked adult MDN evidence, pinned BANC version information, and coverage warnings.
-
-> Using a browser-native site tool, not screen scraping, the agent finds the adult Moonwalker descending-neuron circuit with primary sources, pinned BANC version data, and coverage warnings.
-
-### 3. Falsifiable hypothesis drafted — 0:21.377–0:29.564
-
-**Frame:** `02-hypothesis-drafted.png`
-
-Show the hypothesis artifact and its `agent_hypothesized` label.
-
-> It drafts a falsifiable claim labeled agent-hypothesized, so plausible language never silently becomes biological evidence.
-
-### 4. Controlled protocol locked — 0:29.564–0:38.332
-
-**Frame:** `03-protocol-locked.png`
-
-Show baseline, model-sham, bilateral, left-only, and right-only arms together with timing, unitless drive, replicates, seed, controller version, and assumptions.
-
-> The agent designs five controlled arms. Timing, model drive, replicates, seed, controller version, and assumptions stay visible.
-
-### 5. Human approval boundary — 0:38.332–0:47.586
-
-**Frame:** `04-human-approved.png`
-
-Move from the blocked run state to the visibly approved protocol. Approval is a visible interface action, not one of the seven WebMCP workflow tools; it is not identity-authenticated against general browser automation.
-
-> Execution remains blocked until a person reviews the exact protocol and uses the visible approval control. Approval is deliberately not available as an agent tool.
-
-### 6. Simulation replay — 0:47.586–0:57.061
-
-**Frame:** `05-simulation-replay.png`
-
-Show the completed seeded replay and its `simulation_predicted` label.
-
-> After approval, FlyLab produces seeded deterministic trajectories in a reduced-order model, not FlyGym execution, neural dynamics, or wet-lab data.
-
-### 7. Bilateral BANC circuit view — 0:57.061–1:14.058
-
-**Frame:** `06-circuit-bilateral-active.png`
-
-Show the Three.js reconstruction view with all four MDNs selected in purple and both structural LBL40 paths in cyan.
-
-> The circuit view renders six actual BANC version eight eighty-eight L two skeleton reconstructions: four M D N cells and two L B L forty cells. Purple marks the bilateral model targets. Cyan marks the bundled structural L B L forty paths: four edges and one hundred fifty-three putative contacts.
-
-### 8. Left-only drive and neural-activity boundary — 1:14.058–1:29.546
-
-**Frame:** `07-circuit-left-active.png`
-
-Show only the two metadata-left MDNs and their connectome-inferred right LBL40 target highlighted. Keep the on-screen reconstruction and schematic-shell cautions legible.
-
-> Switching to left-only illuminates only the two metadata-left M D N cells and their connectome-inferred right L B L forty target, totaling one hundred three contacts. The translucent central nervous system shell is schematic, and glow is model selection, not measured neural activity.
-
-### 9. Behavior analysis — 1:29.546–1:41.542
-
-**Frame:** `08-behavior-analysis.png`
-
-Show the predefined required behavior metrics and the paired `derived` and `simulation_predicted` provenance labels.
-
-> The agent calculates the predefined required behavior metrics from the completed batch. Results carry both derived and simulation-predicted labels, preserving the difference between arithmetic on a model and measurements from flies.
-
-### 10. Bounded follow-up — 1:41.542–1:51.255
-
-**Frame:** `09-bounded-follow-up.png`
-
-Show the ranked conditions and one proposed follow-up without executing it.
-
-> FlyLab can rank conditions and propose one bounded follow-up, but that proposal has no execution authority. A new or edited experiment would require another human review.
-
-### 11. Evidence bundle saved — 1:51.255–2:04.473
-
-**Frame:** `10-evidence-saved.png`
-
-Show the saved bundle ID and manifest-hash prefix.
-
-> Finally, the agent saves sources, evidence classes, hypothesis, protocol, seeds, runs, model versions, analyses, limitations, and the next proposal into one manifest-hashed evidence bundle.
-
-### 12. Evidence ledger close — 2:04.473–2:15.610
-
-**Frame:** `11-evidence-ledger.png`
-
-Close on the evidence ledger so the measured, derived, connectome-inferred, simulation-predicted, and agent-hypothesized classes remain visible.
-
-> This is the core of FlyLab. Seven Web M C P tools let an agent explore and run a transparent virtual neuroethology workflow, while every claim retains its source and a person retains control.
-
-The video container ends at 2:15.821, 0.211 seconds after the final caption cue.
-
-## Canonical prompts behind the captured state
-
-The archived video does not show a live prompt-entry sequence and therefore cannot serve as WebMCP proof. The replacement must show the Browser's site-tool surface or equivalent real invocation evidence. These are the two prompts for reproducing the workflow.
+## Canonical prompts
 
 **Prompt 1 — evidence through protocol**
 
 > Find source-backed adult fruit-fly circuits associated with backward walking. Draft a falsifiable MDN activation hypothesis and design a controlled MDN-inspired model-drive experiment with baseline, model-sham, bilateral, left-only, and right-only comparisons. Use unitless model drive 0.65, onset 1000 ms, duration 2000 ms, trial duration 5000 ms, eight replicates per arm, and seed 73142. Stop before running anything so I can inspect and approve the protocol.
 
-Expected tool sequence:
+Expected sequence:
 
 ```text
 inspect_flylab_state
@@ -194,15 +101,13 @@ inspect_flylab_state
 → human approval required
 ```
 
-After a person clicks **Approve experiment**, set the visible **Next-trial budget** to 5. This is a person-owned control and cannot be overridden by the agent. Then use the second prompt.
-
-Call `inspect_flylab_state` again after approval before executing.
+After a person approves the exact visible protocol, set the visible next-trial budget to five and call `inspect_flylab_state` again.
 
 **Prompt 2 — approved execution through evidence**
 
 > Run the exact approved experiment. Analyze backward distance, signed speed, response latency, heading change, and stance stability. Rank the conditions by backward distance using my visible next-trial budget, do not execute the proposed follow-up, and save the exact supporting evidence and comparison lineage.
 
-Expected tool sequence:
+Expected sequence:
 
 ```text
 inspect_flylab_state
@@ -212,26 +117,20 @@ inspect_flylab_state
 → save_fly_evidence
 ```
 
-After the saved-bundle view, edit one protocol field and call `inspect_flylab_state` once more. The recording must show a new experiment ID, `waiting_for_human`, no callable next tool, and cleared downstream artifact IDs.
+After saving, edit one protocol field and inspect again. The recording must show a new experiment ID, `waiting_for_human`, no callable next tool, and cleared batch, analysis, comparison, and bundle IDs.
 
-## Replacement pre-upload checks
+## Pre-upload verification
 
-- Generate new paths, duration, hash, chapters, captions, thumbnail, and gallery from the approved agent-first build; none of the archived v6 values above are reusable submission metadata.
-- Confirm the replacement duration remains below `00:03:00`.
-- Watch the replacement MP4 from beginning to end with audio on.
-- Confirm every replacement segment is uncropped and readable.
-- Confirm the replacement `.srt` matches the embedded English caption track.
-- Confirm “model drive” and “model selection” are never described as measured neural activity.
-- Confirm the BANC lines are described as real reconstruction geometry while the CNS shell remains labeled schematic.
-- Confirm simulation and derived outputs retain their provenance labels.
-- Confirm the follow-up is proposed but not executed.
-- Confirm the video never claims FlyGym execution, whole-brain dynamics, direct connectome simulation, or new biological results.
-- Confirm the public YouTube URL before replacing `[YOUTUBE_DEMO_URL]`.
-- Confirm the public Devpost URL before replacing `[DEVPOST_ENTRY_URL]`.
-- Confirm the public repository displays the owner-approved Apache-2.0 root `LICENSE` file.
-- Confirm the replacement shows real WebMCP tool use, visible actor/tool/revision activity, and no guided-example state presented as agent evidence.
-- Confirm the BANC CC BY 4.0 attribution and derivative-change notice appear in the public video description or credits.
-- Confirm the recording contains no unauthorized music, third-party trademarks, or other protected media; keep any necessary product-interface capture narrowly framed to the WebMCP proof being demonstrated.
-- Confirm the public app remains free and unrestricted through the judging period ending September 21, 2026 at 5:00 p.m. PT.
+- Confirm the delivery report says `ok: true` and the duration is below `180` seconds.
+- Watch the complete MP4 with audio on; verify every frame and caption is readable.
+- Confirm H.264 video, AAC audio, embedded English captions, and the separate `.srt`.
+- Confirm the narration-input hashes match the reviewed recordings.
+- Confirm the social and scientific wording boundaries above.
+- Confirm the proof frames demonstrate real WebMCP inventory and invocation state.
+- Confirm the BANC attribution and derivative notice appear in the video description or credits.
+- Confirm there is no unauthorized music, system voice, trademark, or other protected media.
+- Upload to YouTube as a public video and verify it while signed out.
+- Replace `[YOUTUBE_DEMO_URL]` only after public playback, audio, captions, chapters, links, and visibility all pass.
+- Keep the public application free and unrestricted through September 21, 2026 at 5:00 p.m. PT.
 
-See [YOUTUBE_DESCRIPTION.md](YOUTUBE_DESCRIPTION.md) for upload-ready title, description, chapters, tags, and asset pointers.
+See [YouTube metadata](YOUTUBE_DESCRIPTION.md) for the publication template.

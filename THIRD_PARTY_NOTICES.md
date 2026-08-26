@@ -25,3 +25,9 @@ The exact source URLs, source hashes, counts, transform, and scientific limitati
 FlyLab depends on open-source software distributed under its respective licenses, including React, Next.js, Three.js, Vite/Vinext, Tailwind CSS, and Cloudflare tooling. Package names and pinned versions are recorded in `package.json` and `package-lock.json`.
 
 The generated [dependency, build-artifact, and license bundle](THIRD_PARTY_LICENSES.txt) records the exact production dependency graph, reviewed build-tool packages whose code or runtime helpers are emitted into the deployable artifact, upstream license texts, the complete Geist/Geist Mono SIL Open Font License 1.1 notice, and its copyright statement. The same file is deployed at [`/THIRD_PARTY_LICENSES.txt`](public/THIRD_PARTY_LICENSES.txt). Run `npm run licenses:generate` after a production dependency, build pipeline, or bundled-font change; `npm run build` verifies that both source copies are current and that the public copy survives into the built site.
+
+## Project media
+
+The social-preview image at `public/og.png` is a capture of FlyLab's own public interface and procedural Three.js fly. It replaces an earlier untracked illustration so the submitted media has an explicit, reviewable origin. The included Geist/Geist Mono font use is covered by the SIL Open Font License 1.1 text in `THIRD_PARTY_LICENSES.txt`.
+
+The demo builder does not synthesize or record a macOS System Voice. It requires separately supplied per-segment narration clips plus an explicit `FLYLAB_NARRATION_RIGHTS_CONFIRMED=1` build-time confirmation. Use the entrant's own recording or audio with express public and commercial publication rights; do not include unlicensed music or voice assets.

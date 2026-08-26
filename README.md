@@ -1,5 +1,8 @@
 # FlyLab
 
+[![CI](https://github.com/DJLougen/flylab/actions/workflows/ci.yml/badge.svg)](https://github.com/DJLougen/flylab/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
+
 FlyLab is a WebMCP-enabled virtual neuroethology lab for investigating how an adult fruit-fly neural circuit could influence behavior. It is agent-operable, human-auditable, and scientifically bounded: a person and an agent share one visible page session while structured site tools expose the exact workflow state, next valid action, approval boundary, and evidence lineage.
 
 Created on August 26, 2026 during the WebMCP Challenge period, FlyLab is for computational-neuroethology researchers, neuroscience educators, and agent-tool builders who need inspectable experiment state without UI scraping.
@@ -41,7 +44,7 @@ npm run build
 npm run verify:webmcp
 ```
 
-`npm test` compiles the TypeScript test target and runs Node's built-in test runner. The current 50-test suite covers same-seed reproducibility, changed-seed divergence, mandatory controls, canonical and idempotent artifact identity, onset-referenced/null response latency, exact artifact recovery, stale prepared-commit rejection, cancellation timing, claim-compatible evidence gating, source-support closure, model-card parameter parity, provenance labels, laterality-to-circuit mapping, morphology checksums, the eight WebMCP contracts, the synchronized public agent manifest and evidence gate, current annotation keys, and registration disposal. `npm run verify:webmcp` opens the public deployment in an isolated Chrome profile with Chrome's official WebMCP testing feature, verifies the real browser API, enumerates the exact eight tools through Chrome's WebMCP protocol, calls `inspect_flylab_state`, and completes a live `find_fly_circuits` invocation.
+`npm test` compiles the TypeScript test target and runs Node's built-in test runner. The current 52-test suite covers same-seed reproducibility, changed-seed divergence, mandatory controls, canonical and idempotent artifact identity, onset-referenced/null response latency, exact artifact recovery, stale prepared-commit rejection, cancellation timing, claim-compatible evidence gating, source-support closure, model-card parameter parity, provenance labels, laterality-to-circuit mapping, morphology checksums, the eight WebMCP contracts, the synchronized public agent manifest and evidence gate, current annotation keys, registration disposal, and publication-safe submission assets. `npm run verify:webmcp` opens the public deployment in an isolated Chrome profile with Chrome's official WebMCP testing feature, verifies the real browser API, enumerates the exact eight tools through Chrome's WebMCP protocol, calls `inspect_flylab_state`, and completes a live `find_fly_circuits` invocation.
 
 ## Human-agent workflow
 
