@@ -85,7 +85,7 @@ describe('FlyLab WebMCP registration lifecycle', () => {
       tool: {
         name: string;
         annotations?: Record<string, boolean>;
-        execute(input: unknown, context: { signal: AbortSignal }): Promise<unknown>;
+        execute(input: unknown, context?: { signal?: AbortSignal }): Promise<unknown>;
       };
       signal?: AbortSignal;
     }> = [];
@@ -94,7 +94,7 @@ describe('FlyLab WebMCP registration lifecycle', () => {
         tool: {
           name: string;
           annotations?: Record<string, boolean>;
-          execute(input: unknown, context: { signal: AbortSignal }): Promise<unknown>;
+          execute(input: unknown, context?: { signal?: AbortSignal }): Promise<unknown>;
         },
         options?: { signal?: AbortSignal },
       ) {
@@ -130,10 +130,8 @@ describe('FlyLab WebMCP registration lifecycle', () => {
 
     const discovery = registrations.find(({ tool }) => tool.name === 'find_fly_circuits');
     assert.ok(discovery);
-    const callController = new AbortController();
     const result = await discovery.tool.execute(
       { query: 'MDN', behavior: 'backward_walking' },
-      { signal: callController.signal },
     ) as {
       isError?: boolean;
       structuredContent?: { ok?: boolean; tool?: string; summary?: string };
@@ -142,6 +140,16 @@ describe('FlyLab WebMCP registration lifecycle', () => {
     assert.equal(result.structuredContent?.ok, true);
     assert.equal(result.structuredContent?.tool, 'find_fly_circuits');
     assert.equal(result.structuredContent?.summary, 'ok');
+
+    const callController = new AbortController();
+    callController.abort();
+    await assert.rejects(
+      discovery.tool.execute(
+        { query: 'MDN', behavior: 'backward_walking' },
+        { signal: callController.signal },
+      ),
+      { name: 'AbortError' },
+    );
 
     installation.dispose();
 

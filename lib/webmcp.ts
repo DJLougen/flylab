@@ -304,7 +304,7 @@ interface ModelContext {
       description: string;
       inputSchema: Record<string, unknown>;
       annotations?: { readOnlyHint?: boolean; untrustedContentHint?: boolean };
-      execute: (input: unknown, context: { signal: AbortSignal }) => Promise<unknown>;
+      execute: (input: unknown, context?: { signal?: AbortSignal }) => Promise<unknown>;
     },
     options?: { signal?: AbortSignal },
   ): Promise<void>;
@@ -323,7 +323,8 @@ export async function installFlyLabWebMCP(actions: Record<string, FlyLabToolActi
         await modelContext.registerTool({
           ...contract,
           inputSchema: contract.inputSchema as Record<string, unknown>,
-          execute: async (rawInput: unknown, { signal }: { signal: AbortSignal }) => {
+          execute: async (rawInput: unknown, context?: { signal?: AbortSignal }) => {
+            const signal = context?.signal ?? new AbortController().signal;
             try {
               const input = validateToolInput(contract.name, rawInput);
               const action = actions[contract.name];

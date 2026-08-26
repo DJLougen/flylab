@@ -5,6 +5,15 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
 const defaultUrl = 'https://flylab-neuroethology.d-lougen.chatgpt.site/';
+const expectedToolNames = [
+  'analyze_fly_behavior',
+  'compare_fly_trials',
+  'design_stimulation_trial',
+  'draft_fly_hypothesis',
+  'find_fly_circuits',
+  'run_fly_simulation',
+  'save_fly_evidence',
+];
 const chromeCandidates = process.platform === 'darwin'
   ? ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome']
   : process.platform === 'win32'
@@ -96,6 +105,18 @@ function sendCommand(method, params) {
   }), 5_000, method);
 }
 
+function waitForEvent(method, predicate = () => true) {
+  return withTimeout(new Promise((resolve) => {
+    const onMessage = (event) => {
+      const message = JSON.parse(String(event.data));
+      if (message.method !== method || !predicate(message.params)) return;
+      socket.removeEventListener('message', onMessage);
+      resolve(message.params);
+    };
+    socket.addEventListener('message', onMessage);
+  }), 5_000, method);
+}
+
 async function readRuntimeStatus() {
   const expression = `JSON.stringify({
     modelContextType: typeof document.modelContext,
@@ -142,20 +163,43 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
 
+  const toolsAdded = waitForEvent('WebMCP.toolsAdded');
+  await sendCommand('WebMCP.enable');
+  const registeredTools = await toolsAdded;
+  const actualToolNames = registeredTools.tools.map((tool) => tool.name).sort();
+  const discoveryTool = registeredTools.tools.find((tool) => tool.name === 'find_fly_circuits');
+  if (!discoveryTool?.frameId) {
+    throw new Error('Chrome did not return a frame for find_fly_circuits.');
+  }
+
+  const invocation = await sendCommand('WebMCP.invokeTool', {
+    frameId: discoveryTool.frameId,
+    toolName: 'find_fly_circuits',
+    input: { query: 'MDN', behavior: 'backward_walking' },
+  });
+  const response = await waitForEvent(
+    'WebMCP.toolResponded',
+    (event) => event.invocationId === invocation.invocationId,
+  );
+
   const verified = status?.modelContextType === 'object'
     && status?.registerToolType === 'function'
     && status?.status === '7 tools live'
-    && status?.originAgentCluster === true;
+    && status?.originAgentCluster === true
+    && JSON.stringify(actualToolNames) === JSON.stringify(expectedToolNames)
+    && response.status === 'Completed';
 
   if (!verified) {
-    throw new Error(`WebMCP live verification failed: ${JSON.stringify(status)}`);
+    throw new Error(`WebMCP live verification failed: ${JSON.stringify({ status, actualToolNames, response })}`);
   }
 
   console.log(JSON.stringify({
     ok: true,
     url: status.location,
     browser_api: 'document.modelContext.registerTool',
-    registered_tools: 7,
+    registered_tools: actualToolNames,
+    invoked_tool: 'find_fly_circuits',
+    invocation_status: response.status,
     origin_agent_cluster: true,
   }, null, 2));
 } catch (error) {

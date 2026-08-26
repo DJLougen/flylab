@@ -22,7 +22,7 @@ With Chrome 149 or newer installed, run:
 npm run verify:webmcp
 ```
 
-The command creates an isolated temporary Chrome profile, enables Chrome's official `WebMCPTesting` feature for that process, loads the public deployment, and checks that the real page exposes `document.modelContext.registerTool`, is origin-keyed, and reaches **7 tools live**. It closes the isolated browser and removes the temporary profile afterward. Set `CHROME_BIN` to override the Chrome executable or `FLYLAB_URL` to check another deployment.
+The command creates an isolated temporary Chrome profile, enables Chrome's official `WebMCPTesting` feature for that process, loads the public deployment, and checks that the real page exposes `document.modelContext.registerTool`, is origin-keyed, and reaches **7 tools live**. It then uses Chrome's WebMCP debugging protocol to enumerate the exact seven tool names and complete a live `find_fly_circuits` invocation. It closes the isolated browser and removes the temporary profile afterward. Set `CHROME_BIN` to override the Chrome executable or `FLYLAB_URL` to check another deployment.
 
 ## Live discovery check
 
