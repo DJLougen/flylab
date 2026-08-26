@@ -73,6 +73,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
     <html lang="en">
       <head>
         <link rel="alternate" type="application/json" href="/flylab-agent-manifest.json" title="FlyLab agent manifest" />
+        <link rel="alternate" type="application/json" href="/flylab-tool-contracts.json" title="FlyLab WebMCP tool contracts" />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable}`}>{children}</body>
     </html>

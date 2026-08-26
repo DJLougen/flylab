@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { afterEach, describe, test } from 'node:test';
 
 import {
+  FLYLAB_ERROR_CODES,
   flyLabToolContracts,
   installFlyLabWebMCP,
   prepareCancellableCommit,
@@ -10,6 +11,7 @@ import {
   validateToolInput,
   type FlyLabToolAction,
 } from '../lib/webmcp.js';
+import { flyLabAgentContractDocument } from '../lib/agent-contract-document.js';
 
 const expectedNames = [
   'analyze_fly_behavior',
@@ -90,7 +92,15 @@ describe('FlyLab WebMCP contracts', () => {
   test('publishes a machine-readable manifest synchronized with the live WebMCP tool surface', () => {
     const manifest = JSON.parse(readFileSync('public/flylab-agent-manifest.json', 'utf8')) as {
       schema_version?: string;
-      transport?: { required_first_call?: string; state_contract?: string };
+      transport?: { required_first_call?: string; state_contract?: string; tool_contract_document?: string };
+      discovery?: {
+        contract_url?: string;
+        webmcp_standard_discovery?: boolean;
+        inline_state_selector?: string;
+        inline_runtime_selector?: string;
+        inline_handoff_selector?: string;
+        unsupported_browser_behavior?: string;
+      };
       tools?: Array<{ name?: string }>;
       supervisor_gate?: { webmcp_tool?: boolean; blocks?: string };
       hypothesis_evidence_gate?: {
@@ -105,6 +115,13 @@ describe('FlyLab WebMCP contracts', () => {
     assert.equal(manifest.schema_version, 'flylab.agent-manifest.v1');
     assert.equal(manifest.transport?.required_first_call, 'inspect_flylab_state');
     assert.equal(manifest.transport?.state_contract, 'flylab.agent-context.v1');
+    assert.equal(manifest.transport?.tool_contract_document, '/flylab-tool-contracts.json');
+    assert.equal(manifest.discovery?.contract_url, '/flylab-tool-contracts.json');
+    assert.equal(manifest.discovery?.webmcp_standard_discovery, false);
+    assert.equal(manifest.discovery?.inline_state_selector, '#flylab-agent-context');
+    assert.equal(manifest.discovery?.inline_runtime_selector, '#flylab-agent-runtime');
+    assert.equal(manifest.discovery?.inline_handoff_selector, '#flylab-agent-handoff');
+    assert.match(manifest.discovery?.unsupported_browser_behavior ?? '', /does not polyfill WebMCP/i);
     assert.deepEqual(manifest.tools?.map((tool) => tool.name).sort(), expectedNames);
     assert.equal(manifest.supervisor_gate?.webmcp_tool, false);
     assert.equal(manifest.supervisor_gate?.blocks, 'run_fly_simulation');
@@ -115,6 +132,28 @@ describe('FlyLab WebMCP contracts', () => {
       supplemental_only: ['structural_path', 'specimen_inventory', 'motor_context'],
       excluded: ['model_context', 'catalog_context'],
     });
+  });
+
+  test('derives a complete public contract document from the registered tool source', () => {
+    assert.equal(flyLabAgentContractDocument.schema_version, 'flylab.webmcp-contracts.v1');
+    assert.equal(flyLabAgentContractDocument.transport.required_first_call, 'inspect_flylab_state');
+    assert.match(flyLabAgentContractDocument.transport.execution_note, /not a fallback transport/i);
+    assert.deepEqual(flyLabAgentContractDocument.result_contract.domain_error_codes, FLYLAB_ERROR_CODES);
+    assert.deepEqual(
+      flyLabAgentContractDocument.tools,
+      flyLabToolContracts.map((contract) => ({
+        name: contract.name,
+        title: contract.title,
+        description: contract.description,
+        annotations: contract.annotations,
+        input_schema: contract.inputSchema,
+      })),
+    );
+    assert.equal(flyLabAgentContractDocument.tools.length, 8);
+    for (const tool of flyLabAgentContractDocument.tools) {
+      assert.equal(tool.input_schema.type, 'object');
+      assert.equal(tool.input_schema.additionalProperties, false);
+    }
   });
 
   test('requires baseline and model-sham controls in every trial design', () => {
@@ -188,6 +227,18 @@ describe('FlyLab WebMCP contracts', () => {
 });
 
 describe('FlyLab WebMCP registration lifecycle', () => {
+  test('fails closed with zero registrations when document.modelContext is absent', async () => {
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: {},
+    });
+
+    const result = await installFlyLabWebMCP({});
+
+    assert.equal(result.supported, false);
+    assert.doesNotThrow(() => result.dispose());
+  });
+
   test('registers and invokes all eight contracts, then unregisters them on dispose', async () => {
     const registrations: Array<{
       tool: {

@@ -125,14 +125,22 @@ function waitForEvent(method, predicate = () => true) {
 }
 
 async function readRuntimeStatus() {
-  const expression = `JSON.stringify({
-    modelContextType: typeof document.modelContext,
-    registerToolType: typeof document.modelContext?.registerTool,
-    status: document.querySelector('.tool-status')?.textContent?.trim() ?? null,
-    originAgentCluster: window.originAgentCluster === true,
-    location: window.location.href,
-    userAgent: navigator.userAgent
-  })`;
+  const expression = `(() => {
+    const readJson = (selector) => {
+      const value = document.querySelector(selector)?.textContent;
+      return value ? JSON.parse(value) : null;
+    };
+    return JSON.stringify({
+      modelContextType: typeof document.modelContext,
+      registerToolType: typeof document.modelContext?.registerTool,
+      status: document.querySelector('.tool-status')?.textContent?.trim() ?? null,
+      originAgentCluster: window.originAgentCluster === true,
+      location: window.location.href,
+      userAgent: navigator.userAgent,
+      agentRuntime: readJson('#flylab-agent-runtime'),
+      agentHandoff: readJson('#flylab-agent-handoff')
+    });
+  })()`;
   const response = await sendCommand('Runtime.evaluate', {
     expression,
     returnByValue: true,
@@ -1128,6 +1136,14 @@ try {
     && status?.registerToolType === 'function'
     && status?.status === '8 tools live'
     && status?.originAgentCluster === true
+    && status?.agentRuntime?.status === 'active'
+    && status?.agentRuntime?.registered_tool_count === 8
+    && status?.agentRuntime?.agent_invocation_available === true
+    && status?.agentRuntime?.workflow_next_tool === 'find_fly_circuits'
+    && status?.agentRuntime?.invocable_next_tool === 'find_fly_circuits'
+    && status?.agentRuntime?.invocable_next_action?.callable === true
+    && status?.agentHandoff?.schema_version === 'flylab.agent-handoff.v1'
+    && JSON.stringify(status.agentHandoff.transport) === JSON.stringify(status.agentRuntime)
     && JSON.stringify(actualToolNames) === JSON.stringify(expectedToolNames)
     && response.status === 'Completed';
 
@@ -1146,6 +1162,14 @@ try {
     registered_tools: actualToolNames,
     invoked_tools: ['inspect_flylab_state', 'find_fly_circuits'],
     invocation_status: response.status,
+    agent_transport: {
+      status: status.agentRuntime.status,
+      registered_tool_count: status.agentRuntime.registered_tool_count,
+      workflow_next_tool: status.agentRuntime.workflow_next_tool,
+      invocable_next_tool: status.agentRuntime.invocable_next_tool,
+      invocation_available: status.agentRuntime.agent_invocation_available,
+      handoff_schema: status.agentHandoff.schema_version,
+    },
     origin_agent_cluster: true,
     browser_user_agent: status.userAgent,
   };

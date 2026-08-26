@@ -99,7 +99,7 @@ inspect shared page state
 - Visible human-approval boundary
 - Bounded next-experiment proposal
 - Exact-lineage evidence bundle with separately scoped hypothesis-support and model-method source closures, model manifests, and hash
-- 54 automated tests for the model, model-card parity, recovery state machine, claim-compatible evidence gating, evidence export, synchronized public agent manifest, WebMCP contracts, and publication-safe submission assets and preflight gates
+- 57 automated tests for the model, model-card parity, recovery state machine, claim-compatible evidence gating, evidence export, synchronized public agent manifest and generated contract document, unsupported/active transport handoffs, absent-API fail-closed behavior, WebMCP contracts, and publication-safe submission assets and preflight gates
 
 **Not claimed**
 
@@ -164,9 +164,9 @@ Judge-ready prerequisites, prompts, expected state transitions, and recovery che
 
 - [x] Verify the live HTTPS URL without private-site authentication.
 - [x] Confirm Chrome with the official WebMCP testing feature accepts all eight registrations.
-- [ ] Confirm ChatGPT's in-app browser discovers exactly eight tools.
+- [ ] Confirm ChatGPT's in-app browser discovers exactly eight tools in a model/account/workspace with Site Tools available. The current Codex in-app runtime has been verified to fail closed with `agent_invocation_available: false`, explicit unsupported-runtime copy, and read-only contract/state discovery instead of claiming registration.
 - [x] Run `npm test`, `npm run lint`, and `npm run build` against the release candidate.
-- [x] Re-clone the public GitHub repository and pass dependency installation, all 54 tests, lint, and production build from only the published files.
+- [x] Re-clone the public GitHub repository and pass dependency installation, all 57 tests, lint, and production build from only the published files.
 - [x] Add public CI for exact dependency installation, tests, lint, build, and dependency audit.
 - [x] Confirm the deployed workflow stops at the non-WebMCP review gate before the visible approval click.
 - [x] Confirm on the final deployment that editing a protocol clears approval, playback, analyses, and the follow-up proposal.

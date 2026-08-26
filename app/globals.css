@@ -268,6 +268,16 @@ dd {
 .agent-bridge-identity strong { color: var(--teal); }
 .agent-bridge-gate strong { color: var(--inferred); }
 
+.agent-contract-link {
+  width: fit-content;
+  color: var(--muted-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.56rem;
+  text-decoration: none;
+}
+
+.agent-contract-link:hover { color: var(--agent); }
+
 .workspace {
   min-height: calc(100vh - 166px);
   display: grid;
@@ -619,6 +629,16 @@ dd {
 }
 .agent-handoff-rail > small { color: var(--muted); font-size: 0.6rem; line-height: 1.4; }
 .agent-handoff-rail > small b { color: var(--muted-2); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 620; }
+.agent-runtime-fallback {
+  padding: 8px;
+  border: 1px solid rgba(212, 156, 255, 0.22);
+  border-radius: 6px;
+  background: rgba(5, 12, 14, 0.38);
+  color: var(--muted);
+  font-size: 0.59rem;
+  line-height: 1.45;
+}
+.agent-runtime-fallback a { color: var(--agent); }
 .agent-handoff-rail > button {
   min-height: 38px;
   border: 1px solid rgba(212, 156, 255, 0.44);

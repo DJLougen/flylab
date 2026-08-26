@@ -33,7 +33,7 @@ npm ci
 npm run dev
 ```
 
-Open the local URL printed by the development server. WebMCP discovery requires a compatible browser. For the challenge, use ChatGPT's in-app browser or a Chrome build with WebMCP enabled.
+Open the local URL printed by the development server. WebMCP invocation requires a compatible browser plus a workspace where Site Tools are available. FlyLab's independently verified path is Chrome 149 or newer with WebMCP testing enabled. ChatGPT's in-app browser can expose the same tools when the feature is available for that model, account, and workspace; FlyLab does not treat an absent browser API as a successful registration.
 
 Verification commands:
 
@@ -44,7 +44,7 @@ npm run build
 npm run verify:webmcp
 ```
 
-`npm test` compiles the TypeScript test target and runs Node's built-in test runner. The current 54-test suite covers same-seed reproducibility, changed-seed divergence, mandatory controls, canonical and idempotent artifact identity, onset-referenced/null response latency, exact artifact recovery, stale prepared-commit rejection, cancellation timing, claim-compatible evidence gating, source-support closure, model-card parameter parity, provenance labels, laterality-to-circuit mapping, morphology checksums, the eight WebMCP contracts, the synchronized public agent manifest and evidence gate, current annotation keys, registration disposal, and publication-safe submission assets and preflight gates. `npm run verify:webmcp` opens the public deployment in an isolated Chrome profile with Chrome's official WebMCP testing feature, verifies the real browser API, enumerates the exact eight tools through Chrome's WebMCP protocol, calls `inspect_flylab_state`, and completes a live `find_fly_circuits` invocation.
+`npm test` compiles the TypeScript test target and runs Node's built-in test runner. The current 57-test suite covers same-seed reproducibility, changed-seed divergence, mandatory controls, canonical and idempotent artifact identity, onset-referenced/null response latency, exact artifact recovery, stale prepared-commit rejection, cancellation timing, claim-compatible evidence gating, source-support closure, model-card parameter parity, provenance labels, laterality-to-circuit mapping, morphology checksums, the eight WebMCP contracts, the synchronized public agent manifest and complete contract document, unsupported/active transport handoffs, absent-API fail-closed behavior, current annotation keys, registration disposal, and publication-safe submission assets and preflight gates. `npm run verify:webmcp` opens the public deployment in an isolated Chrome profile with Chrome's official WebMCP testing feature, verifies the real browser API, enumerates the exact eight tools through Chrome's WebMCP protocol, calls `inspect_flylab_state`, and completes a live `find_fly_circuits` invocation.
 
 ## Human-agent workflow
 
@@ -76,6 +76,8 @@ The approval step is intentionally not a WebMCP tool. It remains a human action 
 | `save_fly_evidence` | Save sources, claims, model assumptions, protocol, seeds, runs, analyses, and comparison. | Prepares a manifest-hashed, downloadable JSON envelope and attempts a browser-local convenience copy. |
 
 The current WebMCP implementation uses `document.modelContext.registerTool(...)`, closed object schemas, `readOnlyHint`, `untrustedContentHint`, cancellable execution, and AbortSignal-owned registration lifecycle. Every successful tool call returns `state_revision`; agent actions and person edits advance one shared monotonic revision. Long-running simulation and evidence-save work capture that revision, prepare without publishing, then compare it with the live revision at commit. A mismatch publishes nothing and returns non-retryable `STALE_STATE` with expected/actual revisions and `inspect_flylab_state` as recovery. A cancellation observed before commit cannot publish the prepared batch or bundle, while a mutation already synchronously committed reports success rather than a false cancellation. Every success uses a versioned structured envelope; domain failures are machine-readable, and the inspector is the canonical recovery contract.
+
+The HTML publishes FlyLab-specific documentation links to the [agent manifest](public/flylab-agent-manifest.json) and the live `/flylab-tool-contracts.json` document. The contract endpoint is generated from the same eight definitions registered with WebMCP, including full input schemas, annotations, error codes, result fields, and recovery rules. The page also embeds workflow state, transport availability, and a combined recovery packet at `#flylab-agent-context`, `#flylab-agent-runtime`, and `#flylab-agent-handoff`. These are honest read-only aids when WebMCP is unavailable; they do not polyfill the browser API, make a tool callable, or claim standardized WebMCP manifest discovery.
 It follows OpenAI's [Site tools documentation](https://learn.chatgpt.com/docs/webmcp) for making website capabilities directly available to agents.
 
 ## Reproducibility and provenance

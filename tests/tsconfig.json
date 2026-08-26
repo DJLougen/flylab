@@ -15,6 +15,8 @@
     "../lib/flylab.ts",
     "../lib/fly-brain.ts",
     "../lib/agent-context.ts",
+    "../lib/agent-contract-document.ts",
+    "../lib/agent-handoff.ts",
     "../lib/evidence-export.ts",
     "../lib/webmcp.ts",
     "./*.test.ts"
