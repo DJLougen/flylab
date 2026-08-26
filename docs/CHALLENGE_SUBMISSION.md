@@ -4,7 +4,7 @@ The current agent-first candidate is deployed publicly and has passed the comple
 
 Submission deadline: **September 3, 2026 at 1:00 p.m. PDT**, as shown by the [OpenAI challenge page](https://openai.com/webmcp-challenge/) and the binding [Devpost official rules](https://webmcp.devpost.com/rules).
 
-FlyLab was created on August 26, 2026 during the challenge period. Its primary audience is a computational-neuroethology researcher or educator reviewing a source-backed virtual MDN experiment. The concrete failure it prevents is an agent silently continuing from stale page state or presenting a simulation result after its evidence lineage, protocol, or human approval has changed. Agent-tool builders are a secondary audience.
+FlyLab was created on August 26, 2026 during the challenge period. The dated [first public commit](https://github.com/DJLougen/flylab/commit/a45eb82ad29d62a1bf7afc0aff89f71a70384db9) records the initial challenge build, and the current release candidate's [public CI run](https://github.com/DJLougen/flylab/actions/runs/33013840575) passed exact dependency installation, all 57 tests, lint, production build, and dependency audit. Its primary audience is a computational-neuroethology researcher or educator reviewing a source-backed virtual MDN experiment. The concrete failure it prevents is an agent silently continuing from stale page state or presenting a simulation result after its evidence lineage, protocol, or human approval has changed. Agent-tool builders are a secondary audience.
 
 ## Submission fields
 
@@ -54,6 +54,17 @@ This is not a generic CRUD wrapper: one browser session combines an interactive 
 - Editing invalidates approval and downstream artifacts.
 - The agent proposes one follow-up within a person-selected budget and stops.
 - The final bundle preserves sources and scientific limitations, not just a polished answer.
+
+## Judging-criteria mapping
+
+The official rules weight four criteria equally. FlyLab's evidence for each is:
+
+| Criterion | FlyLab evidence |
+|---|---|
+| **WebMCP Leverage** | Eight non-trivial page-registered tools expose the scientific workflow at the operation level rather than reproducing UI clicks. They share the visible page revision, exact artifact lineage, human approval blocker, cancellation boundary, structured recovery, and one valid next action. |
+| **Execution** | The no-login HTTPS application delivers a coherent adult MDN vertical slice with an interactive Three.js arena and circuit viewer, controlled seeded simulation, analysis, bounded follow-up, and evidence export. The release is covered by public CI and a complete Chrome 151 WebMCP workflow against the deployed site. |
+| **Potential Impact** | FlyLab addresses a specific failure for neuroscience researchers and educators: agents can no longer silently blur measured findings, derived summaries, connectome structure, simulation predictions, and new hypotheses or continue from stale experimental state. |
+| **Creativity & Ambition** | One shared browser instrument combines source-backed neuroethology, reconstruction-derived 3D cells, a deterministic experiment state machine, provenance-preserving evidence bundles, and a deliberately non-tool human review gate. |
 
 ## WebMCP implementation
 
@@ -160,11 +171,22 @@ Judge-ready prerequisites, prompts, expected state transitions, and recovery che
 - Demo video: `[YOUTUBE_DEMO_URL]` — pending public upload and verification
 - Challenge entry: `[DEVPOST_ENTRY_URL]` — pending publication and verification
 
+## Entrant attestations
+
+These eligibility and ownership facts must be verified personally by the entrant. They deliberately remain unchecked until that review is complete.
+
+- [ ] Confirm the entrant is at least the age of majority where they reside and resides in an OpenAI-supported country or territory that is not excluded by the official rules, including the province of Quebec exclusion.
+- [ ] Confirm the entrant is not a Promotion Entity, its employee or agent, a judge or judge employer, an excluded affiliate or household/immediate-family member, or otherwise subject to a real or apparent conflict of interest.
+- [ ] Confirm FlyLab will be the entrant's only WebMCP Challenge submission.
+- [ ] Confirm FlyLab was not developed or derived from a project developed with disqualifying financial or preferential support from OpenAI or Devpost.
+- [ ] Confirm the submitted original work is owned by the entrant and does not violate another party's intellectual-property, privacy, publicity, contractual, or other rights.
+- [ ] Confirm every incorporated third-party SDK, package, dataset, reconstruction, font, and other asset is used under applicable permission or license terms and that all required attribution and modification notices are included.
+
 ## Submission checklist
 
 - [x] Verify the live HTTPS URL without private-site authentication.
 - [x] Confirm Chrome with the official WebMCP testing feature accepts all eight registrations.
-- [ ] Confirm ChatGPT's in-app browser discovers exactly eight tools in a model/account/workspace with Site Tools available. The current Codex in-app runtime has been verified to fail closed with `agent_invocation_available: false`, explicit unsupported-runtime copy, and read-only contract/state discovery instead of claiming registration.
+- [ ] Optional, rollout-dependent QA: confirm ChatGPT's in-app browser discovers exactly eight tools in a model/account/workspace where Site Tools are available. This is not a submission blocker because the challenge rules also accept the independently verified Chrome 149+ path. The current Codex in-app runtime has been verified to fail closed with `agent_invocation_available: false`, explicit unsupported-runtime copy, and read-only contract/state discovery instead of claiming registration.
 - [x] Run `npm test`, `npm run lint`, and `npm run build` against the release candidate.
 - [x] Re-clone the public GitHub repository and pass dependency installation, all 57 tests, lint, and production build from only the published files.
 - [x] Add public CI for exact dependency installation, tests, lint, build, and dependency audit.

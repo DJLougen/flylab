@@ -315,11 +315,11 @@ export const BANC_V888_BUNDLE = {
   specimen: 'One adult female Drosophila central nervous system.',
   stableSnapshotKey: 'banc_888_id',
   edgeJoin: 'pre/post join to banc_888_id',
-  edgeSource: 'v3 synapse detections rolled up to directed neuron pairs',
+  edgeSource: 'v3 future-work predicted synaptic links, postsynapse size ≥10 voxels, rolled up to directed neuron pairs; Bates et al. paper analyses use v2 (≥5)',
   limitations: [
     'This is one specimen, not a population estimate or a universal cell count.',
     'The reconstruction is incomplete; the lamina and ocellar ganglion are absent and other reconstruction limitations remain.',
-    'Directed contacts are anatomical predictions, not recordings of activity, causal efficacy, or physiological weights.',
+    'Directed counts are v3-predicted synaptic links after the postsynapse-size ≥10-voxel filter, not recordings of activity, causal efficacy, or physiological weights; the paper analyses use v2 (≥5).',
     'The raw norm field is preserved for provenance but is not assigned a biological interpretation by FlyLab.',
   ],
   files: BANC_V888_SOURCE_FILES,

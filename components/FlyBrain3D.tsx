@@ -429,7 +429,7 @@ export function FlyBrain3D({ laterality, driveActive, perturbation, conditionLab
       </div>
 
       <aside className="brain-neuron-panel" aria-label="BANC neuron records">
-        <header><div><p className="eyebrow">Pinned cells</p><h2>4 MDNs · 2 LBL40s</h2></div><span>{BANC_V888_EDGES.length} edges</span></header>
+        <header><div><p className="eyebrow">Pinned cells</p><h2>4 MDNs · 2 LBL40s</h2></div><span>{BANC_V888_EDGES.length} rows</span></header>
         <div className="brain-neuron-list">
           {cells.map((cell) => {
             const isActive = activeMdnSet.has(cell.banc_888_id);
@@ -456,7 +456,7 @@ export function FlyBrain3D({ laterality, driveActive, perturbation, conditionLab
               <dl>
                 <div><dt>BANC v888 ID</dt><dd>{selectedCell.banc_888_id}</dd></div>
                 <div><dt>Metadata region</dt><dd>{selectedCell.root_region}</dd></div>
-                <div><dt>Structural contacts</dt><dd>{contactsForCell(selectedCell.banc_888_id)} across bundled MDN→LBL40 edges</dd></div>
+                <div><dt>Structural v3 links</dt><dd>{contactsForCell(selectedCell.banc_888_id)} predicted synaptic links across bundled MDN→LBL40 rows</dd></div>
               </dl>
             </>
           ) : (
@@ -465,14 +465,14 @@ export function FlyBrain3D({ laterality, driveActive, perturbation, conditionLab
         </div>
         <div className="brain-edge-summary">
           <span><ViewerProvenanceTag kind="connectome_inferred" /> selected structural path</span>
-          <strong>{activity.highlightedEdges.length ? `${activity.highlightedEdges.length} edges · ${activity.highlightedEdges.reduce((total, edge) => total + edge.count, 0)} putative contacts` : 'none during baseline / sham / rest'}</strong>
+          <strong>{activity.highlightedEdges.length ? `${activity.highlightedEdges.length} rows · ${activity.highlightedEdges.reduce((total, edge) => total + edge.count, 0)} v3-predicted links` : 'none during baseline / sham / rest'}</strong>
         </div>
       </aside>
 
       <footer className="brain-viewer-boundary">
         <span><ViewerProvenanceTag kind="derived" /> neuron lines from BANC v888 SWCs</span>
         <span>Not evidence · schematic orientation shell</span>
-        <strong><ViewerProvenanceTag kind="agent_hypothesized" /> glow is model selection, not measured activity or signal propagation.</strong>
+        <strong><ViewerProvenanceTag kind="agent_hypothesized" /> glow is model selection; v3 link counts are not physiology or measured activity.</strong>
       </footer>
     </section>
   );

@@ -4,6 +4,8 @@ FlyLab is public, requires no account, and exposes exactly eight imperative WebM
 
 - Live application: <https://flylab-neuroethology.d-lougen.chatgpt.site/>
 - Public source: <https://github.com/DJLougen/flylab>
+- Challenge-period source proof: [first public commit, August 26, 2026](https://github.com/DJLougen/flylab/commit/a45eb82ad29d62a1bf7afc0aff89f71a70384db9)
+- Release verification: [successful public CI run](https://github.com/DJLougen/flylab/actions/runs/33013840575)
 
 The complete path takes about three minutes. It intentionally pauses once at a visible approval control that is absent from the WebMCP tool surface.
 
@@ -14,7 +16,7 @@ Use either of the challenge-supported paths:
 1. For an agent-driven run, use the ChatGPT desktop app with GPT-5.6 Sol or GPT-5.6 Terra, update the app, enable **Settings → Browser → Permissions → Enable site tools**, and open the live URL in the built-in browser. Open **Site tools → Available site tools** in the address bar.
 2. For a Chrome-only run, use Chrome 149 or newer, enable `chrome://flags/#enable-webmcp-testing` and `chrome://flags/#devtools-webmcp-support`, relaunch, and open **DevTools → Application → WebMCP**. Follow the complete [manual Chrome tool sequence](CHROME_MANUAL_TEST.md), including its dynamic-ID handoffs. Vanilla Chrome provides manual WebMCP invocation, not a conversational agent.
 
-OpenAI notes that site-tool availability can depend on model, app version, workspace type, permissions, and rollout. If an otherwise compatible ChatGPT session does not show the site-tool surface, use the Chrome path. Do not install an MCP server or use a page polyfill.
+OpenAI notes that site-tool availability can depend on model, app version, workspace type, permissions, and rollout. ChatGPT discovery is therefore useful rollout-dependent QA, not a prerequisite for judging this deployment. The independently verified Chrome 149+ path is the baseline when an otherwise compatible ChatGPT session does not show the site-tool surface. Do not install an MCP server or use a page polyfill.
 
 References: [OpenAI Site tools](https://learn.chatgpt.com/docs/webmcp), [Chrome WebMCP](https://developer.chrome.com/docs/ai/webmcp), and [Chrome WebMCP debugging](https://developer.chrome.com/docs/devtools/application/webmcp).
 
@@ -33,7 +35,9 @@ Confirm these eight names:
 
 `inspect_flylab_state` is the sole read-only tool. Human approval is deliberately not a ninth tool.
 
-## ChatGPT agent-driven workflow test
+## Optional rollout-dependent ChatGPT agent-driven workflow test
+
+Run this section only when the current ChatGPT model, account, workspace, and app expose Site Tools. Otherwise use the complete Chrome sequence above; an unavailable ChatGPT rollout does not imply that FlyLab registered a fallback transport or failed the verified Chrome path.
 
 Ask the agent to call `inspect_flylab_state`. A fresh page should report:
 

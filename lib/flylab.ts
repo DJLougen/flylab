@@ -80,6 +80,15 @@ export interface SourceRecord {
   notes?: string;
 }
 
+export interface VisualReferenceRecord extends SourceRecord {
+  kind: 'article';
+  relation: 'visual_reference';
+  hypothesisEligible: false;
+  scope: string;
+  boundary: string;
+  provenance: 'derived';
+}
+
 export interface EvidenceRecord {
   id: string;
   label: string;
@@ -104,7 +113,17 @@ export interface CircuitRecord {
   stage: 'adult';
   sex: 'source_specific';
   sexBoundary: string;
-  laterality: 'bilateral_pair';
+  laterality: 'bilateral_population';
+  specimenInventory: {
+    dataset: 'BANC';
+    snapshot: 'banc_888';
+    specimen: string;
+    mdnTotal: 4;
+    mdnPerSide: { left: 2; right: 2 };
+    evidenceId: 'E-BANC-MDN-INVENTORY-007';
+    provenance: 'derived';
+    boundary: string;
+  };
   behaviors: string[];
   evidenceIds: string[];
   summary: string;
@@ -295,6 +314,45 @@ export const MODEL_MANIFEST = {
   boundary: 'Hand-authored, uncalibrated reduced-order kinematic prediction only. It does not execute BANC neurons, model neural dynamics, reproduce a wet-lab perturbation, or constitute an independent biological validation.',
 } as const;
 
+export const VISUAL_REFERENCES: readonly VisualReferenceRecord[] = [
+  {
+    id: 'SRC-JURGENS-GENETICS-2024',
+    kind: 'article',
+    relation: 'visual_reference',
+    title: 'An anatomical atlas of Drosophila melanogaster—the wild-type',
+    url: 'https://doi.org/10.1093/genetics/iyae129',
+    doi: '10.1093/genetics/iyae129',
+    citation: 'Jürgens KJJ, Drechsler M, Paululat A. Genetics 228:iyae129 (2024).',
+    version: 'Version of record (2024)',
+    access: 'Open primary article.',
+    license: 'CC-BY-4.0',
+    specimen: 'Wild-type Drosophila larvae and adults; FlyLab uses only the adult external-anatomy reference.',
+    redistribution: 'No article text or figures are bundled.',
+    scope: 'Reference for the major adult external landmarks in FlyLab’s procedural Three.js animal.',
+    boundary: 'Visual reference only. The FlyLab mesh is not a scan, specimen reconstruction, segmentation, or morphometric derivative of this atlas.',
+    hypothesisEligible: false,
+    provenance: 'derived',
+  },
+  {
+    id: 'SRC-CHUN-ELIFE-2021',
+    kind: 'article',
+    relation: 'visual_reference',
+    title: 'Drosophila uses a tripod gait across all walking speeds, and the geometry of the tripod is important for speed control',
+    url: 'https://doi.org/10.7554/eLife.65878',
+    doi: '10.7554/eLife.65878',
+    citation: 'Chun C, Biswas T, Bhandawat V. eLife 10:e65878 (2021).',
+    version: 'Version of record (2021)',
+    access: 'Open primary article.',
+    license: 'CC-BY-4.0',
+    specimen: 'Adult Drosophila measured during straight forward walking.',
+    redistribution: 'No article text, figures, or measured trajectories are bundled.',
+    scope: 'Display-level reference for an alternating modified-tripod motion cue.',
+    boundary: 'Visual reference only. The study concerns forward walking, not backward-gait biomechanics, and it does not support FlyLab trajectory values, foot contacts, forces, or joint dynamics.',
+    hypothesisEligible: false,
+    provenance: 'derived',
+  },
+] as const;
+
 export const DATASET_MANIFEST = {
   banc: {
     name: BANC_V888_BUNDLE.dataset,
@@ -319,6 +377,7 @@ export const DATASET_MANIFEST = {
     boundary: 'Context for future descending-neuron expansion; it is not an MDN-specific causal source.',
   },
   flygym: MODEL_MANIFEST.embodimentReference,
+  visualReferences: VISUAL_REFERENCES,
 } as const;
 
 export const SOURCES: SourceRecord[] = [
@@ -414,7 +473,7 @@ export const SOURCES: SourceRecord[] = [
     license: 'CC-BY-4.0',
     specimen: BANC_V888_BUNDLE.specimen,
     redistribution: 'Attribution required; exact source-file identifiers and hashes are retained.',
-    notes: 'Incomplete reconstruction: the lamina and ocellar ganglion are absent, and other reconstruction limitations remain.',
+    notes: 'Incomplete reconstruction: the lamina and ocellar ganglion are absent, and other reconstruction limitations remain. FlyLab uses the v3 future-work edge product (postsynapse size ≥10 voxels); the Bates et al. paper analyses use v2 (≥5).',
   },
   {
     id: 'SRC-MANC-V121',
@@ -433,14 +492,14 @@ export const SOURCES: SourceRecord[] = [
     id: 'SRC-FLYLAB-MODEL-CARD',
     kind: 'software',
     title: 'FlyLab reduced-order model card',
-    url: 'https://github.com/DJLougen/flylab/blob/main/docs/MODEL_CARD.md',
+    url: 'https://github.com/DJLougen/flylab/blob/4f25bbfc307a0f351ac4389cf5e12060abedbeb3/docs/MODEL_CARD.md',
     citation: 'FlyLab contributors. FlyLab reduced-order model card, version 0.1.3 (2026).',
-    version: '0.1.3 / mdn-inspired-retreat-adapter.v2',
+    version: '0.1.3 / mdn-inspired-retreat-adapter.v2 / commit 4f25bbfc307a0f351ac4389cf5e12060abedbeb3',
     access: 'Open source model definition and equations.',
     license: 'Apache-2.0',
     specimen: 'No biological specimen; local deterministic software method.',
     redistribution: 'Reuse under Apache-2.0 with required notices.',
-    notes: 'This is the authoritative source for FlyLab equations. FlyGym is a separate embodiment reference and does not define the local controller.',
+    notes: 'This pinned model card is the authoritative source for FlyLab equations (SHA-256 0ba75547efcfe1f6c045e32cdc3f56ad8aa3664eee8c0b87644fab9906e9229d). FlyGym is a separate embodiment reference and does not define the local controller.',
   },
   {
     id: 'SRC-FLYGYM-NM-2024',
@@ -468,6 +527,7 @@ export const SOURCES: SourceRecord[] = [
     redistribution: 'Reuse under Apache-2.0 with required notices.',
     notes: 'Pinned browser dependencies: MuJoCo-WASM 3.9.0 and Three.js 0.169.0.',
   },
+  ...VISUAL_REFERENCES,
 ];
 
 export const EVIDENCE: EvidenceRecord[] = [
@@ -503,17 +563,17 @@ export const EVIDENCE: EvidenceRecord[] = [
   },
   {
     id: 'E-BANC-PATH-003',
-    label: 'Pinned MDN-to-LBL40 anatomical contacts',
-    claim: `The pinned BANC v888 edge list contains four directed MDN→LBL40 rows totaling ${BANC_V888_MDN_LBL40_TOTAL_CONTACTS} predicted contacts.`,
+    label: 'Pinned MDN-to-LBL40 v3 predicted links',
+    claim: `The pinned BANC v888 v3 edge list contains four directed MDN→LBL40 rows totaling ${BANC_V888_MDN_LBL40_TOTAL_CONTACTS} v3-predicted synaptic links after the postsynapse-size ≥10-voxel filter.`,
     provenance: 'connectome_inferred',
     sourceIds: ['SRC-BANC-NATURE-2026', 'SRC-BANC-DATAVERSE-V3'],
-    context: 'Four selected edge rows from the v3-derived directed edge list in one adult female BANC specimen.',
-    caution: 'Putative anatomical contacts are not physiological weights, connection probabilities, activity measurements, or causal efficacy. FlyLab preserves norm without assigning it a biological interpretation.',
+    context: 'Four selected edge rows from the v3 future-work directed edge product in one adult female BANC specimen; Bates et al.’s paper analyses use v2 with a postsynapse-size ≥5-voxel filter.',
+    caution: 'The v3-predicted synaptic-link counts are not physiological weights, connection probabilities, activity measurements, or causal efficacy. FlyLab preserves norm without assigning it a biological interpretation.',
     role: 'hypothesis_support',
     support: { kind: 'structural_path', behaviors: ['backward_walking', 'retreat'] },
     sourceSupport: [
       { sourceId: 'SRC-BANC-NATURE-2026', relation: 'dataset_basis', locator: 'Data availability; final-print materialization v888 and static edge-list resources', supports: 'Identifies the adult female BANC specimen, v888 materialization, and released connectivity resources.' },
-      { sourceId: 'SRC-BANC-DATAVERSE-V3', relation: 'dataset_basis', locator: 'banc_888_edgelist_simple_v3.feather; Dataverse file 13918810; SHA-256 8c296e946f3c69a8c7222f30ad75fa8a98eeb189124fec6df829c9125f4be64b; rows 720575941491012809→720575941669069043 count 52, 720575941491065653→720575941669069043 count 51, 720575941499708745→720575941669107187 count 26, 720575941614906387→720575941669107187 count 24', supports: 'Provides the exact pinned rows and contact-count field used for the four-edge, 153-contact derived record.' },
+      { sourceId: 'SRC-BANC-DATAVERSE-V3', relation: 'dataset_basis', locator: 'banc_888_edgelist_simple_v3.feather; v3 postsynapse-size ≥10-voxel filter; Dataverse file 13918810; SHA-256 8c296e946f3c69a8c7222f30ad75fa8a98eeb189124fec6df829c9125f4be64b; rows 720575941491012809→720575941669069043 count 52, 720575941491065653→720575941669069043 count 51, 720575941499708745→720575941669107187 count 26, 720575941614906387→720575941669107187 count 24', supports: 'Provides the exact pinned rows and count field used for the four-row, 153-v3-predicted-link record; v3 is the future-work product rather than the paper’s v2 analysis product.' },
     ],
   },
   {
@@ -612,7 +672,17 @@ export const CIRCUITS: CircuitRecord[] = [
     stage: 'adult',
     sex: 'source_specific',
     sexBoundary: 'Evidence spans source-specific adult assay populations and one adult-female BANC specimen; this catalog record does not establish sex generality.',
-    laterality: 'bilateral_pair',
+    laterality: 'bilateral_population',
+    specimenInventory: {
+      dataset: 'BANC',
+      snapshot: 'banc_888',
+      specimen: BANC_V888_BUNDLE.specimen,
+      mdnTotal: 4,
+      mdnPerSide: { left: 2, right: 2 },
+      evidenceId: 'E-BANC-MDN-INVENTORY-007',
+      provenance: 'derived',
+      boundary: 'Four MDNs—two metadata-left and two metadata-right—is a deterministic inventory of one adult-female BANC v888 specimen, not a universal adult Drosophila cell count.',
+    },
     behaviors: ['backward_walking', 'retreat'],
     evidenceIds: [
       'E-MDN-ACTIVATION-001',
@@ -833,7 +903,7 @@ export function designExperiment(input: {
     assumptions: [
       'Activation level is a unitless model control, not optical power or firing rate.',
       'The MDN-to-controller mapping is hand-authored and versioned; it is not fitted neural dynamics.',
-      'BANC snapshot IDs and anatomical contacts are provenance records, not executable neurons or physiological weights.',
+      'BANC snapshot IDs and v3-predicted synaptic-link counts are provenance records, not executable neurons, activity measurements, or physiological weights.',
       'FlyGym v2.1.0 is an embodied simulation reference; this reduced-order browser model does not execute FlyGym.',
       'Simulator intervals describe seeded model variation, not biological population inference.',
       ...(input.perturbation === 'silence'

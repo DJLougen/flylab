@@ -22,9 +22,17 @@ export interface EvidenceBundleMetadata {
   includedIds: string[];
   supportingEvidenceIds: string[];
   supportingSourceIds: string[];
+  contextEvidenceIds: string[];
+  contextSourceIds: string[];
   methodEvidenceIds: string[];
   methodSourceIds: string[];
   provenanceCounts: Record<ProvenanceLabel, number>;
+  provenanceIndex: Record<ProvenanceLabel, string[]>;
+  lineageEdges: Array<{
+    from: string;
+    relation: string;
+    to: string;
+  }>;
   boundary: string;
   provenance: ['derived'];
   annotation: EvidenceBundleAnnotation;

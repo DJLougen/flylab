@@ -39,6 +39,7 @@ import {
   requireCurrentStateRevision,
   validateToolInput,
   type FlyLabActionActor,
+  type FlyLabProvenanceManifestEntry,
   type FlyLabToolAction,
 } from '@/lib/webmcp';
 import {
@@ -118,6 +119,17 @@ const provenanceMeta: Record<ProvenanceLabel, { label: string; short: string }> 
   agent_hypothesized: { label: 'Agent hypothesis', short: 'A' },
 };
 
+const DATASET_MANIFEST_SOURCE_IDS = [
+  'SRC-BANC-DATAVERSE-V3',
+  'SRC-MANC-V121',
+  'SRC-CANDE-ELIFE-2018',
+  'SRC-CANDE-DRYAD-V1',
+  'SRC-FLYGYM-NM-2024',
+  'SRC-FLYGYM-CODE-V210',
+  'SRC-JURGENS-GENETICS-2024',
+  'SRC-CHUN-ELIFE-2021',
+];
+
 function Badge({ kind, compact = false }: { kind: ProvenanceLabel; compact?: boolean }) {
   const meta = provenanceMeta[kind];
   return <span className={`provenance-badge ${kind}`}><i>{meta.short}</i>{compact ? meta.short : meta.label}</span>;
@@ -144,6 +156,308 @@ function stringInput(input: Record<string, unknown>, key: string, fallback = '')
 
 function stringArrayInput(input: Record<string, unknown>, key: string) {
   return Array.isArray(input[key]) ? (input[key] as unknown[]).filter((value): value is string => typeof value === 'string') : [];
+}
+
+function uniqueStrings(values: string[]) {
+  return [...new Set(values)];
+}
+
+function evidenceRecordsForIds(ids: string[]) {
+  return ids
+    .map((id) => EVIDENCE.find((record) => record.id === id))
+    .filter((record): record is (typeof EVIDENCE)[number] => Boolean(record));
+}
+
+function sourceIdsForEvidence(ids: string[]) {
+  return uniqueStrings(evidenceRecordsForIds(ids).flatMap((record) => record.sourceIds));
+}
+
+function buildArtifactManifest(current: LabState) {
+  const circuit = CIRCUITS.find((record) => record.id === current.selectedCircuitId) ?? null;
+  const discoveredEvidence = evidenceRecordsForIds(current.discoveredEvidenceIds);
+  const hypothesisSourceIds = current.hypothesis ? sourceIdsForEvidence(current.hypothesis.evidenceIds) : [];
+  const modelSourceIds = ['SRC-FLYLAB-MODEL-CARD', 'SRC-FLYGYM-NM-2024', 'SRC-FLYGYM-CODE-V210'];
+  return {
+    selected_circuit: circuit ? {
+      id: circuit.id,
+      artifact_type: 'circuit',
+      provenance: circuit.provenance,
+      parent_ids: [],
+      evidence_ids: circuit.evidenceIds,
+      source_ids: sourceIdsForEvidence(circuit.evidenceIds),
+      stage: circuit.stage,
+      sex_boundary: circuit.sexBoundary,
+      laterality: circuit.laterality,
+      specimen_inventory: circuit.specimenInventory,
+      summary: circuit.summary,
+    } : null,
+    discovered_evidence: discoveredEvidence.map((record) => ({
+      id: record.id,
+      artifact_type: 'evidence_record',
+      provenance: [record.provenance],
+      parent_ids: circuit ? [circuit.id] : [],
+      evidence_ids: [],
+      source_ids: record.sourceIds,
+      role: record.role,
+      support_kind: record.support.kind,
+      claim: record.claim,
+      caution: record.caution,
+    })),
+    hypothesis: current.hypothesis ? {
+      id: current.hypothesis.id,
+      artifact_type: 'hypothesis',
+      provenance: [current.hypothesis.provenance],
+      parent_ids: [current.hypothesis.circuitId, ...current.hypothesis.evidenceIds],
+      evidence_ids: current.hypothesis.evidenceIds,
+      causal_evidence_ids: current.hypothesis.causalEvidenceIds,
+      source_ids: hypothesisSourceIds,
+      claim: current.hypothesis.claim,
+      predicted_behavior: current.hypothesis.predictedBehavior,
+      perturbation: current.hypothesis.perturbation,
+      falsification_criterion: current.hypothesis.falsificationCriterion,
+    } : null,
+    experiment: current.experiment ? {
+      id: current.experiment.id,
+      artifact_type: 'experiment',
+      provenance: current.experiment.provenance,
+      parent_ids: [current.experiment.hypothesisId, current.experiment.targetCircuitId],
+      evidence_ids: current.hypothesis?.evidenceIds ?? [],
+      source_ids: uniqueStrings([...hypothesisSourceIds, ...modelSourceIds]),
+      approved: current.experiment.approved,
+      target_circuit_id: current.experiment.targetCircuitId,
+      perturbation: current.experiment.perturbation,
+      primary_laterality: current.experiment.primaryLaterality,
+      protocol: {
+        activation_level: current.experiment.activationLevel,
+        onset_ms: current.experiment.onsetMs,
+        duration_ms: current.experiment.durationMs,
+        trial_duration_ms: current.experiment.trialDurationMs,
+        replicates: current.experiment.replicates,
+        seed: current.experiment.seed,
+      },
+      condition_ids: current.experiment.conditions.map((condition) => condition.id),
+      model: {
+        name: current.experiment.model.name,
+        version: current.experiment.model.version,
+        controller: current.experiment.model.controller,
+        environment: current.experiment.model.environment,
+        provenance: ['derived'],
+        controller_mapping_provenance: ['agent_hypothesized'],
+        boundary: current.experiment.model.boundary,
+      },
+    } : null,
+    batch: current.batch ? {
+      id: current.batch.id,
+      artifact_type: 'simulation_batch',
+      provenance: current.batch.provenance,
+      parent_ids: [current.batch.experimentId],
+      evidence_ids: current.hypothesis?.evidenceIds ?? [],
+      source_ids: uniqueStrings([...hypothesisSourceIds, ...modelSourceIds]),
+      experiment_id: current.batch.experimentId,
+      run_hash: current.batch.runHash,
+      protocol: current.batch.protocol,
+      protocol_provenance: ['agent_hypothesized'],
+      condition_ids: current.batch.conditionRuns.map((run) => run.conditionId),
+      run_ids: current.batch.conditionRuns.flatMap((run) => run.runIds),
+      model: {
+        name: current.batch.model.name,
+        version: current.batch.model.version,
+        controller: current.batch.model.controller,
+        environment: current.batch.model.environment,
+        provenance: ['derived'],
+        controller_mapping_provenance: ['agent_hypothesized'],
+        boundary: current.batch.model.boundary,
+      },
+    } : null,
+    analyses: current.analyses.map((analysis) => ({
+      id: analysis.id,
+      artifact_type: 'behavior_analysis',
+      provenance: analysis.provenance,
+      parent_ids: [analysis.batchId],
+      evidence_ids: current.hypothesis?.evidenceIds ?? [],
+      source_ids: uniqueStrings([...hypothesisSourceIds, ...modelSourceIds]),
+      batch_id: analysis.batchId,
+      method_version: analysis.methodVersion,
+      window_ms: analysis.windowMs,
+      metrics: analysis.metrics,
+      condition_ids: analysis.conditions.map((condition) => condition.conditionId),
+    })),
+    comparison: current.comparison ? {
+      id: current.comparison.id,
+      artifact_type: 'trial_comparison',
+      provenance: current.comparison.provenance,
+      parent_ids: current.comparison.analysisIds,
+      evidence_ids: current.hypothesis?.evidenceIds ?? [],
+      source_ids: uniqueStrings([...hypothesisSourceIds, ...modelSourceIds]),
+      analysis_ids: current.comparison.analysisIds,
+      objective_metric: current.comparison.objectiveMetric,
+      objective: current.comparison.objective,
+      ranked_condition_ids: current.comparison.rankedConditions.map((condition) => condition.conditionId),
+      proposal: {
+        id: current.comparison.proposal.id,
+        artifact_type: 'follow_up_proposal',
+        provenance: [current.comparison.proposal.provenance],
+        parent_ids: [current.comparison.id],
+        evidence_ids: current.hypothesis?.evidenceIds ?? [],
+        source_ids: hypothesisSourceIds,
+        rationale: current.comparison.proposal.rationale,
+        activation_levels: current.comparison.proposal.activationLevels,
+        replicate_budget: current.comparison.proposal.replicateBudget,
+        execution_authorized: false,
+      },
+    } : null,
+    evidence_bundle: current.bundle ? {
+      id: current.bundle.id,
+      artifact_type: 'evidence_bundle',
+      provenance: current.bundle.provenance,
+      parent_ids: current.bundle.includedIds,
+      evidence_ids: uniqueStrings([
+        ...current.bundle.supportingEvidenceIds,
+        ...current.bundle.contextEvidenceIds,
+        ...current.bundle.methodEvidenceIds,
+      ]),
+      source_ids: uniqueStrings([
+        ...current.bundle.supportingSourceIds,
+        ...current.bundle.contextSourceIds,
+        ...current.bundle.methodSourceIds,
+      ]),
+      manifest_hash: current.bundle.manifestHash,
+      saved_at: current.bundle.savedAt,
+      provenance_index: current.bundle.provenanceIndex,
+      lineage_edges: current.bundle.lineageEdges,
+    } : null,
+  };
+}
+
+function provenanceEntry(
+  path: string,
+  artifactId: string | null,
+  artifactType: string,
+  scope: FlyLabProvenanceManifestEntry['scope'],
+  labels: ProvenanceLabel[],
+  parentIds: string[],
+  evidenceIds: string[],
+  sourceIds: string[],
+  boundary: string,
+): FlyLabProvenanceManifestEntry {
+  return {
+    path,
+    artifact_id: artifactId,
+    artifact_type: artifactType,
+    scope,
+    labels,
+    parent_ids: uniqueStrings(parentIds),
+    evidence_ids: uniqueStrings(evidenceIds),
+    source_ids: uniqueStrings(sourceIds),
+    boundary,
+  };
+}
+
+function buildCurrentLineageProvenanceEntries(current: LabState, prefix: string) {
+  const entries: FlyLabProvenanceManifestEntry[] = [];
+  const circuit = CIRCUITS.find((record) => record.id === current.selectedCircuitId) ?? null;
+  const discoveredEvidence = evidenceRecordsForIds(current.discoveredEvidenceIds);
+  if (circuit) entries.push(provenanceEntry(`${prefix}/selected_circuit`, circuit.id, 'circuit', 'artifact', circuit.provenance, [], circuit.evidenceIds, sourceIdsForEvidence(circuit.evidenceIds), 'Derived catalog record; not a neural activity measurement.'));
+  discoveredEvidence.forEach((record, index) => entries.push(provenanceEntry(`${prefix}/discovered_evidence/${index}`, record.id, 'evidence_record', 'record', [record.provenance], circuit ? [circuit.id] : [], [], record.sourceIds, record.caution)));
+  if (current.hypothesis) entries.push(provenanceEntry(`${prefix}/hypothesis`, current.hypothesis.id, 'hypothesis', 'artifact', [current.hypothesis.provenance], [current.hypothesis.circuitId, ...current.hypothesis.evidenceIds], current.hypothesis.evidenceIds, sourceIdsForEvidence(current.hypothesis.evidenceIds), 'Agent-authored falsifiable proposal; not evidence.'));
+  if (current.experiment) {
+    entries.push(provenanceEntry(`${prefix}/experiment`, current.experiment.id, 'experiment', 'artifact', current.experiment.provenance, [current.experiment.hypothesisId, current.experiment.targetCircuitId], current.hypothesis?.evidenceIds ?? [], sourceIdsForEvidence(current.hypothesis?.evidenceIds ?? []), 'Human-reviewable virtual protocol; not a wet-lab protocol or biological dose.'));
+    entries.push(provenanceEntry(`${prefix}/experiment/model`, null, 'model_manifest', 'container', ['derived'], [current.experiment.id], ['E-FLYLAB-MODEL-004'], ['SRC-FLYLAB-MODEL-CARD', 'SRC-FLYGYM-NM-2024', 'SRC-FLYGYM-CODE-V210'], MODEL_MANIFEST.boundary));
+    entries.push(provenanceEntry(`${prefix}/experiment/model/controllerMapping`, null, 'controller_mapping', 'container', ['agent_hypothesized'], [current.experiment.id], ['E-FLYLAB-MODEL-004'], ['SRC-FLYLAB-MODEL-CARD'], MODEL_MANIFEST.controllerMapping.statement));
+  }
+  if (current.batch) {
+    entries.push(provenanceEntry(`${prefix}/batch`, current.batch.id, 'simulation_batch', 'artifact', current.batch.provenance, [current.batch.experimentId], current.hypothesis?.evidenceIds ?? [], sourceIdsForEvidence(current.hypothesis?.evidenceIds ?? []), current.batch.model.boundary));
+    entries.push(...batchFieldProvenanceEntries(current.batch, current.hypothesis?.evidenceIds ?? [], `${prefix}/batch`, false));
+  }
+  current.analyses.forEach((analysis, index) => entries.push(provenanceEntry(`${prefix}/analyses/${index}`, analysis.id, 'behavior_analysis', 'artifact', analysis.provenance, [analysis.batchId], current.hypothesis?.evidenceIds ?? [], sourceIdsForEvidence(current.hypothesis?.evidenceIds ?? []), analysis.warning)));
+  if (current.comparison) {
+    entries.push(provenanceEntry(`${prefix}/comparison`, current.comparison.id, 'trial_comparison', 'artifact', current.comparison.provenance, current.comparison.analysisIds, current.hypothesis?.evidenceIds ?? [], sourceIdsForEvidence(current.hypothesis?.evidenceIds ?? []), 'Ranking of simulation-derived analyses; not biological evidence.'));
+    entries.push(provenanceEntry(`${prefix}/comparison/proposal`, current.comparison.proposal.id, 'follow_up_proposal', 'artifact', [current.comparison.proposal.provenance], [current.comparison.id], current.hypothesis?.evidenceIds ?? [], sourceIdsForEvidence(current.hypothesis?.evidenceIds ?? []), 'Proposal only; execution is not authorized.'));
+  }
+  if (current.bundle) entries.push(provenanceEntry(`${prefix}/evidence_bundle`, current.bundle.id, 'evidence_bundle', 'artifact', current.bundle.provenance, current.bundle.includedIds, uniqueStrings([...current.bundle.supportingEvidenceIds, ...current.bundle.contextEvidenceIds, ...current.bundle.methodEvidenceIds]), uniqueStrings([...current.bundle.supportingSourceIds, ...current.bundle.contextSourceIds, ...current.bundle.methodSourceIds]), current.bundle.boundary));
+  return entries;
+}
+
+function batchFieldProvenanceEntries(
+  batch: SimulationBatch,
+  evidenceIds: string[],
+  prefix = '',
+  includeRoot = true,
+) {
+  const hypothesisSourceIds = sourceIdsForEvidence(evidenceIds);
+  const modelSourceIds = ['SRC-FLYLAB-MODEL-CARD', 'SRC-FLYGYM-NM-2024', 'SRC-FLYGYM-CODE-V210'];
+  const entries: FlyLabProvenanceManifestEntry[] = [];
+  if (includeRoot) {
+    entries.push(provenanceEntry(
+      prefix,
+      batch.id,
+      'simulation_batch',
+      'artifact',
+      ['simulation_predicted'],
+      [batch.experimentId],
+      evidenceIds,
+      uniqueStrings([...hypothesisSourceIds, ...modelSourceIds]),
+      batch.model.boundary,
+    ));
+  }
+  entries.push(
+    provenanceEntry(
+      `${prefix}/conditionRuns`,
+      null,
+      'simulation_run_collection',
+      'container',
+      ['simulation_predicted'],
+      [batch.id],
+      evidenceIds,
+      uniqueStrings([...hypothesisSourceIds, ...modelSourceIds]),
+      'Seeded reduced-order model outputs and illustrative replay trajectories; not observations from animals.',
+    ),
+    provenanceEntry(
+      `${prefix}/protocol`,
+      null,
+      'approved_virtual_protocol_snapshot',
+      'container',
+      ['agent_hypothesized'],
+      [batch.experimentId, batch.id],
+      evidenceIds,
+      hypothesisSourceIds,
+      'Snapshot of a human-approved virtual protocol; not a wet-lab protocol or biological dose.',
+    ),
+    provenanceEntry(
+      `${prefix}/model`,
+      null,
+      'model_manifest',
+      'container',
+      ['derived'],
+      [batch.id],
+      ['E-FLYLAB-MODEL-004'],
+      modelSourceIds,
+      MODEL_MANIFEST.boundary,
+    ),
+    provenanceEntry(
+      `${prefix}/model/controllerMapping`,
+      null,
+      'controller_mapping',
+      'container',
+      ['agent_hypothesized'],
+      [batch.id],
+      ['E-FLYLAB-MODEL-004'],
+      ['SRC-FLYLAB-MODEL-CARD'],
+      MODEL_MANIFEST.controllerMapping.statement,
+    ),
+    provenanceEntry(
+      `${prefix}/boundary`,
+      null,
+      'interpretation_boundary',
+      'record',
+      ['derived'],
+      [batch.id],
+      ['E-FLYLAB-MODEL-004'],
+      ['SRC-FLYLAB-MODEL-CARD'],
+      'Method boundary copied from the versioned model manifest.',
+    ),
+  );
+  return entries;
 }
 
 function agentSnapshot(current: LabState, simulationRunning: boolean, evidenceSaveRunning: boolean): FlyLabAgentSnapshot {
@@ -186,6 +500,7 @@ function agentSnapshot(current: LabState, simulationRunning: boolean, evidenceSa
     comparisonAnalysisIds: current.comparison?.analysisIds ?? [],
     bundleId: current.bundle?.id ?? null,
     nextTrialBudget: current.nextTrialBudget,
+    artifactManifest: buildArtifactManifest(current),
   };
 }
 
@@ -301,10 +616,24 @@ export default function Home() {
         Boolean(activeSimulationControllerRef.current),
         Boolean(activeEvidenceSaveControllerRef.current),
       ));
+      const provenanceEntries = buildCurrentLineageProvenanceEntries(current, '/agent_context/artifact_manifest');
       return {
         summary: `FlyLab is ${agentContext.agent_status}; ${agentContext.next_tool ? `next call ${agentContext.next_tool}` : agentContext.next_action.reason}`,
         data: { agent_context: agentContext },
-        provenance: [],
+        provenance: [...new Set(provenanceEntries.flatMap((entry) => entry.labels))],
+        provenanceManifest: {
+          entries: provenanceEntries,
+          operationalPaths: [
+            '/agent_context/state',
+            '/agent_context/artifacts',
+            '/agent_context/next_action',
+            '/agent_context/next_tool',
+            '/agent_context/human_controls',
+            '/agent_context/human_gate',
+            '/agent_context/pipeline',
+            '/agent_context/session_warning',
+          ],
+        },
         stateRevision: current.revision,
       };
     },
@@ -335,6 +664,19 @@ export default function Home() {
         silence: evidence.filter((record) => record.support.kind === 'perturbation_effect'
           && record.support.perturbations?.includes('silence')).map((record) => record.id),
       };
+      const evidenceWithSources = evidence.map((record) => {
+        const sources = record.sourceIds
+          .map((id) => SOURCES.find((source) => source.id === id))
+          .filter((source): source is (typeof SOURCES)[number] => Boolean(source));
+        if (sources.length !== record.sourceIds.length) {
+          throw new FlyLabDomainError('INCOMPLETE_PROVENANCE', 'A discovered evidence record has an unresolved source reference.', false, {
+            evidence_id: record.id,
+            required_source_ids: record.sourceIds,
+            resolved_source_ids: sources.map((source) => source.id),
+          });
+        }
+        return { ...record, sources };
+      });
       const selectedCircuit = matches.find((circuit) => circuit.evidenceIds.some((id) => evidenceIds.includes(id))) ?? null;
       const prior = labRef.current;
       const preservesLineage = selectedCircuit?.id === prior.selectedCircuitId
@@ -365,16 +707,123 @@ export default function Home() {
           ? 'The same evidence selection was returned; the existing artifact lineage remains intact.'
           : 'MDN is highlighted. The next step is a falsifiable hypothesis.'
         : matches.length ? 'No evidence matched that filter. Broaden the evidence labels before drafting.' : 'No match in the bounded challenge catalog.');
+      const connectomeCells = BANC_V888_CELLS.map((cell) => ({
+        banc_888_id: cell.banc_888_id,
+        root_id: cell.root_id,
+        side: cell.side,
+        proofread: cell.proofread,
+        cell_type: cell.cell_type,
+        region: cell.region,
+        root_region: cell.root_region,
+        super_class: cell.super_class,
+        flylab_provenance: cell.flylab_provenance,
+      }));
+      const provenanceEntries: FlyLabProvenanceManifestEntry[] = [
+        ...matches.map((record, index) => provenanceEntry(
+          `/circuits/${index}`,
+          record.id,
+          'circuit',
+          'artifact',
+          record.provenance,
+          [],
+          record.evidenceIds,
+          sourceIdsForEvidence(record.evidenceIds),
+          'Derived source catalog entry; not neural activity or a biological measurement.',
+        )),
+        ...evidence.map((record, index) => provenanceEntry(
+          `/evidence/${index}`,
+          record.id,
+          'evidence_record',
+          'record',
+          [record.provenance],
+          selectedCircuit ? [selectedCircuit.id] : [],
+          [],
+          record.sourceIds,
+          record.caution,
+        )),
+        provenanceEntry(
+          '/connectome_records/snapshot',
+          'banc_888',
+          'dataset_snapshot_identifier',
+          'record',
+          ['derived'],
+          [],
+          ['E-BANC-PATH-003', 'E-BANC-MDN-INVENTORY-007'],
+          ['SRC-BANC-DATAVERSE-V3'],
+          'Exact pinned dataset snapshot identifier for the returned cells and edges.',
+        ),
+        provenanceEntry(
+          '/connectome_records/cells',
+          'banc_888_mdn_lbl40_cells',
+          'connectome_cell_metadata',
+          'container',
+          ['derived'],
+          selectedCircuit ? [selectedCircuit.id] : [],
+          ['E-BANC-MDN-INVENTORY-007'],
+          ['SRC-BANC-DATAVERSE-V3'],
+          'Deterministically selected metadata from the pinned BANC v888 specimen; classifier, literature-curated neurotransmitter, and cross-dataset-match fields are intentionally omitted.',
+        ),
+        provenanceEntry(
+          '/connectome_records/edges',
+          'banc_888_mdn_lbl40_edges_v3',
+          'connectome_edge_predictions',
+          'container',
+          ['connectome_inferred'],
+          selectedCircuit ? [selectedCircuit.id] : [],
+          ['E-BANC-PATH-003'],
+          ['SRC-BANC-NATURE-2026', 'SRC-BANC-DATAVERSE-V3'],
+          'Four v3 MDN→LBL40 rows totaling 153 predicted synaptic links after the released postsynapse-size ≥10-voxel filter. This future-work v3 product differs from the Nature paper analyses, which use v2 (≥5); neither establishes activity, physiology, or causal efficacy.',
+        ),
+        provenanceEntry(
+          '/connectome_records/field_semantics',
+          null,
+          'connectome_field_semantics',
+          'container',
+          ['derived'],
+          [],
+          ['E-BANC-PATH-003', 'E-BANC-MDN-INVENTORY-007'],
+          ['SRC-BANC-DATAVERSE-V3'],
+          'Machine-readable interpretation rules for the curated BANC fields.',
+        ),
+        provenanceEntry(
+          '/connectome_records/interpretation',
+          null,
+          'connectome_interpretation_boundary',
+          'record',
+          ['derived'],
+          [],
+          ['E-BANC-PATH-003'],
+          ['SRC-BANC-NATURE-2026', 'SRC-BANC-DATAVERSE-V3'],
+          'Explicit method and biological interpretation boundary for this pinned slice.',
+        ),
+        provenanceEntry(
+          '/dataset_versions',
+          null,
+          'dataset_manifest',
+          'container',
+          ['derived'],
+          [],
+          [],
+          DATASET_MANIFEST_SOURCE_IDS,
+          'Pinned dataset, software-reference, and visual-reference identity, version, license, scope, and limitations metadata. Visual references are explicitly ineligible for hypothesis support.',
+        ),
+      ];
       return {
         summary: selectedCircuit ? `Found ${matches.length} curated adult circuit with ${evidence.length} matching evidence records.` : matches.length ? 'A circuit matched, but the evidence filter returned no usable records.' : 'No circuit matched the bounded catalog.',
         data: {
           circuits: matches,
-          evidence: evidence.map((record) => ({ ...record, sources: SOURCES.filter((source) => record.sourceIds.includes(source.id)) })),
+          evidence: evidenceWithSources,
           connectome_records: {
             snapshot: 'banc_888',
-            cells: BANC_V888_CELLS,
+            cells: connectomeCells,
             edges: BANC_V888_EDGES,
-            interpretation: `${BANC_V888_EDGES.length} directed MDN→LBL40 cell pairs total ${BANC_V888_MDN_LBL40_TOTAL_CONTACTS} putative anatomical contacts; they are not physiological weights or causal efficacy.`,
+            field_semantics: {
+              cells: 'Deterministically selected BANC v888 metadata. Neurotransmitter classifier, literature-curated neurotransmitter, and cross-dataset-match fields are intentionally omitted from the agent result.',
+              edges: 'Rows come from banc_888_edgelist_simple_v3.feather, a future-work v3 predicted-synapse product filtered to postsynapse size ≥10 voxels. The Nature paper analyses use v2 with threshold ≥5.',
+              count: 'Number of v3 predicted synaptic links represented by the directed row; not a physiological weight.',
+              norm: 'Raw released normalization value preserved for auditability; FlyLab assigns it no biological or causal interpretation.',
+            },
+            interpretation: `${BANC_V888_EDGES.length} directed MDN→LBL40 rows total ${BANC_V888_MDN_LBL40_TOTAL_CONTACTS} v3 predicted synaptic links after the released postsynapse-size ≥10-voxel filter; they are not physiological weights, activity measurements, or causal efficacy.`,
           },
           dataset_versions: DATASET_MANIFEST,
           hypothesis_eligible_evidence_ids: hypothesisEvidenceIds,
@@ -383,11 +832,17 @@ export default function Home() {
           coverage_warning: 'FlyLab challenge release currently exposes the validated adult MDN vertical slice.',
           next_action: postContext.next_action,
         },
-        provenance: [...new Set<ProvenanceLabel>([
-          ...evidence.map((record) => record.provenance),
-          'derived',
-          'connectome_inferred',
-        ])],
+        provenance: [...new Set(provenanceEntries.flatMap((entry) => entry.labels))],
+        provenanceManifest: {
+          entries: provenanceEntries,
+          operationalPaths: [
+            '/hypothesis_eligible_evidence_ids',
+            '/causal_evidence_ids_by_perturbation',
+            '/evidence_role_policy',
+            '/coverage_warning',
+            '/next_action',
+          ],
+        },
         stateRevision: next.revision,
       };
     },
@@ -486,6 +941,20 @@ export default function Home() {
           next_action: postContext.next_action,
         },
         provenance: ['agent_hypothesized'],
+        provenanceManifest: {
+          entries: [provenanceEntry(
+            '/hypothesis',
+            hypothesis.id,
+            'hypothesis',
+            'artifact',
+            ['agent_hypothesized'],
+            [hypothesis.circuitId, ...hypothesis.evidenceIds],
+            hypothesis.evidenceIds,
+            sourceIdsForEvidence(hypothesis.evidenceIds),
+            'Agent-authored falsifiable proposal; not source evidence, biological validation, or execution authority.',
+          )],
+          operationalPaths: ['/next_action'],
+        },
         stateRevision: next.revision,
       };
     },
@@ -560,7 +1029,45 @@ export default function Home() {
           human_gate: postContext.human_gate,
           next_action: postContext.next_action,
         },
-        provenance: [...persistedExperiment.provenance],
+        provenance: [...persistedExperiment.provenance, 'derived'],
+        provenanceManifest: {
+          entries: [
+            provenanceEntry(
+              '/experiment',
+              persistedExperiment.id,
+              'experiment',
+              'artifact',
+              [...persistedExperiment.provenance],
+              [persistedExperiment.hypothesisId, persistedExperiment.targetCircuitId],
+              current.hypothesis.evidenceIds,
+              sourceIdsForEvidence(current.hypothesis.evidenceIds),
+              'Human-reviewable virtual protocol with a unitless model control; not a wet-lab protocol or biological dose.',
+            ),
+            provenanceEntry(
+              '/experiment/model',
+              null,
+              'model_manifest',
+              'container',
+              ['derived'],
+              [persistedExperiment.id],
+              ['E-FLYLAB-MODEL-004'],
+              ['SRC-FLYLAB-MODEL-CARD', 'SRC-FLYGYM-NM-2024', 'SRC-FLYGYM-CODE-V210'],
+              MODEL_MANIFEST.boundary,
+            ),
+            provenanceEntry(
+              '/experiment/model/controllerMapping',
+              null,
+              'controller_mapping',
+              'container',
+              ['agent_hypothesized'],
+              [persistedExperiment.id],
+              ['E-FLYLAB-MODEL-004'],
+              ['SRC-FLYLAB-MODEL-CARD'],
+              MODEL_MANIFEST.controllerMapping.statement,
+            ),
+          ],
+          operationalPaths: ['/experiment/approved', '/approval_required', '/agent_status', '/blocked_by', '/agent_actionable', '/human_gate', '/next_action'],
+        },
         stateRevision: next.revision,
       };
     },
@@ -603,7 +1110,11 @@ export default function Home() {
             boundary: MODEL_MANIFEST.boundary,
             next_action: postContext.next_action,
           },
-          provenance: ['simulation_predicted'],
+          provenance: ['simulation_predicted', 'agent_hypothesized', 'derived'],
+          provenanceManifest: {
+            entries: batchFieldProvenanceEntries(current.batch, current.hypothesis?.evidenceIds ?? []),
+            operationalPaths: ['/next_action'],
+          },
           stateRevision: current.revision,
         };
       }
@@ -682,7 +1193,11 @@ export default function Home() {
           boundary: MODEL_MANIFEST.boundary,
           next_action: getAgentContext(labRef.current).next_action,
         },
-        provenance: ['simulation_predicted'],
+        provenance: ['simulation_predicted', 'agent_hypothesized', 'derived'],
+        provenanceManifest: {
+          entries: batchFieldProvenanceEntries(batch, current.hypothesis?.evidenceIds ?? []),
+          operationalPaths: ['/next_action'],
+        },
         stateRevision,
       };
     },
@@ -721,6 +1236,47 @@ export default function Home() {
           next_action: postContext.next_action,
         },
         provenance: ['derived', 'simulation_predicted'],
+        provenanceManifest: {
+          entries: [
+            provenanceEntry(
+              '/analysis',
+              analysis.id,
+              'behavior_analysis',
+              'artifact',
+              ['derived', 'simulation_predicted'],
+              [analysis.batchId],
+              current.hypothesis?.evidenceIds ?? [],
+              uniqueStrings([
+                ...sourceIdsForEvidence(current.hypothesis?.evidenceIds ?? []),
+                'SRC-FLYLAB-MODEL-CARD',
+              ]),
+              analysis.warning,
+            ),
+            provenanceEntry(
+              '/metric_definitions',
+              null,
+              'analysis_method_metadata',
+              'container',
+              ['derived'],
+              [analysis.id],
+              [],
+              ['SRC-FLYLAB-MODEL-CARD'],
+              'Method definitions for simulation-derived metrics; not biological effect-size definitions.',
+            ),
+            provenanceEntry(
+              '/unit_boundary',
+              null,
+              'model_unit_boundary',
+              'container',
+              ['derived'],
+              [analysis.id],
+              [],
+              ['SRC-FLYLAB-MODEL-CARD'],
+              MODEL_MANIFEST.parameterization.unitBoundary,
+            ),
+          ],
+          operationalPaths: ['/next_action'],
+        },
         stateRevision: next.revision,
       };
     },
@@ -788,6 +1344,36 @@ export default function Home() {
           next_action: postContext.next_action,
         },
         provenance: ['derived', 'simulation_predicted', 'agent_hypothesized'],
+        provenanceManifest: {
+          entries: [
+            provenanceEntry(
+              '/comparison',
+              comparison.id,
+              'trial_comparison',
+              'artifact',
+              ['derived', 'simulation_predicted'],
+              comparison.analysisIds,
+              current.hypothesis?.evidenceIds ?? [],
+              uniqueStrings([
+                ...sourceIdsForEvidence(current.hypothesis?.evidenceIds ?? []),
+                'SRC-FLYLAB-MODEL-CARD',
+              ]),
+              'Ranking of simulation-derived analyses; not biological evidence.',
+            ),
+            provenanceEntry(
+              '/comparison/proposal',
+              comparison.proposal.id,
+              'follow_up_proposal',
+              'artifact',
+              ['agent_hypothesized'],
+              [comparison.id],
+              current.hypothesis?.evidenceIds ?? [],
+              sourceIdsForEvidence(current.hypothesis?.evidenceIds ?? []),
+              'Agent-authored proposal only; execution is not authorized.',
+            ),
+          ],
+          operationalPaths: ['/execution_authorized', '/next_action'],
+        },
         stateRevision: next.revision,
       };
     },
@@ -846,6 +1432,12 @@ export default function Home() {
       const supportingSources = supportingSourceIds
         .map((id) => SOURCES.find((record) => record.id === id))
         .filter((record): record is (typeof SOURCES)[number] => Boolean(record));
+      if (supportingSources.length !== supportingSourceIds.length) {
+        throw new FlyLabDomainError('INCOMPLETE_PROVENANCE', 'One or more hypothesis-supporting source records are missing from the pinned catalog.', false, {
+          required_source_ids: supportingSourceIds,
+          resolved_source_ids: supportingSources.map((record) => record.id),
+        });
+      }
       const methodEvidence = circuit.evidenceIds
         .map((id) => EVIDENCE.find((record) => record.id === id))
         .filter((record): record is (typeof EVIDENCE)[number] => Boolean(record) && record.role === 'model_context');
@@ -860,6 +1452,35 @@ export default function Home() {
       const methodSources = methodSourceIds
         .map((id) => SOURCES.find((record) => record.id === id))
         .filter((record): record is (typeof SOURCES)[number] => Boolean(record));
+      if (methodSources.length !== methodSourceIds.length) {
+        throw new FlyLabDomainError('INCOMPLETE_PROVENANCE', 'One or more model-method source records are missing from the pinned catalog.', false, {
+          required_source_ids: methodSourceIds,
+          resolved_source_ids: methodSources.map((record) => record.id),
+        });
+      }
+      const claimedEvidenceIds = new Set([...hypothesis.evidenceIds, ...methodEvidenceIds]);
+      const contextEvidence = circuit.evidenceIds
+        .filter((id) => !claimedEvidenceIds.has(id))
+        .map((id) => EVIDENCE.find((record) => record.id === id))
+        .filter((record): record is (typeof EVIDENCE)[number] => Boolean(record));
+      const expectedContextEvidenceIds = circuit.evidenceIds.filter((id) => !claimedEvidenceIds.has(id));
+      if (contextEvidence.length !== expectedContextEvidenceIds.length) {
+        throw new FlyLabDomainError('INCOMPLETE_PROVENANCE', 'One or more circuit-context evidence records are missing from the pinned catalog.', false, {
+          required_evidence_ids: expectedContextEvidenceIds,
+          resolved_evidence_ids: contextEvidence.map((record) => record.id),
+        });
+      }
+      const contextEvidenceIds = contextEvidence.map((record) => record.id);
+      const contextSourceIds = uniqueStrings(contextEvidence.flatMap((record) => record.sourceIds));
+      const contextSources = contextSourceIds
+        .map((id) => SOURCES.find((record) => record.id === id))
+        .filter((record): record is (typeof SOURCES)[number] => Boolean(record));
+      if (contextSources.length !== contextSourceIds.length) {
+        throw new FlyLabDomainError('INCOMPLETE_PROVENANCE', 'One or more circuit-context source records are missing from the pinned catalog.', false, {
+          required_source_ids: contextSourceIds,
+          resolved_source_ids: contextSources.map((record) => record.id),
+        });
+      }
       const annotation = {
         id: `annotation_${stableHash({
           title: stringInput(input, 'title'),
@@ -873,11 +1494,38 @@ export default function Home() {
         purpose: 'administrative_annotation_not_evidence' as const,
         boundary: 'Caller-supplied title and note are untrusted administrative annotations, not scientific evidence or a validated biological claim.',
       };
+      const modelSourceIds = ['SRC-FLYLAB-MODEL-CARD', 'SRC-FLYGYM-NM-2024', 'SRC-FLYGYM-CODE-V210'];
+      const payloadProvenanceEntries: FlyLabProvenanceManifestEntry[] = [
+        ...supportingSources.map((source, index) => provenanceEntry(`/supportingSources/${index}`, source.id, 'source_record', 'record', ['derived'], [], [], [source.id], 'Citation and source metadata; it does not itself reproduce the cited experiment.')),
+        ...supportingEvidence.map((record, index) => provenanceEntry(`/supportingEvidence/${index}`, record.id, 'evidence_record', 'record', [record.provenance], [circuit.id], [], record.sourceIds, record.caution)),
+        ...contextSources.map((source, index) => provenanceEntry(`/contextSources/${index}`, source.id, 'source_record', 'record', ['derived'], [], [], [source.id], 'Citation and source metadata retained as circuit context, not promoted to hypothesis support.')),
+        ...contextEvidence.map((record, index) => provenanceEntry(`/contextEvidence/${index}`, record.id, 'evidence_record', 'record', [record.provenance], [circuit.id], [], record.sourceIds, `${record.caution} This record is contextual and is not promoted to hypothesis support in this bundle.`)),
+        ...methodSources.map((source, index) => provenanceEntry(`/methodSources/${index}`, source.id, 'source_record', 'record', ['derived'], [], [], [source.id], 'Method-definition or embodiment-reference metadata; not a measured fly result.')),
+        ...methodEvidence.map((record, index) => provenanceEntry(`/methodEvidence/${index}`, record.id, 'evidence_record', 'record', [record.provenance], [circuit.id], [], record.sourceIds, record.caution)),
+        provenanceEntry('/circuit', circuit.id, 'circuit', 'artifact', circuit.provenance, [], circuit.evidenceIds, sourceIdsForEvidence(circuit.evidenceIds), 'Derived source catalog entry; not neural activity or a biological measurement.'),
+        provenanceEntry('/hypothesis', hypothesis.id, 'hypothesis', 'artifact', [hypothesis.provenance], [hypothesis.circuitId, ...hypothesis.evidenceIds], hypothesis.evidenceIds, supportingSourceIds, 'Agent-authored falsifiable proposal; not evidence.'),
+        provenanceEntry('/experiment', experiment.id, 'experiment', 'artifact', experiment.provenance, [experiment.hypothesisId, experiment.targetCircuitId], hypothesis.evidenceIds, uniqueStrings([...supportingSourceIds, ...modelSourceIds]), 'Human-approved virtual protocol; activation level is a unitless model control, not a biological dose.'),
+        provenanceEntry('/experiment/model', null, 'model_manifest', 'container', ['derived'], [experiment.id], methodEvidenceIds, methodSourceIds, MODEL_MANIFEST.boundary),
+        provenanceEntry('/experiment/model/controllerMapping', null, 'controller_mapping', 'container', ['agent_hypothesized'], [experiment.id], methodEvidenceIds, methodSourceIds, MODEL_MANIFEST.controllerMapping.statement),
+        provenanceEntry('/batch', batch.id, 'simulation_batch', 'artifact', batch.provenance, [batch.experimentId], hypothesis.evidenceIds, uniqueStrings([...supportingSourceIds, ...modelSourceIds]), batch.model.boundary),
+        provenanceEntry('/batch/protocol', null, 'approved_virtual_protocol_snapshot', 'container', ['agent_hypothesized'], [experiment.id, batch.id], hypothesis.evidenceIds, supportingSourceIds, 'Snapshot of the approved virtual protocol; not a wet-lab protocol.'),
+        provenanceEntry('/batch/model', null, 'model_manifest', 'container', ['derived'], [batch.id], methodEvidenceIds, methodSourceIds, MODEL_MANIFEST.boundary),
+        provenanceEntry('/batch/model/controllerMapping', null, 'controller_mapping', 'container', ['agent_hypothesized'], [batch.id], methodEvidenceIds, methodSourceIds, MODEL_MANIFEST.controllerMapping.statement),
+        provenanceEntry('/batch/conditionRuns', null, 'simulation_run_collection', 'container', ['simulation_predicted'], [batch.id], hypothesis.evidenceIds, uniqueStrings([...supportingSourceIds, ...modelSourceIds]), 'Seeded model outputs; not measurements from animals.'),
+        ...lineageAnalyses.map((analysis, index) => provenanceEntry(`/analyses/${index}`, analysis.id, 'behavior_analysis', 'artifact', analysis.provenance, [analysis.batchId], hypothesis.evidenceIds, uniqueStrings([...supportingSourceIds, ...modelSourceIds]), analysis.warning)),
+        provenanceEntry('/comparison', comparison.id, 'trial_comparison', 'artifact', comparison.provenance, comparison.analysisIds, hypothesis.evidenceIds, uniqueStrings([...supportingSourceIds, ...modelSourceIds]), 'Ranking of simulation-derived analyses; not biological evidence.'),
+        provenanceEntry('/comparison/proposal', comparison.proposal.id, 'follow_up_proposal', 'artifact', [comparison.proposal.provenance], [comparison.id], hypothesis.evidenceIds, supportingSourceIds, 'Proposal only; execution is not authorized.'),
+        provenanceEntry('/datasets', null, 'dataset_manifest', 'container', ['derived'], [], [], DATASET_MANIFEST_SOURCE_IDS, 'Pinned dataset, software-reference, and visual-reference metadata. Visual references are explicitly ineligible for hypothesis support.'),
+        provenanceEntry('/model', null, 'model_manifest', 'container', ['derived'], [], methodEvidenceIds, methodSourceIds, MODEL_MANIFEST.boundary),
+        provenanceEntry('/model/controllerMapping', null, 'controller_mapping', 'container', ['agent_hypothesized'], [], methodEvidenceIds, methodSourceIds, MODEL_MANIFEST.controllerMapping.statement),
+      ];
       const payload = {
         format: 'flylab.evidence-bundle.v2',
         annotation,
         supportingSources,
         supportingEvidence,
+        contextSources,
+        contextEvidence,
         methodSources,
         methodEvidence,
         circuit,
@@ -888,6 +1536,13 @@ export default function Home() {
         comparison,
         datasets: DATASET_MANIFEST,
         model: MODEL_MANIFEST,
+        provenanceManifest: {
+          schema_version: 'flylab.provenance-manifest.v1',
+          path_scope: 'JSON Pointer paths relative to this payload; each entry labels its complete subtree unless a narrower entry overrides it.',
+          entries: payloadProvenanceEntries,
+          operational_paths: ['/annotation', '/provenanceManifest'],
+          untrusted_annotation_boundary: annotation.boundary,
+        },
       };
       if (activeEvidenceSaveControllerRef.current) {
         throw new FlyLabDomainError('SIMULATION_UNAVAILABLE', 'An evidence bundle is already being prepared.', true);
@@ -905,7 +1560,7 @@ export default function Home() {
       }));
       const expectedRevision = savingState.revision;
       setNotice('Preparing the exact evidence lineage. A stale shared revision cannot commit.');
-      let completed: { bundle: EvidenceBundleMetadata; stateRevision: number };
+      let completed: { bundle: EvidenceBundleMetadata; evidenceExport: EvidenceExportEnvelope; stateRevision: number };
       try {
         completed = await prepareCancellableCommit({
           signal: saveSignal,
@@ -921,33 +1576,87 @@ export default function Home() {
                 reused: true,
               };
             }
-            const provenanceCounts: Record<ProvenanceLabel, number> = {
-              measured: 0,
-              derived: 0,
-              connectome_inferred: 0,
-              simulation_predicted: 0,
-              agent_hypothesized: 0,
+            const provenanceSets: Record<ProvenanceLabel, Set<string>> = {
+              measured: new Set(),
+              derived: new Set(),
+              connectome_inferred: new Set(),
+              simulation_predicted: new Set(),
+              agent_hypothesized: new Set(),
             };
-            supportingEvidence.forEach((record) => { provenanceCounts[record.provenance] += 1; });
-            methodEvidence.forEach((record) => { provenanceCounts[record.provenance] += 1; });
-            circuit.provenance.forEach((kind) => { provenanceCounts[kind] += 1; });
-            provenanceCounts[hypothesis.provenance] += 1;
-            experiment.provenance.forEach((kind) => { provenanceCounts[kind] += 1; });
-            batch.provenance.forEach((kind) => { provenanceCounts[kind] += 1; });
-            lineageAnalyses.forEach((record) => record.provenance.forEach((kind) => { provenanceCounts[kind] += 1; }));
-            comparison.provenance.forEach((kind) => { provenanceCounts[kind] += 1; });
-            provenanceCounts[comparison.proposal.provenance] += 1;
+            const indexProvenance = (id: string, labels: readonly ProvenanceLabel[]) => labels.forEach((label) => provenanceSets[label].add(id));
+            [...supportingSources, ...contextSources, ...methodSources].forEach((source) => indexProvenance(source.id, ['derived']));
+            [...supportingEvidence, ...contextEvidence, ...methodEvidence].forEach((record) => indexProvenance(record.id, [record.provenance]));
+            indexProvenance(circuit.id, circuit.provenance);
+            indexProvenance(hypothesis.id, [hypothesis.provenance]);
+            indexProvenance(experiment.id, experiment.provenance);
+            experiment.conditions.forEach((condition) => indexProvenance(condition.id, experiment.provenance));
+            indexProvenance(batch.id, batch.provenance);
+            batch.conditionRuns.flatMap((run) => run.runIds).forEach((id) => indexProvenance(id, batch.provenance));
+            lineageAnalyses.forEach((record) => indexProvenance(record.id, record.provenance));
+            indexProvenance(comparison.id, comparison.provenance);
+            indexProvenance(comparison.proposal.id, [comparison.proposal.provenance]);
+            const bundleId = `evidence_${stableHash({ manifestHash, title: annotation.title })}`;
+            indexProvenance(bundleId, ['derived']);
+            const provenanceIndex = Object.fromEntries(
+              (Object.entries(provenanceSets) as Array<[ProvenanceLabel, Set<string>]>).map(([label, ids]) => [label, [...ids].sort()]),
+            ) as Record<ProvenanceLabel, string[]>;
+            const provenanceCounts = Object.fromEntries(
+              (Object.entries(provenanceIndex) as Array<[ProvenanceLabel, string[]]>).map(([label, ids]) => [label, ids.length]),
+            ) as Record<ProvenanceLabel, number>;
+            const allEvidence = [...supportingEvidence, ...contextEvidence, ...methodEvidence];
+            const baseLineageEdges = [
+              ...allEvidence.flatMap((record) => record.sourceIds.map((sourceId) => ({ from: record.id, relation: 'supported_by', to: sourceId }))),
+              ...circuit.evidenceIds.map((evidenceId) => ({ from: circuit.id, relation: 'catalogs_evidence', to: evidenceId })),
+              { from: hypothesis.id, relation: 'targets_circuit', to: circuit.id },
+              ...hypothesis.evidenceIds.map((evidenceId) => ({ from: hypothesis.id, relation: 'cites_hypothesis_support', to: evidenceId })),
+              { from: experiment.id, relation: 'tests_hypothesis', to: hypothesis.id },
+              { from: experiment.id, relation: 'targets_circuit', to: circuit.id },
+              ...experiment.conditions.map((condition) => ({ from: experiment.id, relation: 'has_condition', to: condition.id })),
+              { from: batch.id, relation: 'executes_experiment', to: experiment.id },
+              ...batch.conditionRuns.flatMap((run) => run.runIds.map((runId) => ({ from: batch.id, relation: `contains_run_for:${run.conditionId}`, to: runId }))),
+              ...lineageAnalyses.map((analysis) => ({ from: analysis.id, relation: 'analyzes_batch', to: batch.id })),
+              ...comparison.analysisIds.map((analysisId) => ({ from: comparison.id, relation: 'compares_analysis', to: analysisId })),
+              { from: comparison.proposal.id, relation: 'proposed_from_comparison', to: comparison.id },
+            ];
+            const includedIds = uniqueStrings([
+              ...supportingSourceIds,
+              ...contextSourceIds,
+              ...methodSourceIds,
+              ...hypothesis.evidenceIds,
+              ...contextEvidenceIds,
+              ...methodEvidenceIds,
+              circuit.id,
+              hypothesisId,
+              experimentId,
+              ...experiment.conditions.map((condition) => condition.id),
+              batch.id,
+              ...batch.conditionRuns.flatMap((run) => run.runIds),
+              ...lineageAnalysisIds,
+              comparison.id,
+              comparison.proposal.id,
+              annotation.id,
+            ]);
+            const lineageEdges = [
+              ...baseLineageEdges,
+              ...includedIds
+                .filter((id) => id !== annotation.id && id !== bundleId)
+                .map((id) => ({ from: bundleId, relation: 'includes', to: id })),
+            ];
             const bundle: EvidenceBundleMetadata = {
-              id: `evidence_${stableHash({ manifestHash, title: annotation.title })}`,
+              id: bundleId,
               title: annotation.title,
               manifestHash,
               savedAt: new Date().toISOString(),
-              includedIds: [...new Set([...supportingSourceIds, ...hypothesis.evidenceIds, ...methodSourceIds, ...methodEvidenceIds, circuit.id, hypothesisId, experimentId, batch.id, ...lineageAnalysisIds, comparison.id, annotation.id])],
+              includedIds,
               supportingEvidenceIds: hypothesis.evidenceIds,
               supportingSourceIds,
+              contextEvidenceIds,
+              contextSourceIds,
               methodEvidenceIds,
               methodSourceIds,
               provenanceCounts,
+              provenanceIndex,
+              lineageEdges,
               boundary: 'Simulation evidence bundle; not a new biological experiment.',
               provenance: ['derived'],
               annotation,
@@ -972,7 +1681,7 @@ export default function Home() {
             }));
             setSelectedEvidenceId(bundle.id);
             setNotice('Evidence bundle saved. Download the portable JSON from the evidence ledger.');
-            return { bundle, stateRevision: next.revision };
+            return { bundle, evidenceExport, stateRevision: next.revision };
           },
         });
       } catch (error) {
@@ -997,6 +1706,9 @@ export default function Home() {
         summary: 'Saved a manifest-hashed, provenance-rich FlyLab evidence snapshot.',
         data: {
           bundle: completed.bundle,
+          evidence_export: completed.evidenceExport,
+          export_media_type: EVIDENCE_EXPORT_MEDIA_TYPE,
+          export_filename: evidenceExportFilename(completed.bundle.id),
           local_reference: completed.bundle.id,
           storage_scope: 'best-effort browser origin',
           next_action: getAgentContext(labRef.current).next_action,
@@ -1004,6 +1716,46 @@ export default function Home() {
         provenance: (Object.entries(completed.bundle.provenanceCounts) as Array<[ProvenanceLabel, number]>)
           .filter(([, count]) => count > 0)
           .map(([kind]) => kind),
+        provenanceManifest: {
+          entries: [
+            provenanceEntry(
+              '/bundle',
+              completed.bundle.id,
+              'evidence_bundle',
+              'artifact',
+              completed.bundle.provenance,
+              completed.bundle.includedIds,
+              uniqueStrings([
+                ...completed.bundle.supportingEvidenceIds,
+                ...completed.bundle.contextEvidenceIds,
+                ...completed.bundle.methodEvidenceIds,
+              ]),
+              uniqueStrings([
+                ...completed.bundle.supportingSourceIds,
+                ...completed.bundle.contextSourceIds,
+                ...completed.bundle.methodSourceIds,
+              ]),
+              completed.bundle.boundary,
+            ),
+            ...payloadProvenanceEntries.map((entry) => ({
+              ...entry,
+              path: `/evidence_export/payload${entry.path}`,
+            })),
+          ],
+          operationalPaths: [
+            '/evidence_export/schema',
+            '/evidence_export/schemaVersion',
+            '/evidence_export/bundle',
+            '/evidence_export/integrity',
+            '/evidence_export/payload/annotation',
+            '/evidence_export/payload/provenanceManifest',
+            '/export_media_type',
+            '/export_filename',
+            '/local_reference',
+            '/storage_scope',
+            '/next_action',
+          ],
+        },
         stateRevision: completed.stateRevision,
       };
     },
@@ -1696,6 +2448,8 @@ export default function Home() {
                     <div><dt>Manifest hash</dt><dd><code>{selectedBundle.manifestHash}</code></dd></div>
                     <div><dt>Supporting evidence</dt><dd><code>{selectedBundle.supportingEvidenceIds.join(' · ')}</code></dd></div>
                     <div><dt>Supporting sources</dt><dd><code>{selectedBundle.supportingSourceIds.join(' · ')}</code></dd></div>
+                    <div><dt>Circuit-context evidence</dt><dd><code>{selectedBundle.contextEvidenceIds.join(' · ') || 'none'}</code></dd></div>
+                    <div><dt>Circuit-context sources</dt><dd><code>{selectedBundle.contextSourceIds.join(' · ') || 'none'}</code></dd></div>
                     <div><dt>Model-method evidence</dt><dd><code>{selectedBundle.methodEvidenceIds.join(' · ')}</code></dd></div>
                     <div><dt>Model-method sources</dt><dd><code>{selectedBundle.methodSourceIds.join(' · ')}</code></dd></div>
                     <div><dt>Exact lineage</dt><dd>{selectedBundle.includedIds.length} identifiers: causal/supporting sources and evidence, separately scoped model-method sources and evidence, the selected circuit, hypothesis, experiment, batch, complete analysis set, comparison, and bounded administrative annotation</dd></div>
@@ -1722,14 +2476,14 @@ export default function Home() {
                     <div><dt>Context</dt><dd>{selectedEvidence.context}</dd></div>
                     <div><dt>Boundary</dt><dd>{selectedEvidence.caution}</dd></div>
                   </dl>
-                  <h4>Primary source{selectedSources.length === 1 ? '' : 's'}</h4>
+                  <h4>Sources and support roles</h4>
                   {selectedSources.map((source) => {
                     const mapping = selectedEvidence.sourceSupport.find((item) => item.sourceId === source.id);
                     return (
                       <a href={source.url} target="_blank" rel="noreferrer" key={source.id}>
                         <strong>{source.title}</strong>
                         <span>{mapping?.supports ?? source.citation}</span>
-                        <small>{mapping?.relation ?? 'source'} · {mapping?.locator ?? source.version}</small>
+                        <small>{source.kind} · {mapping?.relation ?? 'source'} · {mapping?.locator ?? source.version}</small>
                         <small>{source.citation} · {source.version} · {source.specimen} · {source.license}</small>
                       </a>
                     );

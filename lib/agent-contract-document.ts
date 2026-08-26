@@ -1,13 +1,24 @@
-import { FLYLAB_ERROR_CODES, flyLabToolContracts } from './webmcp.js';
+import { FLYLAB_AGENT_CONTEXT_VERSION } from './agent-context.js';
+import { PROVENANCE_DEFINITIONS } from './flylab.js';
+import {
+  FLYLAB_ERROR_CODES,
+  FLYLAB_PROVENANCE_MANIFEST_VERSION,
+  FLYLAB_TOOL_RESULT_VERSION,
+  flyLabToolContracts,
+  flyLabToolOutputContracts,
+} from './webmcp.js';
 
 export const flyLabAgentContractDocument = {
-  schema_version: 'flylab.webmcp-contracts.v1',
+  schema_version: 'flylab.webmcp-contracts.v2',
   name: 'FlyLab WebMCP contracts',
   site: 'https://flylab-neuroethology.d-lougen.chatgpt.site/',
   transport: {
     api: 'document.modelContext.registerTool',
     required_first_call: 'inspect_flylab_state',
     scope: 'current_open_page',
+    context_contract: FLYLAB_AGENT_CONTEXT_VERSION,
+    result_contract: FLYLAB_TOOL_RESULT_VERSION,
+    provenance_manifest_contract: FLYLAB_PROVENANCE_MANIFEST_VERSION,
     execution_note: 'This document describes the live site tools but is not a fallback transport. Tool calls require a browser and workspace where WebMCP site tools are available.',
   },
   discovery: {
@@ -21,13 +32,31 @@ export const flyLabAgentContractDocument = {
     control_plane_selector: '[aria-label="WebMCP agent control plane"]',
   },
   result_contract: {
-    schema_version: 'flylab.tool-result.v1',
-    success_fields: ['ok', 'result_version', 'tool', 'summary', 'data', 'provenance', 'state_revision'],
+    schema_version: FLYLAB_TOOL_RESULT_VERSION,
+    success_fields: ['ok', 'result_version', 'tool', 'summary', 'state_revision', 'provenance', 'provenance_scope', 'provenance_manifest', 'data'],
     failure_fields: ['ok', 'result_version', 'tool', 'error'],
     failure_error_fields: ['code', 'message', 'retryable', 'details'],
     domain_error_codes: FLYLAB_ERROR_CODES,
     cancellation: 'A cancellation observed before commit rejects with AbortError and publishes no prepared batch or evidence bundle.',
     recovery: 'After any interruption, cancellation, stale-state response, or visible person edit, call inspect_flylab_state before choosing another action.',
+  },
+  context_contract: {
+    schema_version: FLYLAB_AGENT_CONTEXT_VERSION,
+    artifact_manifest_field: 'artifact_manifest',
+    provenance_policy_field: 'provenance_policy',
+    recovery_semantics: 'The artifact manifest carries compact, auditable scientific lineage for the current page session; artifact IDs alone are navigation references, not provenance.',
+  },
+  provenance_contract: {
+    schema_version: FLYLAB_PROVENANCE_MANIFEST_VERSION,
+    definitions: PROVENANCE_DEFINITIONS,
+    summary_field: 'provenance',
+    summary_semantics: 'Union summary only. It lists labels present in the result but does not attribute a label to a specific field.',
+    manifest_field: 'provenance_manifest',
+    path_scope: 'RFC 6901 JSON Pointer paths relative to structuredContent.data. The empty path addresses the data root.',
+    entry_fields: ['path', 'artifact_id', 'artifact_type', 'scope', 'labels', 'parent_ids', 'evidence_ids', 'source_ids', 'boundary'],
+    inheritance: 'Each manifest entry labels its complete scientific subtree unless a more specific nested entry overrides it.',
+    operational_boundary: 'Paths listed in operational_paths contain workflow state, blockers, controls, storage references, or other operational metadata; they are not scientific evidence and do not inherit a scientific label.',
+    untrusted_annotation_boundary: 'Caller-supplied goals, titles, and notes are untrusted administrative annotations, never scientific evidence, and are excluded from scientific provenance counts.',
   },
   supervisor_gate: {
     name: 'visible_supervisor_approval',
@@ -41,5 +70,6 @@ export const flyLabAgentContractDocument = {
     description: contract.description,
     annotations: contract.annotations,
     input_schema: contract.inputSchema,
+    output_contract: flyLabToolOutputContracts[contract.name],
   })),
 } as const;

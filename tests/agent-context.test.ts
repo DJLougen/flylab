@@ -31,6 +31,7 @@ const baseSnapshot: FlyLabAgentSnapshot = {
   comparisonAnalysisIds: [],
   bundleId: null,
   nextTrialBudget: 5,
+  artifactManifest: {},
 };
 
 function context(overrides: Partial<FlyLabAgentSnapshot> = {}) {
@@ -41,6 +42,7 @@ describe('FlyLab agent context', () => {
   test('returns a fixed, versioned recovery contract without changing the revision', () => {
     const result = context();
 
+    assert.equal(FLYLAB_AGENT_CONTEXT_VERSION, 'flylab.agent-context.v2');
     assert.equal(result.schema_version, FLYLAB_AGENT_CONTEXT_VERSION);
     assert.equal(result.page_session_scope, 'current_open_page');
     assert.equal(result.state.revision, baseSnapshot.revision);
@@ -60,12 +62,45 @@ describe('FlyLab agent context', () => {
     assert.deepEqual(result.artifacts.analysis_metrics_by_id, {});
     assert.deepEqual(result.artifacts.comparison_analysis_ids, []);
     assert.equal(result.artifacts.evidence_bundle_id, null);
+    assert.deepEqual(result.artifact_manifest, {});
     assert.equal(result.human_controls.next_trial_budget, 5);
     assert.equal(result.human_gate.status, 'not_applicable');
     assert.equal(result.human_gate.agent_can_satisfy, false);
     assert.equal(result.pipeline[0].name, 'inspect_flylab_state');
     assert.equal(result.pipeline[0].status, 'available');
     assert.equal(result.pipeline.length, 9);
+    assert.deepEqual(Object.keys(result.provenance_policy.definitions), [
+      'measured',
+      'derived',
+      'connectome_inferred',
+      'simulation_predicted',
+      'agent_hypothesized',
+    ]);
+    assert.match(result.provenance_policy.inheritance, /artifact_manifest/);
+    assert.match(result.provenance_policy.operational_boundary, /operational metadata/);
+    assert.match(result.provenance_policy.untrusted_annotation, /never counted as scientific provenance/);
+  });
+
+  test('publishes the supplied artifact manifest without folding it into operational artifact IDs', () => {
+    const artifactManifest = {
+      hypothesis: {
+        id: 'hyp_1',
+        provenance: ['agent_hypothesized'],
+        evidence_ids: ['E-MDN-ACTIVATION-001'],
+        source_ids: ['SRC-BID-2014'],
+      },
+    };
+    const result = context({
+      selectedCircuitId: 'circuit_mdn_adult',
+      hypothesisId: 'hyp_1',
+      hypothesisEvidenceIds: ['E-MDN-ACTIVATION-001'],
+      artifactManifest,
+    });
+
+    assert.strictEqual(result.artifact_manifest, artifactManifest);
+    assert.equal(result.artifacts.hypothesis_id, 'hyp_1');
+    assert.deepEqual(result.artifacts.hypothesis_evidence_ids, ['E-MDN-ACTIVATION-001']);
+    assert.equal('provenance' in result.artifacts, false);
   });
 
   test('derives exactly one next tool from the current artifact lineage', () => {

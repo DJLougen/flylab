@@ -1,3 +1,5 @@
+import { PROVENANCE_DEFINITIONS } from './flylab.js';
+
 export type AgentPipelineStatus =
   | 'available'
   | 'recommended'
@@ -33,6 +35,7 @@ export interface FlyLabAgentSnapshot {
   comparisonAnalysisIds: string[];
   bundleId: string | null;
   nextTrialBudget: number;
+  artifactManifest: Record<string, unknown>;
 }
 
 export interface AgentPipelineStep {
@@ -43,7 +46,7 @@ export interface AgentPipelineStep {
   boundary: string;
 }
 
-export const FLYLAB_AGENT_CONTEXT_VERSION = 'flylab.agent-context.v1';
+export const FLYLAB_AGENT_CONTEXT_VERSION = 'flylab.agent-context.v2';
 
 export function deriveFlyLabAgentStage(snapshot: FlyLabAgentSnapshot) {
   if (snapshot.bundleId) return 'saved';
@@ -200,6 +203,7 @@ export function buildFlyLabAgentContext(snapshot: FlyLabAgentSnapshot) {
       comparison_analysis_ids: snapshot.comparisonAnalysisIds,
       evidence_bundle_id: snapshot.bundleId,
     },
+    artifact_manifest: snapshot.artifactManifest,
     next_action: next,
     next_tool: next.kind === 'tool' ? next.name : null,
     human_controls: {
@@ -219,10 +223,19 @@ export function buildFlyLabAgentContext(snapshot: FlyLabAgentSnapshot) {
     },
     pipeline,
     interpretation_policy: {
+      reported_empirical_observations: 'measured',
+      deterministic_catalog_and_method_records: 'derived',
       structural_wiring: 'connectome_inferred',
       generated_trajectories: 'simulation_predicted',
+      draft_protocols: 'agent_hypothesized',
       calculated_metrics: ['derived', 'simulation_predicted'],
       proposed_claims_and_follow_ups: 'agent_hypothesized',
+    },
+    provenance_policy: {
+      definitions: PROVENANCE_DEFINITIONS,
+      inheritance: 'Each artifact_manifest record labels its complete scientific subtree unless a more specific nested record provides its own provenance.',
+      operational_boundary: 'State revisions, blockers, next actions, UI labels, and storage references are operational metadata rather than scientific evidence.',
+      untrusted_annotation: 'Caller-supplied goals, titles, and notes are administrative input and are never counted as scientific provenance.',
     },
     session_warning: 'Tool artifact IDs belong to this open page session. Inspect state again after interruption, edits, cancellation, or navigation.',
   };

@@ -1,5 +1,5 @@
 {
-  "schema_version": "flylab.agent-manifest.v1",
+  "schema_version": "flylab.agent-manifest.v2",
   "name": "FlyLab",
   "description": "Agent-first WebMCP virtual Drosophila neuroethology lab with a visible supervisor audit surface.",
   "site": "https://flylab-neuroethology.d-lougen.chatgpt.site/",
@@ -7,8 +7,9 @@
   "transport": {
     "api": "WebMCP document.modelContext.registerTool",
     "scope": "current_open_page",
-    "state_contract": "flylab.agent-context.v1",
-    "result_contract": "flylab.tool-result.v1",
+    "state_contract": "flylab.agent-context.v2",
+    "result_contract": "flylab.tool-result.v2",
+    "provenance_manifest_contract": "flylab.provenance-manifest.v1",
     "required_first_call": "inspect_flylab_state",
     "tool_contract_document": "/flylab-tool-contracts.json"
   },
@@ -45,6 +46,56 @@
     { "name": "compare_fly_trials", "effect": "writes_comparison_and_proposal", "purpose": "Rank conditions and propose, but never execute, one bounded follow-up." },
     { "name": "save_fly_evidence", "effect": "writes_evidence_bundle", "purpose": "Commit the exact source-to-result lineage and portable JSON envelope." }
   ],
+  "output_contracts": {
+    "inspect_flylab_state": {
+      "required_data_fields": ["agent_context"],
+      "produced_artifacts": [],
+      "scientific_paths": ["/agent_context/artifact_manifest"],
+      "operational_paths": ["/agent_context/state", "/agent_context/next_action", "/agent_context/human_gate", "/agent_context/pipeline"]
+    },
+    "find_fly_circuits": {
+      "required_data_fields": ["circuits", "evidence", "connectome_records", "dataset_versions", "hypothesis_eligible_evidence_ids", "causal_evidence_ids_by_perturbation", "evidence_role_policy", "coverage_warning", "next_action"],
+      "produced_artifacts": ["circuit_selection", "evidence_record", "connectome_record"],
+      "scientific_paths": ["/circuits", "/evidence", "/connectome_records", "/dataset_versions"],
+      "operational_paths": ["/hypothesis_eligible_evidence_ids", "/causal_evidence_ids_by_perturbation", "/evidence_role_policy", "/coverage_warning", "/next_action"]
+    },
+    "draft_fly_hypothesis": {
+      "required_data_fields": ["hypothesis", "next_action"],
+      "produced_artifacts": ["hypothesis"],
+      "scientific_paths": ["/hypothesis"],
+      "operational_paths": ["/next_action"]
+    },
+    "design_stimulation_trial": {
+      "required_data_fields": ["experiment", "approval_required", "agent_status", "blocked_by", "agent_actionable", "human_gate", "next_action"],
+      "produced_artifacts": ["experiment", "trial_condition"],
+      "scientific_paths": ["/experiment", "/experiment/model", "/experiment/model/controllerMapping"],
+      "operational_paths": ["/experiment/approved", "/approval_required", "/agent_status", "/blocked_by", "/agent_actionable", "/human_gate", "/next_action"]
+    },
+    "run_fly_simulation": {
+      "required_data_fields": ["id", "experimentId", "status", "conditionRuns", "runHash", "protocol", "model", "provenance", "boundary", "next_action"],
+      "produced_artifacts": ["simulation_batch", "simulation_run", "illustrative_trajectory"],
+      "scientific_paths": ["", "/conditionRuns", "/protocol", "/model", "/model/controllerMapping", "/boundary"],
+      "operational_paths": ["/next_action"]
+    },
+    "analyze_fly_behavior": {
+      "required_data_fields": ["analysis", "metric_definitions", "unit_boundary", "next_action"],
+      "produced_artifacts": ["behavior_analysis"],
+      "scientific_paths": ["/analysis", "/metric_definitions", "/unit_boundary"],
+      "operational_paths": ["/next_action"]
+    },
+    "compare_fly_trials": {
+      "required_data_fields": ["comparison", "execution_authorized", "next_action"],
+      "produced_artifacts": ["trial_comparison", "follow_up_proposal"],
+      "scientific_paths": ["/comparison", "/comparison/proposal"],
+      "operational_paths": ["/execution_authorized", "/next_action"]
+    },
+    "save_fly_evidence": {
+      "required_data_fields": ["bundle", "evidence_export", "export_media_type", "export_filename", "local_reference", "storage_scope", "next_action"],
+      "produced_artifacts": ["evidence_bundle", "portable_evidence_export"],
+      "scientific_paths": ["/bundle", "/evidence_export"],
+      "operational_paths": ["/export_media_type", "/export_filename", "/local_reference", "/storage_scope", "/next_action"]
+    }
+  },
   "supervisor_gate": {
     "name": "visible_supervisor_approval",
     "webmcp_tool": false,
@@ -62,6 +113,23 @@
     "must_match": ["perturbation", "predicted_behavior"],
     "supplemental_only": ["structural_path", "specimen_inventory", "motor_context"],
     "excluded": ["model_context", "catalog_context"]
+  },
+  "provenance": {
+    "schema_version": "flylab.provenance-manifest.v1",
+    "summary_field": "provenance",
+    "summary_semantics": "Union summary only; use provenance_manifest for field-level attribution.",
+    "manifest_field": "provenance_manifest",
+    "path_scope": "RFC 6901 JSON Pointer paths relative to structuredContent.data; the empty path addresses the data root.",
+    "inheritance": "Each manifest entry labels its complete scientific subtree unless a more specific nested entry overrides it.",
+    "operational_boundary": "Paths in operational_paths are workflow or storage metadata, not scientific evidence, and do not inherit a scientific label.",
+    "untrusted_annotation_boundary": "Caller-supplied goals, titles, and notes are untrusted administrative annotations, excluded from scientific provenance counts.",
+    "definitions": {
+      "measured": "An empirical result reported under the cited study conditions; it is not automatically universal or reproduced by FlyLab.",
+      "derived": "A deterministic filter, aggregation, or calculation from pinned source records; it is not a new wet-lab measurement.",
+      "connectome_inferred": "An anatomical inference from EM reconstruction or annotations; it does not establish activity, physiological efficacy, or behavior.",
+      "simulation_predicted": "An output conditional on the stated model, controller mapping, parameters, and seed; it is not biological validation.",
+      "agent_hypothesized": "An untested proposal authored by an agent that must remain distinct from source evidence and simulation output."
+    }
   },
   "provenance_labels": [
     "measured",

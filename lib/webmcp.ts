@@ -33,7 +33,27 @@ export interface ToolActionResult {
   summary: string;
   data: Record<string, unknown>;
   provenance: ProvenanceLabel[];
+  provenanceManifest: {
+    entries: FlyLabProvenanceManifestEntry[];
+    operationalPaths: string[];
+  };
   stateRevision: number;
+}
+
+export const FLYLAB_TOOL_RESULT_VERSION = 'flylab.tool-result.v2' as const;
+export const FLYLAB_PROVENANCE_MANIFEST_VERSION = 'flylab.provenance-manifest.v1' as const;
+
+export interface FlyLabProvenanceManifestEntry {
+  /** JSON Pointer relative to structuredContent.data. An empty string addresses the data root. */
+  path: string;
+  artifact_id: string | null;
+  artifact_type: string;
+  scope: 'artifact' | 'record' | 'container';
+  labels: ProvenanceLabel[];
+  parent_ids: string[];
+  evidence_ids: string[];
+  source_ids: string[];
+  boundary: string;
 }
 
 export type FlyLabActionActor = 'webmcp_agent' | 'human_ui' | 'guided_example';
@@ -175,7 +195,7 @@ export const flyLabToolContracts = [
   {
     name: 'run_fly_simulation',
     title: 'Run fly simulation',
-    description: 'Execute one approved, bounded FlyLab experiment and animate its conditions in the shared arena. Returns exact model, controller, seed and run IDs with simulation_predicted provenance.',
+    description: 'Execute one approved, bounded FlyLab experiment and animate its conditions in the shared arena. Returns exact model, controller, seed and run IDs with field-level attribution: outputs are simulation_predicted, the approved protocol and controller mapping are agent_hypothesized, and model metadata is derived.',
     annotations: { readOnlyHint: false, untrustedContentHint: false },
     inputSchema: objectSchema({
       experiment_id: { type: 'string', minLength: 1, maxLength: 100 },
@@ -205,7 +225,7 @@ export const flyLabToolContracts = [
   {
     name: 'save_fly_evidence',
     title: 'Save fly evidence',
-    description: 'Commit a complete FlyLab hypothesis, experiment, runs, analyses, comparison, citations, model versions and seeds to the visible browser-local evidence ledger. Returns a stable bundle ID and manifest hash.',
+    description: 'Commit a complete FlyLab hypothesis, experiment, runs, analyses, comparison, citations, model versions and seeds to the visible browser-local evidence ledger. Returns the stable bundle metadata and exact portable evidence-export envelope, including its manifest hash.',
     annotations: { readOnlyHint: false, untrustedContentHint: true },
     inputSchema: objectSchema({
       title: { type: 'string', minLength: 1, maxLength: 120 },
@@ -218,6 +238,67 @@ export const flyLabToolContracts = [
     }, ['title', 'hypothesis_id', 'experiment_id', 'batch_ids', 'analysis_ids', 'comparison_id']),
   },
 ] as const;
+
+/**
+ * Machine-readable result documentation kept beside the runtime contracts.
+ * These describe the exact top-level `data` fields returned by each action;
+ * nested scientific attribution is supplied by every result's provenance manifest.
+ */
+export const flyLabToolOutputContracts = {
+  inspect_flylab_state: {
+    required_data_fields: ['agent_context'],
+    produced_artifacts: [],
+    scientific_paths: ['/agent_context/artifact_manifest'],
+    operational_paths: ['/agent_context/state', '/agent_context/next_action', '/agent_context/human_gate', '/agent_context/pipeline'],
+  },
+  find_fly_circuits: {
+    required_data_fields: ['circuits', 'evidence', 'connectome_records', 'dataset_versions', 'hypothesis_eligible_evidence_ids', 'causal_evidence_ids_by_perturbation', 'evidence_role_policy', 'coverage_warning', 'next_action'],
+    produced_artifacts: ['circuit_selection', 'evidence_record', 'connectome_record'],
+    scientific_paths: ['/circuits', '/evidence', '/connectome_records', '/dataset_versions'],
+    operational_paths: ['/hypothesis_eligible_evidence_ids', '/causal_evidence_ids_by_perturbation', '/evidence_role_policy', '/coverage_warning', '/next_action'],
+  },
+  draft_fly_hypothesis: {
+    required_data_fields: ['hypothesis', 'next_action'],
+    produced_artifacts: ['hypothesis'],
+    scientific_paths: ['/hypothesis'],
+    operational_paths: ['/next_action'],
+  },
+  design_stimulation_trial: {
+    required_data_fields: ['experiment', 'approval_required', 'agent_status', 'blocked_by', 'agent_actionable', 'human_gate', 'next_action'],
+    produced_artifacts: ['experiment', 'trial_condition'],
+    scientific_paths: ['/experiment', '/experiment/model', '/experiment/model/controllerMapping'],
+    operational_paths: ['/experiment/approved', '/approval_required', '/agent_status', '/blocked_by', '/agent_actionable', '/human_gate', '/next_action'],
+  },
+  run_fly_simulation: {
+    required_data_fields: ['id', 'experimentId', 'status', 'conditionRuns', 'runHash', 'protocol', 'model', 'provenance', 'boundary', 'next_action'],
+    produced_artifacts: ['simulation_batch', 'simulation_run', 'illustrative_trajectory'],
+    scientific_paths: ['', '/conditionRuns', '/protocol', '/model', '/model/controllerMapping', '/boundary'],
+    operational_paths: ['/next_action'],
+  },
+  analyze_fly_behavior: {
+    required_data_fields: ['analysis', 'metric_definitions', 'unit_boundary', 'next_action'],
+    produced_artifacts: ['behavior_analysis'],
+    scientific_paths: ['/analysis', '/metric_definitions', '/unit_boundary'],
+    operational_paths: ['/next_action'],
+  },
+  compare_fly_trials: {
+    required_data_fields: ['comparison', 'execution_authorized', 'next_action'],
+    produced_artifacts: ['trial_comparison', 'follow_up_proposal'],
+    scientific_paths: ['/comparison', '/comparison/proposal'],
+    operational_paths: ['/execution_authorized', '/next_action'],
+  },
+  save_fly_evidence: {
+    required_data_fields: ['bundle', 'evidence_export', 'export_media_type', 'export_filename', 'local_reference', 'storage_scope', 'next_action'],
+    produced_artifacts: ['evidence_bundle', 'portable_evidence_export'],
+    scientific_paths: ['/bundle', '/evidence_export'],
+    operational_paths: ['/export_media_type', '/export_filename', '/local_reference', '/storage_scope', '/next_action'],
+  },
+} as const satisfies Record<(typeof flyLabToolContracts)[number]['name'], {
+  required_data_fields: readonly string[];
+  produced_artifacts: readonly string[];
+  scientific_paths: readonly string[];
+  operational_paths: readonly string[];
+}>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -318,13 +399,26 @@ export function validateToolInput(toolName: string, rawInput: unknown): Record<s
 }
 
 function toolSuccess(tool: string, result: ToolActionResult) {
+  const manifestLabels = [...new Set(result.provenanceManifest.entries.flatMap((entry) => entry.labels))];
+  const summaryLabels = [...new Set(result.provenance)];
+  if (manifestLabels.length !== summaryLabels.length
+    || manifestLabels.some((label) => !summaryLabels.includes(label))) {
+    throw new Error(`${tool} provenance summary does not match its field-addressable manifest.`);
+  }
   const payload = {
     ok: true,
-    result_version: 'flylab.tool-result.v1',
+    result_version: FLYLAB_TOOL_RESULT_VERSION,
     tool,
     summary: result.summary,
     state_revision: result.stateRevision,
     provenance: result.provenance,
+    provenance_scope: 'Union summary only. Use provenance_manifest entries for field-level attribution.',
+    provenance_manifest: {
+      schema_version: FLYLAB_PROVENANCE_MANIFEST_VERSION,
+      path_scope: 'JSON Pointer paths relative to structuredContent.data; each entry labels its complete subtree unless a narrower entry overrides it.',
+      entries: result.provenanceManifest.entries,
+      operational_paths: result.provenanceManifest.operationalPaths,
+    },
     data: result.data,
   };
   return {
@@ -336,7 +430,7 @@ function toolSuccess(tool: string, result: ToolActionResult) {
 function toolFailure(tool: string, error: FlyLabDomainError) {
   const payload = {
     ok: false,
-    result_version: 'flylab.tool-result.v1',
+    result_version: FLYLAB_TOOL_RESULT_VERSION,
     tool,
     error: { code: error.code, message: error.message, retryable: error.retryable, details: error.details },
   };

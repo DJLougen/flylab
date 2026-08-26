@@ -28,6 +28,7 @@ const initialSnapshot: FlyLabAgentSnapshot = {
   comparisonAnalysisIds: [],
   bundleId: null,
   nextTrialBudget: 5,
+  artifactManifest: {},
 };
 
 describe('FlyLab inline agent handoff', () => {
@@ -58,6 +59,10 @@ describe('FlyLab inline agent handoff', () => {
       assert.match(transport.execution_note, wanted.available ? /inspect_flylab_state/ : /not a fallback transport/i);
     }
 
-    assert.deepEqual(buildFlyLabAgentHandoff(context, 'unsupported').trust.untrusted_human_fields, ['agent_context.state.goal']);
+    const unsupported = buildFlyLabAgentHandoff(context, 'unsupported');
+    assert.equal(unsupported.agent_context.schema_version, 'flylab.agent-context.v2');
+    assert.deepEqual(unsupported.agent_context.artifact_manifest, {});
+    assert.match(unsupported.agent_context.provenance_policy.inheritance, /artifact_manifest/);
+    assert.deepEqual(unsupported.trust.untrusted_human_fields, ['agent_context.state.goal']);
   });
 });

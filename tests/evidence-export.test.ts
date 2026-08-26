@@ -29,6 +29,20 @@ const annotation = {
   boundary: 'Administrative annotation; not scientific evidence.',
 };
 
+const provenanceIndex = {
+  measured: ['evidence_123'],
+  derived: ['analysis_123', 'evidence_123'],
+  connectome_inferred: ['context_evidence_123'],
+  simulation_predicted: ['run_123'],
+  agent_hypothesized: ['exp_123'],
+};
+
+const lineageEdges = [
+  { from: 'evidence_123', relation: 'supports', to: 'exp_123' },
+  { from: 'context_evidence_123', relation: 'contextualizes', to: 'exp_123' },
+  { from: 'exp_123', relation: 'produces', to: 'run_123' },
+];
+
 describe('FlyLab portable evidence export', () => {
   test('preserves the exact saved metadata and full payload in a versioned envelope', async () => {
     const payload = {
@@ -46,9 +60,13 @@ describe('FlyLab portable evidence export', () => {
       includedIds: ['exp_123', 'run_123'],
       supportingEvidenceIds: ['evidence_123'],
       supportingSourceIds: ['source_123'],
+      contextEvidenceIds: ['context_evidence_123'],
+      contextSourceIds: ['context_source_123'],
       methodEvidenceIds: ['method_evidence_123'],
       methodSourceIds: ['method_source_123'],
       provenanceCounts,
+      provenanceIndex,
+      lineageEdges,
       boundary: 'Simulation evidence bundle; not a new biological experiment.',
       provenance: ['derived'],
       annotation,
@@ -61,6 +79,10 @@ describe('FlyLab portable evidence export', () => {
     assert.equal(envelope.schemaVersion, EVIDENCE_EXPORT_SCHEMA_VERSION);
     assert.strictEqual(envelope.bundle, bundle);
     assert.strictEqual(envelope.payload, payload);
+    assert.deepEqual(envelope.bundle.contextEvidenceIds, ['context_evidence_123']);
+    assert.deepEqual(envelope.bundle.contextSourceIds, ['context_source_123']);
+    assert.deepEqual(envelope.bundle.provenanceIndex, provenanceIndex);
+    assert.deepEqual(envelope.bundle.lineageEdges, lineageEdges);
     assert.equal(envelope.integrity.manifestHash, manifestHash);
     assert.equal(envelope.integrity.scope, 'payload');
     assert.match(envelope.integrity.assurance, /not a digital signature or a guarantee of immutability/);
@@ -81,9 +103,22 @@ describe('FlyLab portable evidence export', () => {
       includedIds: ['source_1', 'analysis_1'],
       supportingEvidenceIds: ['evidence_1'],
       supportingSourceIds: ['source_1'],
+      contextEvidenceIds: ['context_evidence_1'],
+      contextSourceIds: ['context_source_1'],
       methodEvidenceIds: ['method_evidence_1'],
       methodSourceIds: ['method_source_1'],
       provenanceCounts,
+      provenanceIndex: {
+        measured: ['evidence_1'],
+        derived: ['analysis_1'],
+        connectome_inferred: ['context_evidence_1'],
+        simulation_predicted: [],
+        agent_hypothesized: [],
+      },
+      lineageEdges: [
+        { from: 'source_1', relation: 'supports', to: 'evidence_1' },
+        { from: 'context_evidence_1', relation: 'contextualizes', to: 'analysis_1' },
+      ],
       boundary: 'Simulation evidence bundle; not a new biological experiment.',
       provenance: ['derived'],
       annotation: { ...annotation, title: 'Hash round trip' },
@@ -96,6 +131,10 @@ describe('FlyLab portable evidence export', () => {
     assert.equal(first, second);
     assert.ok(first.endsWith('\n'));
     assert.deepEqual(parsed.payload, payload);
+    assert.deepEqual(parsed.bundle.contextEvidenceIds, ['context_evidence_1']);
+    assert.deepEqual(parsed.bundle.contextSourceIds, ['context_source_1']);
+    assert.deepEqual(parsed.bundle.provenanceIndex, bundle.provenanceIndex);
+    assert.deepEqual(parsed.bundle.lineageEdges, bundle.lineageEdges);
     assert.equal(parsed.integrity.manifestHash, manifestHash);
     assert.equal(await sha256(parsed.payload), manifestHash);
   });

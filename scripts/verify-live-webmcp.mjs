@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -753,17 +754,330 @@ function decodedOutput(response) {
   }
 }
 
+const provenanceLabels = [
+  'measured',
+  'derived',
+  'connectome_inferred',
+  'simulation_predicted',
+  'agent_hypothesized',
+];
+
+function uniqueSortedStrings(values) {
+  return [...new Set(values)].sort();
+}
+
+function assertSameStringSet(actual, expected, label) {
+  const normalizedActual = uniqueSortedStrings(actual);
+  const normalizedExpected = uniqueSortedStrings(expected);
+  if (JSON.stringify(normalizedActual) !== JSON.stringify(normalizedExpected)) {
+    throw new Error(`${label} did not match: ${JSON.stringify({ actual: normalizedActual, expected: normalizedExpected })}`);
+  }
+}
+
+function sha256Json(value) {
+  return `sha256:${createHash('sha256').update(JSON.stringify(value)).digest('hex')}`;
+}
+
+function assertProvenanceManifest(envelope, toolName) {
+  const manifest = envelope?.provenance_manifest;
+  const entries = manifest?.entries;
+  const summary = envelope?.provenance;
+  if (envelope?.result_version !== 'flylab.tool-result.v2'
+    || manifest?.schema_version !== 'flylab.provenance-manifest.v1'
+    || !Array.isArray(entries)
+    || !Array.isArray(manifest.operational_paths)
+    || !Array.isArray(summary)
+    || !String(envelope?.provenance_scope ?? '').includes('Union summary only')) {
+    throw new Error(`${toolName} did not return the FlyLab v2 provenance contract: ${JSON.stringify(envelope)}`);
+  }
+  if (summary.length !== new Set(summary).size || summary.some((label) => !provenanceLabels.includes(label))) {
+    throw new Error(`${toolName} returned an invalid top-level provenance summary: ${JSON.stringify(summary)}`);
+  }
+  for (const [index, entry] of entries.entries()) {
+    if (typeof entry?.path !== 'string'
+      || (entry.artifact_id !== null && typeof entry.artifact_id !== 'string')
+      || typeof entry.artifact_type !== 'string'
+      || !entry.artifact_type
+      || !['artifact', 'record', 'container'].includes(entry.scope)
+      || !Array.isArray(entry.labels)
+      || !entry.labels.length
+      || entry.labels.some((label) => !provenanceLabels.includes(label))
+      || !Array.isArray(entry.parent_ids)
+      || !Array.isArray(entry.evidence_ids)
+      || !Array.isArray(entry.source_ids)
+      || typeof entry.boundary !== 'string'
+      || !entry.boundary) {
+      throw new Error(`${toolName} returned an invalid provenance entry at index ${index}: ${JSON.stringify(entry)}`);
+    }
+  }
+  if (manifest.operational_paths.some((path) => typeof path !== 'string' || (path !== '' && !path.startsWith('/')))) {
+    throw new Error(`${toolName} returned an invalid operational JSON Pointer: ${JSON.stringify(manifest.operational_paths)}`);
+  }
+  assertSameStringSet(
+    entries.flatMap((entry) => entry.labels),
+    summary,
+    `${toolName} provenance entry-label union`,
+  );
+}
+
 function successfulEnvelope(response, toolName) {
   const envelope = decodedOutput(response)?.structuredContent;
   if (response?.status !== 'Completed' || envelope?.ok !== true || envelope?.tool !== toolName) {
     throw new Error(`${toolName} did not complete successfully: ${JSON.stringify(response)}`);
   }
+  assertProvenanceManifest(envelope, toolName);
   return envelope;
 }
 
 async function inspectAgentContext(tools) {
   const response = await invokeRegisteredTool(tools, 'inspect_flylab_state', {});
-  return successfulEnvelope(response, 'inspect_flylab_state').data.agent_context;
+  const envelope = successfulEnvelope(response, 'inspect_flylab_state');
+  const context = envelope.data?.agent_context;
+  const artifactManifest = context?.artifact_manifest;
+  const requiredArtifactFields = [
+    'selected_circuit',
+    'discovered_evidence',
+    'hypothesis',
+    'experiment',
+    'batch',
+    'analyses',
+    'comparison',
+    'evidence_bundle',
+  ];
+  if (context?.schema_version !== 'flylab.agent-context.v2'
+    || !artifactManifest
+    || typeof artifactManifest !== 'object'
+    || Array.isArray(artifactManifest)
+    || requiredArtifactFields.some((field) => !(field in artifactManifest))
+    || !Array.isArray(artifactManifest.discovered_evidence)
+    || !Array.isArray(artifactManifest.analyses)
+    || !context.provenance_policy?.definitions
+    || provenanceLabels.some((label) => typeof context.provenance_policy.definitions[label] !== 'string')
+    || !String(context.provenance_policy?.inheritance ?? '').includes('more specific nested record')
+    || !String(context.provenance_policy?.operational_boundary ?? '').includes('operational metadata')
+    || !String(context.provenance_policy?.untrusted_annotation ?? '').includes('never counted as scientific provenance')) {
+    throw new Error(`Inspector did not expose the FlyLab agent-context v2 audit contract: ${JSON.stringify(context)}`);
+  }
+  if (envelope.provenance_manifest.entries.some((entry) => !entry.path.startsWith('/agent_context/artifact_manifest'))) {
+    throw new Error(`Inspector provenance entries escaped artifact_manifest: ${JSON.stringify(envelope.provenance_manifest.entries)}`);
+  }
+  return context;
+}
+
+function verifySavedEvidenceExport(saved, expected) {
+  const bundle = saved.data?.bundle;
+  const evidenceExport = saved.data?.evidence_export;
+  const payload = evidenceExport?.payload;
+  if (!bundle
+    || evidenceExport?.schema !== 'flylab.evidence-export'
+    || evidenceExport?.schemaVersion !== 2
+    || evidenceExport?.integrity?.scope !== 'payload'
+    || evidenceExport?.integrity?.serialization !== 'JSON.stringify(payload)'
+    || !payload
+    || JSON.stringify(evidenceExport.bundle) !== JSON.stringify(bundle)) {
+    throw new Error(`save_fly_evidence did not expose the exact v2 evidence export: ${JSON.stringify(saved.data)}`);
+  }
+
+  const computedManifestHash = sha256Json(payload);
+  if (bundle.manifestHash !== computedManifestHash
+    || evidenceExport.integrity.manifestHash !== computedManifestHash) {
+    throw new Error(`Evidence-export payload hash did not match bundle and integrity metadata: ${JSON.stringify({
+      computedManifestHash,
+      bundleHash: bundle.manifestHash,
+      integrityHash: evidenceExport.integrity.manifestHash,
+    })}`);
+  }
+
+  const groups = [
+    {
+      name: 'hypothesis support',
+      evidence: payload.supportingEvidence,
+      sources: payload.supportingSources,
+      evidenceIds: bundle.supportingEvidenceIds,
+      sourceIds: bundle.supportingSourceIds,
+    },
+    {
+      name: 'circuit context',
+      evidence: payload.contextEvidence,
+      sources: payload.contextSources,
+      evidenceIds: bundle.contextEvidenceIds,
+      sourceIds: bundle.contextSourceIds,
+    },
+    {
+      name: 'model method',
+      evidence: payload.methodEvidence,
+      sources: payload.methodSources,
+      evidenceIds: bundle.methodEvidenceIds,
+      sourceIds: bundle.methodSourceIds,
+    },
+  ];
+  for (const group of groups) {
+    if (!Array.isArray(group.evidence) || !Array.isArray(group.sources)
+      || !Array.isArray(group.evidenceIds) || !Array.isArray(group.sourceIds)) {
+      throw new Error(`Evidence export omitted the ${group.name} closure.`);
+    }
+    assertSameStringSet(group.evidence.map((record) => record.id), group.evidenceIds, `${group.name} evidence IDs`);
+    assertSameStringSet(group.sources.map((record) => record.id), group.sourceIds, `${group.name} source IDs`);
+    assertSameStringSet(
+      group.evidence.flatMap((record) => record.sourceIds ?? []),
+      group.sourceIds,
+      `${group.name} evidence-to-source closure`,
+    );
+    const sourceSet = new Set(group.sourceIds);
+    for (const evidence of group.evidence) {
+      if (!Array.isArray(evidence.sourceIds)
+        || evidence.sourceIds.some((sourceId) => !sourceSet.has(sourceId))
+        || !Array.isArray(evidence.sourceSupport)) {
+        throw new Error(`${group.name} record ${evidence.id} has unresolved source lineage.`);
+      }
+      assertSameStringSet(
+        evidence.sourceSupport.map((mapping) => mapping.sourceId),
+        evidence.sourceIds,
+        `${group.name} record ${evidence.id} locator closure`,
+      );
+    }
+  }
+  assertSameStringSet(payload.hypothesis?.evidenceIds ?? [], bundle.supportingEvidenceIds, 'hypothesis supporting evidence closure');
+  assertSameStringSet(
+    groups.flatMap((group) => group.evidenceIds),
+    payload.circuit?.evidenceIds ?? [],
+    'complete selected-circuit evidence partition',
+  );
+
+  if (payload.hypothesis?.id !== expected.hypothesis.id
+    || payload.experiment?.id !== expected.experiment.id
+    || payload.batch?.id !== expected.batch.id
+    || !payload.analyses?.some((analysis) => analysis.id === expected.analysis.id)
+    || payload.comparison?.id !== expected.comparison.id) {
+    throw new Error(`Evidence export did not preserve the executed artifact chain: ${JSON.stringify({ payload, expected })}`);
+  }
+
+  const conditionIds = payload.experiment.conditions.map((condition) => condition.id);
+  const runIds = payload.batch.conditionRuns.flatMap((conditionRun) => conditionRun.runIds);
+  const replicateIds = payload.batch.conditionRuns.flatMap((conditionRun) => conditionRun.replicates.map((replicate) => replicate.id));
+  const proposalId = payload.comparison?.proposal?.id;
+  assertSameStringSet(conditionIds, expected.experiment.conditions.map((condition) => condition.id), 'saved condition IDs');
+  assertSameStringSet(runIds, replicateIds, 'saved run and replicate IDs');
+  if (!proposalId || proposalId !== expected.comparison.proposal.id) {
+    throw new Error(`Evidence export omitted the compared follow-up proposal: ${JSON.stringify({ proposalId, expected: expected.comparison.proposal.id })}`);
+  }
+  const includedIds = new Set(bundle.includedIds);
+  const requiredIncludedIds = [...conditionIds, ...runIds, proposalId];
+  if (requiredIncludedIds.some((id) => !includedIds.has(id))) {
+    throw new Error(`Bundle includedIds omitted conditions, runs, or the proposal: ${JSON.stringify({ requiredIncludedIds, includedIds: bundle.includedIds })}`);
+  }
+
+  const provenanceIndex = bundle.provenanceIndex;
+  const provenanceCounts = bundle.provenanceCounts;
+  if (!provenanceIndex || !provenanceCounts
+    || JSON.stringify(Object.keys(provenanceIndex).sort()) !== JSON.stringify([...provenanceLabels].sort())) {
+    throw new Error(`Bundle did not publish the complete provenance index: ${JSON.stringify({ provenanceIndex, provenanceCounts })}`);
+  }
+  for (const label of provenanceLabels) {
+    const indexedIds = provenanceIndex[label];
+    if (!Array.isArray(indexedIds)
+      || indexedIds.length !== new Set(indexedIds).size
+      || JSON.stringify(indexedIds) !== JSON.stringify([...indexedIds].sort())
+      || provenanceCounts[label] !== indexedIds.length) {
+      throw new Error(`Bundle provenance index/count mismatch for ${label}: ${JSON.stringify({ indexedIds, count: provenanceCounts[label] })}`);
+    }
+  }
+  const expectedIndexMembership = [
+    ...conditionIds.map((id) => [id, 'agent_hypothesized']),
+    ...runIds.map((id) => [id, 'simulation_predicted']),
+    [proposalId, 'agent_hypothesized'],
+    [payload.hypothesis.id, 'agent_hypothesized'],
+    [payload.experiment.id, 'agent_hypothesized'],
+    [payload.batch.id, 'simulation_predicted'],
+    [payload.analyses[0].id, 'derived'],
+    [payload.analyses[0].id, 'simulation_predicted'],
+    [payload.comparison.id, 'derived'],
+    [payload.comparison.id, 'simulation_predicted'],
+    [bundle.id, 'derived'],
+  ];
+  for (const [id, label] of expectedIndexMembership) {
+    if (!provenanceIndex[label].includes(id)) {
+      throw new Error(`Bundle provenance index omitted ${id} from ${label}.`);
+    }
+  }
+  for (const group of groups) {
+    for (const evidence of group.evidence) {
+      if (!provenanceIndex[evidence.provenance]?.includes(evidence.id)) {
+        throw new Error(`Bundle provenance index omitted evidence record ${evidence.id} from ${evidence.provenance}.`);
+      }
+    }
+  }
+
+  const annotation = payload.annotation;
+  const payloadManifest = payload.provenanceManifest;
+  const allScientificallyIndexedIds = provenanceLabels.flatMap((label) => provenanceIndex[label]);
+  if (!annotation?.id
+    || annotation.trust !== 'untrusted_annotation'
+    || annotation.purpose !== 'administrative_annotation_not_evidence'
+    || !bundle.includedIds.includes(annotation.id)
+    || allScientificallyIndexedIds.includes(annotation.id)
+    || payloadManifest?.schema_version !== 'flylab.provenance-manifest.v1'
+    || !payloadManifest.operational_paths?.includes('/annotation')
+    || payloadManifest.entries?.some((entry) => entry.path === '/annotation' || entry.path.startsWith('/annotation/'))) {
+    throw new Error(`Untrusted annotation crossed the scientific provenance boundary: ${JSON.stringify({ annotation, provenanceIndex, payloadManifest })}`);
+  }
+  assertSameStringSet(
+    payloadManifest.entries.flatMap((entry) => entry.labels),
+    provenanceLabels.filter((label) => provenanceIndex[label].length > 0),
+    'payload provenance-manifest label coverage',
+  );
+
+  const lineageEdges = bundle.lineageEdges;
+  if (!Array.isArray(lineageEdges) || !lineageEdges.length) {
+    throw new Error('Evidence bundle did not expose lineageEdges.');
+  }
+  const hasEdge = (from, relation, to) => lineageEdges.some((edge) => (
+    edge.from === from && edge.relation === relation && edge.to === to
+  ));
+  for (const group of groups) {
+    for (const evidence of group.evidence) {
+      for (const sourceId of evidence.sourceIds) {
+        if (!hasEdge(evidence.id, 'supported_by', sourceId)) {
+          throw new Error(`Lineage graph omitted ${evidence.id} -> ${sourceId}.`);
+        }
+      }
+    }
+  }
+  for (const evidenceId of bundle.supportingEvidenceIds) {
+    if (!hasEdge(payload.hypothesis.id, 'cites_hypothesis_support', evidenceId)) {
+      throw new Error(`Lineage graph omitted hypothesis support ${evidenceId}.`);
+    }
+  }
+  for (const conditionId of conditionIds) {
+    if (!hasEdge(payload.experiment.id, 'has_condition', conditionId)) {
+      throw new Error(`Lineage graph omitted experiment condition ${conditionId}.`);
+    }
+  }
+  for (const conditionRun of payload.batch.conditionRuns) {
+    for (const runId of conditionRun.runIds) {
+      if (!hasEdge(payload.batch.id, `contains_run_for:${conditionRun.conditionId}`, runId)) {
+        throw new Error(`Lineage graph omitted simulation run ${runId}.`);
+      }
+    }
+  }
+  if (!hasEdge(proposalId, 'proposed_from_comparison', payload.comparison.id)
+    || lineageEdges.some((edge) => edge.from === annotation.id || edge.to === annotation.id)) {
+    throw new Error(`Lineage graph mishandled the proposal or untrusted annotation: ${JSON.stringify(lineageEdges)}`);
+  }
+
+  return {
+    schema: evidenceExport.schema,
+    schema_version: evidenceExport.schemaVersion,
+    manifest_hash: computedManifestHash,
+    evidence_records: groups.reduce((count, group) => count + group.evidence.length, 0),
+    source_records: uniqueSortedStrings(groups.flatMap((group) => group.sourceIds)).length,
+    condition_ids: conditionIds,
+    run_ids: runIds.length,
+    proposal_id: proposalId,
+    provenance_counts: provenanceCounts,
+    lineage_edges: lineageEdges.length,
+    untrusted_annotation_excluded: true,
+  };
 }
 
 async function verifyCompletedLineageIdempotency(tools, inputs, savedBundle) {
@@ -989,10 +1303,27 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
     : await verifyEvidenceSaveCancellation(tools, saveInput);
   const saveResponse = await invokeRegisteredTool(tools, 'save_fly_evidence', saveInput);
   const saved = successfulEnvelope(saveResponse, 'save_fly_evidence');
+  const evidenceExportAudit = verifySavedEvidenceExport(saved, {
+    hypothesis: drafted.data.hypothesis,
+    experiment: designed.data.experiment,
+    batch: run.data,
+    analysis: analysis.data.analysis,
+    comparison: comparison.data.comparison,
+  });
   const completedContext = await inspectAgentContext(tools);
+  const recoveredArtifacts = completedContext.artifact_manifest;
   if (completedContext.agent_status !== 'complete'
     || completedContext.next_tool !== null
-    || completedContext.next_action?.kind !== 'complete') {
+    || completedContext.next_action?.kind !== 'complete'
+    || recoveredArtifacts.hypothesis?.id !== drafted.data.hypothesis.id
+    || recoveredArtifacts.experiment?.id !== experimentId
+    || recoveredArtifacts.batch?.id !== run.data.id
+    || recoveredArtifacts.batch?.run_hash !== run.data.runHash
+    || !recoveredArtifacts.analyses?.some((record) => record.id === analysis.data.analysis.id)
+    || recoveredArtifacts.comparison?.id !== comparison.data.comparison.id
+    || recoveredArtifacts.comparison?.proposal?.id !== comparison.data.comparison.proposal.id
+    || recoveredArtifacts.evidence_bundle?.id !== saved.data.bundle.id
+    || recoveredArtifacts.evidence_bundle?.manifest_hash !== saved.data.bundle.manifestHash) {
     throw new Error(`Inspector did not expose workflow completion: ${JSON.stringify(completedContext)}`);
   }
   const idempotency = cleanCapture
@@ -1022,10 +1353,10 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
     navPosition: 'end',
   });
   await captureStage('evidence-saved');
-  await clickButton({ text: 'Pinned MDN-to-LBL40 anatomical contacts' });
+  await clickButton({ text: 'Pinned MDN-to-LBL40 v3 predicted links' });
   await new Promise((resolve) => setTimeout(resolve, 160));
   await prepareEvidenceModalCapture({
-    expectedSelection: 'Pinned MDN-to-LBL40 anatomical contacts',
+    expectedSelection: 'Pinned MDN-to-LBL40 v3 predicted links',
     navPosition: 'start',
   });
   await captureStage('evidence-ledger');
@@ -1054,11 +1385,14 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
     human_proposal_budget: humanBudget,
     visible_comparison_verified: Boolean(visibleComparison),
     visible_bundle_verified: Boolean(visibleBundle),
+    evidence_export_audit: evidenceExportAudit,
     inspector: {
       initial_next_tool: initialContext.next_tool,
       blocked_status: lockedContext.agent_status,
       post_approval_next_tool: approvedContext.next_tool,
       final_status: completedContext.agent_status,
+      context_contract: completedContext.schema_version,
+      artifact_manifest_recovered: true,
     },
     cancellation: {
       commit_boundary: 'prepare -> combined AbortSignal check -> synchronous state commit',

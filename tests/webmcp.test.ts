@@ -4,14 +4,19 @@ import { afterEach, describe, test } from 'node:test';
 
 import {
   FLYLAB_ERROR_CODES,
+  FLYLAB_PROVENANCE_MANIFEST_VERSION,
+  FLYLAB_TOOL_RESULT_VERSION,
   flyLabToolContracts,
+  flyLabToolOutputContracts,
   installFlyLabWebMCP,
   prepareCancellableCommit,
   requireCurrentStateRevision,
   validateToolInput,
   type FlyLabToolAction,
 } from '../lib/webmcp.js';
+import { FLYLAB_AGENT_CONTEXT_VERSION } from '../lib/agent-context.js';
 import { flyLabAgentContractDocument } from '../lib/agent-contract-document.js';
+import { PROVENANCE_DEFINITIONS } from '../lib/flylab.js';
 
 const expectedNames = [
   'analyze_fly_behavior',
@@ -23,6 +28,21 @@ const expectedNames = [
   'run_fly_simulation',
   'save_fly_evidence',
 ];
+
+const derivedProvenanceManifest = {
+  entries: [{
+    path: '',
+    artifact_id: null,
+    artifact_type: 'test_fixture',
+    scope: 'container' as const,
+    labels: ['derived' as const],
+    parent_ids: [],
+    evidence_ids: [],
+    source_ids: [],
+    boundary: 'Synthetic derived fixture used only to verify the WebMCP result envelope.',
+  }],
+  operationalPaths: [] as string[],
+};
 
 afterEach(() => {
   Reflect.deleteProperty(globalThis, 'document');
@@ -92,7 +112,13 @@ describe('FlyLab WebMCP contracts', () => {
   test('publishes a machine-readable manifest synchronized with the live WebMCP tool surface', () => {
     const manifest = JSON.parse(readFileSync('public/flylab-agent-manifest.json', 'utf8')) as {
       schema_version?: string;
-      transport?: { required_first_call?: string; state_contract?: string; tool_contract_document?: string };
+      transport?: {
+        required_first_call?: string;
+        state_contract?: string;
+        result_contract?: string;
+        provenance_manifest_contract?: string;
+        tool_contract_document?: string;
+      };
       discovery?: {
         contract_url?: string;
         webmcp_standard_discovery?: boolean;
@@ -102,6 +128,17 @@ describe('FlyLab WebMCP contracts', () => {
         unsupported_browser_behavior?: string;
       };
       tools?: Array<{ name?: string }>;
+      output_contracts?: Record<string, unknown>;
+      provenance?: {
+        schema_version?: string;
+        summary_field?: string;
+        manifest_field?: string;
+        inheritance?: string;
+        operational_boundary?: string;
+        untrusted_annotation_boundary?: string;
+        definitions?: Record<string, string>;
+      };
+      provenance_labels?: string[];
       supervisor_gate?: { webmcp_tool?: boolean; blocks?: string };
       hypothesis_evidence_gate?: {
         required_role?: string;
@@ -112,9 +149,11 @@ describe('FlyLab WebMCP contracts', () => {
       };
     };
 
-    assert.equal(manifest.schema_version, 'flylab.agent-manifest.v1');
+    assert.equal(manifest.schema_version, 'flylab.agent-manifest.v2');
     assert.equal(manifest.transport?.required_first_call, 'inspect_flylab_state');
-    assert.equal(manifest.transport?.state_contract, 'flylab.agent-context.v1');
+    assert.equal(manifest.transport?.state_contract, FLYLAB_AGENT_CONTEXT_VERSION);
+    assert.equal(manifest.transport?.result_contract, FLYLAB_TOOL_RESULT_VERSION);
+    assert.equal(manifest.transport?.provenance_manifest_contract, FLYLAB_PROVENANCE_MANIFEST_VERSION);
     assert.equal(manifest.transport?.tool_contract_document, '/flylab-tool-contracts.json');
     assert.equal(manifest.discovery?.contract_url, '/flylab-tool-contracts.json');
     assert.equal(manifest.discovery?.webmcp_standard_discovery, false);
@@ -123,6 +162,16 @@ describe('FlyLab WebMCP contracts', () => {
     assert.equal(manifest.discovery?.inline_handoff_selector, '#flylab-agent-handoff');
     assert.match(manifest.discovery?.unsupported_browser_behavior ?? '', /does not polyfill WebMCP/i);
     assert.deepEqual(manifest.tools?.map((tool) => tool.name).sort(), expectedNames);
+    assert.deepEqual(manifest.output_contracts, flyLabToolOutputContracts);
+    assert.deepEqual(Object.keys(manifest.output_contracts ?? {}).sort(), expectedNames);
+    assert.equal(manifest.provenance?.schema_version, FLYLAB_PROVENANCE_MANIFEST_VERSION);
+    assert.equal(manifest.provenance?.summary_field, 'provenance');
+    assert.equal(manifest.provenance?.manifest_field, 'provenance_manifest');
+    assert.match(manifest.provenance?.inheritance ?? '', /more specific nested entry overrides/i);
+    assert.match(manifest.provenance?.operational_boundary ?? '', /not scientific evidence/i);
+    assert.match(manifest.provenance?.untrusted_annotation_boundary ?? '', /excluded from scientific provenance counts/i);
+    assert.deepEqual(manifest.provenance?.definitions, PROVENANCE_DEFINITIONS);
+    assert.deepEqual(manifest.provenance_labels, Object.keys(PROVENANCE_DEFINITIONS));
     assert.equal(manifest.supervisor_gate?.webmcp_tool, false);
     assert.equal(manifest.supervisor_gate?.blocks, 'run_fly_simulation');
     assert.deepEqual(manifest.hypothesis_evidence_gate, {
@@ -135,10 +184,22 @@ describe('FlyLab WebMCP contracts', () => {
   });
 
   test('derives a complete public contract document from the registered tool source', () => {
-    assert.equal(flyLabAgentContractDocument.schema_version, 'flylab.webmcp-contracts.v1');
+    assert.equal(flyLabAgentContractDocument.schema_version, 'flylab.webmcp-contracts.v2');
     assert.equal(flyLabAgentContractDocument.transport.required_first_call, 'inspect_flylab_state');
+    assert.equal(flyLabAgentContractDocument.transport.context_contract, FLYLAB_AGENT_CONTEXT_VERSION);
+    assert.equal(flyLabAgentContractDocument.transport.result_contract, FLYLAB_TOOL_RESULT_VERSION);
+    assert.equal(flyLabAgentContractDocument.transport.provenance_manifest_contract, FLYLAB_PROVENANCE_MANIFEST_VERSION);
     assert.match(flyLabAgentContractDocument.transport.execution_note, /not a fallback transport/i);
+    assert.equal(flyLabAgentContractDocument.result_contract.schema_version, FLYLAB_TOOL_RESULT_VERSION);
+    assert.ok(flyLabAgentContractDocument.result_contract.success_fields.includes('provenance_manifest'));
+    assert.ok(flyLabAgentContractDocument.result_contract.success_fields.includes('provenance_scope'));
     assert.deepEqual(flyLabAgentContractDocument.result_contract.domain_error_codes, FLYLAB_ERROR_CODES);
+    assert.equal(flyLabAgentContractDocument.context_contract.schema_version, FLYLAB_AGENT_CONTEXT_VERSION);
+    assert.equal(flyLabAgentContractDocument.provenance_contract.schema_version, FLYLAB_PROVENANCE_MANIFEST_VERSION);
+    assert.deepEqual(flyLabAgentContractDocument.provenance_contract.definitions, PROVENANCE_DEFINITIONS);
+    assert.match(flyLabAgentContractDocument.provenance_contract.inheritance, /more specific nested entry overrides/i);
+    assert.match(flyLabAgentContractDocument.provenance_contract.operational_boundary, /not scientific evidence/i);
+    assert.match(flyLabAgentContractDocument.provenance_contract.untrusted_annotation_boundary, /never scientific evidence/i);
     assert.deepEqual(
       flyLabAgentContractDocument.tools,
       flyLabToolContracts.map((contract) => ({
@@ -147,12 +208,16 @@ describe('FlyLab WebMCP contracts', () => {
         description: contract.description,
         annotations: contract.annotations,
         input_schema: contract.inputSchema,
+        output_contract: flyLabToolOutputContracts[contract.name],
       })),
     );
     assert.equal(flyLabAgentContractDocument.tools.length, 8);
     for (const tool of flyLabAgentContractDocument.tools) {
       assert.equal(tool.input_schema.type, 'object');
       assert.equal(tool.input_schema.additionalProperties, false);
+      assert.ok(tool.output_contract.required_data_fields.length > 0);
+      assert.ok(tool.output_contract.scientific_paths.every((path) => path === '' || path.startsWith('/')));
+      assert.ok(tool.output_contract.operational_paths.every((path) => path.startsWith('/')));
     }
   });
 
@@ -269,6 +334,7 @@ describe('FlyLab WebMCP registration lifecycle', () => {
       summary: 'ok',
       data: {},
       provenance: ['derived'],
+      provenanceManifest: derivedProvenanceManifest,
       stateRevision: 1,
     });
     const actions = Object.fromEntries(
@@ -293,12 +359,22 @@ describe('FlyLab WebMCP registration lifecycle', () => {
       { query: 'MDN', behavior: 'backward_walking' },
     ) as {
       isError?: boolean;
-      structuredContent?: { ok?: boolean; tool?: string; summary?: string };
+      structuredContent?: {
+        ok?: boolean;
+        result_version?: string;
+        tool?: string;
+        summary?: string;
+        provenance_scope?: string;
+        provenance_manifest?: { schema_version?: string };
+      };
     };
     assert.notEqual(result.isError, true);
     assert.equal(result.structuredContent?.ok, true);
     assert.equal(result.structuredContent?.tool, 'find_fly_circuits');
     assert.equal(result.structuredContent?.summary, 'ok');
+    assert.equal(result.structuredContent?.result_version, FLYLAB_TOOL_RESULT_VERSION);
+    assert.match(result.structuredContent?.provenance_scope ?? '', /union summary only/i);
+    assert.equal(result.structuredContent?.provenance_manifest?.schema_version, FLYLAB_PROVENANCE_MANIFEST_VERSION);
 
     const inspector = registrations.find(({ tool }) => tool.name === 'inspect_flylab_state');
     assert.ok(inspector);
@@ -324,6 +400,7 @@ describe('FlyLab WebMCP registration lifecycle', () => {
         summary: 'should not run',
         data: {},
         provenance: ['derived'],
+        provenanceManifest: derivedProvenanceManifest,
         stateRevision: 2,
       };
     };
@@ -346,6 +423,7 @@ describe('FlyLab WebMCP registration lifecycle', () => {
         summary: 'committed before cancellation became observable',
         data: { committed: true },
         provenance: ['derived'],
+        provenanceManifest: derivedProvenanceManifest,
         stateRevision: 3,
       };
     };
@@ -384,6 +462,7 @@ describe('FlyLab WebMCP registration lifecycle', () => {
       summary: 'ok',
       data: {},
       provenance: ['derived'],
+      provenanceManifest: derivedProvenanceManifest,
       stateRevision: 1,
     });
     const actions = Object.fromEntries(
