@@ -2,10 +2,12 @@
 
 FlyLab is a WebMCP-enabled virtual neuroethology lab for investigating how an adult fruit-fly neural circuit could influence behavior. It is agent-operable, human-auditable, and scientifically bounded: a person and an agent share one visible page session while structured site tools expose the exact workflow state, next valid action, approval boundary, and evidence lineage.
 
+Created on August 26, 2026 during the WebMCP Challenge period, FlyLab is for computational-neuroethology researchers, neuroscience educators, and agent-tool builders who need inspectable experiment state without UI scraping.
+
 - **Live lab:** [flylab-neuroethology.d-lougen.chatgpt.site](https://flylab-neuroethology.d-lougen.chatgpt.site)
 - **Public source:** [github.com/DJLougen/flylab](https://github.com/DJLougen/flylab)
 
-> **Current release boundary:** FlyLab is an adult Moonwalker descending neuron (MDN) backward-walking vertical slice. Its embodiment is the **FlyLab reduced-order model** version `0.1.1` with the versioned `mdn-inspired-retreat-adapter.v1` controller. It does not execute FlyGym, simulate neural dynamics, or emulate a complete fly brain.
+> **Current release boundary:** FlyLab is an adult Moonwalker descending neuron (MDN) backward-walking vertical slice. Its embodiment is the **FlyLab reduced-order model** version `0.1.2` with the versioned `mdn-inspired-retreat-adapter.v1` controller. It does not execute FlyGym, simulate neural dynamics, or emulate a complete fly brain.
 
 ## What the challenge release demonstrates
 
@@ -13,7 +15,7 @@ FlyLab is a WebMCP-enabled virtual neuroethology lab for investigating how an ad
 - A curated, primary-source-backed adult MDN evidence path.
 - A procedural Three.js adult-fly arena model with six legs, one wing pair plus halteres, compound eyes, branched aristae, a segmented abdomen, replay-linked heading, and an explicitly schematic morphology boundary.
 - An orbitable Three.js CNS viewer with six reconstruction-derived BANC v888 neuron skeletons, camera presets, cell inspection, and replay-linked laterality highlighting.
-- A controlled protocol with baseline, model-sham, bilateral, left-only, and right-only conditions.
+- Runtime- and schema-enforced baseline and model-sham controls; bilateral designs also add left-only and right-only comparisons.
 - A hard human-approval gate before simulation.
 - Deterministic virtual trials with recorded seeds, model versions, condition IDs, and run hashes.
 - Method-versioned behavioral summaries and an evidence ledger that never upgrades simulation output into biological measurement, with a portable JSON download for each saved bundle.
@@ -39,13 +41,13 @@ npm run build
 npm run verify:webmcp
 ```
 
-`npm test` compiles the TypeScript test target and runs Node's built-in test runner. The deterministic suite covers same-seed reproducibility, changed-seed divergence, control-arm construction, provenance labels, laterality-to-circuit mapping, morphology checksums, the eight WebMCP contracts, agent-state transitions, current annotation keys, and registration disposal. `npm run verify:webmcp` opens the public deployment in an isolated Chrome profile with Chrome's official WebMCP testing feature, verifies the real browser API, enumerates the exact eight tools through Chrome's WebMCP protocol, calls `inspect_flylab_state`, and completes a live `find_fly_circuits` invocation.
+`npm test` compiles the TypeScript test target and runs Node's built-in test runner. The current 45-test suite covers same-seed reproducibility, changed-seed divergence, mandatory controls, canonical and idempotent artifact identity, onset-referenced/null response latency, exact artifact recovery, stale prepared-commit rejection, cancellation timing, provenance labels, laterality-to-circuit mapping, morphology checksums, the eight WebMCP contracts, current annotation keys, and registration disposal. `npm run verify:webmcp` opens the public deployment in an isolated Chrome profile with Chrome's official WebMCP testing feature, verifies the real browser API, enumerates the exact eight tools through Chrome's WebMCP protocol, calls `inspect_flylab_state`, and completes a live `find_fly_circuits` invocation.
 
 ## Human-agent workflow
 
 The intended sequence is deliberately explicit:
 
-1. The agent calls `inspect_flylab_state` first and after interruptions or person edits. It receives the current revision, artifact IDs, gate status, person-selected limits, and exactly one valid next action without scraping the page.
+1. The agent calls `inspect_flylab_state` first and after interruptions or person edits. It receives the current revision, artifact IDs, hypothesis behavior and perturbation, analysis metric sets, comparison lineage, gate status, person-selected limits, and exactly one valid next action without scraping the page.
 2. It calls `find_fly_circuits` to search FlyLab's bounded evidence catalog.
 3. It calls `draft_fly_hypothesis` to create a falsifiable claim labeled `agent_hypothesized`.
 4. It calls `design_stimulation_trial` to create the visible controlled protocol.
@@ -70,7 +72,7 @@ The approval step is intentionally not a WebMCP tool. It remains a human action 
 | `compare_fly_trials` | Rank compatible analyses and create one next-experiment proposal. | Writes a comparison; the proposal is not execution authority. |
 | `save_fly_evidence` | Save sources, claims, model assumptions, protocol, seeds, runs, analyses, and comparison. | Prepares a manifest-hashed, downloadable JSON envelope and attempts a browser-local convenience copy. |
 
-The current WebMCP implementation uses `document.modelContext.registerTool(...)`, closed object schemas, `readOnlyHint`, `untrustedContentHint`, cancellable execution, and AbortSignal-owned registration lifecycle. Long-running simulation and evidence-save work use a tested prepare/check/synchronous-commit boundary, so a cancellation observed before commit cannot publish the prepared batch or bundle. Every success uses a versioned structured envelope; domain failures are machine-readable, and the inspector is the canonical recovery contract.
+The current WebMCP implementation uses `document.modelContext.registerTool(...)`, closed object schemas, `readOnlyHint`, `untrustedContentHint`, cancellable execution, and AbortSignal-owned registration lifecycle. Every successful tool call returns `state_revision`; agent actions and person edits advance one shared monotonic revision. Long-running simulation and evidence-save work capture that revision, prepare without publishing, then compare it with the live revision at commit. A mismatch publishes nothing and returns non-retryable `STALE_STATE` with expected/actual revisions and `inspect_flylab_state` as recovery. A cancellation observed before commit cannot publish the prepared batch or bundle, while a mutation already synchronously committed reports success rather than a false cancellation. Every success uses a versioned structured envelope; domain failures are machine-readable, and the inspector is the canonical recovery contract.
 It follows OpenAI's [Site tools documentation](https://learn.chatgpt.com/docs/webmcp) for making website capabilities directly available to agents.
 
 ## Reproducibility and provenance
@@ -85,7 +87,7 @@ Every claim or artifact uses one or more of five labels:
 | `simulation_predicted` | Output generated by the versioned FlyLab model. |
 | `agent_hypothesized` | A proposed claim or follow-up that still requires testing and human judgment. |
 
-An experiment stores its base seed. Replicate seeds are derived deterministically from the base seed, condition order, and replicate index. The saved lineage includes model/controller/environment versions, condition and run IDs, analysis method version, a run hash, source records, assumptions, and an evidence-bundle manifest hash. The evidence-ledger download uses the `flylab.evidence-export` schema version `1` and carries the complete saved payload, bundle metadata, and that same payload manifest hash. The hash is an integrity check for detecting changes; it is not a digital signature or a guarantee of immutability. Repeating the same experiment and seed produces the same batch; changing the seed changes the generated runs.
+An experiment stores its base seed. Replicate seeds are derived deterministically from the base seed, condition order, and replicate index. Discovery records only evidence IDs returned by the current filter; a hypothesis may cite only those IDs for the selected circuit, and the trial target/perturbation must match that hypothesis. Comparison accepts analyses from exactly one batch and requires its objective metric in every analysis. Saving requires the current hypothesis, experiment, sole batch, comparison, and exactly the comparison's complete analysis-ID set. Only the hypothesis's supporting evidence/source closure and those exact analyses are serialized. The lineage also includes model/controller/environment versions, condition and run IDs, analysis method version, a run hash, assumptions, and a manifest hash. The `flylab.evidence-export` schema-version-`1` download carries the complete saved payload and metadata. Its hash detects changes; it is not a digital signature or guarantee of immutability. Repeating the same experiment and seed produces the same batch; changing the seed changes the generated runs.
 
 The circuit viewer bundles simplified render assets derived from the six pinned BANC v888 L2 SWC skeletons. The asset manifest records every source URL, SHA-256 checksum, source node count, shared coordinate transform, and topology-preserving simplification rule. The neuron lines are reconstruction-derived; the translucent CNS envelope is explicitly schematic. Purple glow means the current FlyLab model targets that MDN during the replay window, while cyan marks its bundled structural LBL40 path. Neither means measured activity or signal propagation.
 

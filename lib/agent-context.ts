@@ -11,14 +11,21 @@ export interface FlyLabAgentSnapshot {
   stage: string;
   goal: string;
   simulationRunning: boolean;
+  evidenceSaveRunning: boolean;
   selectedCircuitId: string | null;
+  discoveredEvidenceIds: string[];
   hypothesisId: string | null;
+  hypothesisEvidenceIds: string[];
+  hypothesisPredictedBehavior: string | null;
+  hypothesisPerturbation: 'activate' | 'silence' | null;
   experimentId: string | null;
   experimentApproved: boolean;
   conditionIds: string[];
   batchId: string | null;
   analysisIds: string[];
+  analysisMetricsById: Record<string, string[]>;
   comparisonId: string | null;
+  comparisonAnalysisIds: string[];
   bundleId: string | null;
   nextTrialBudget: number;
 }
@@ -32,6 +39,16 @@ export interface AgentPipelineStep {
 }
 
 export const FLYLAB_AGENT_CONTEXT_VERSION = 'flylab.agent-context.v1';
+
+export function deriveFlyLabAgentStage(snapshot: FlyLabAgentSnapshot) {
+  if (snapshot.bundleId) return 'saved';
+  if (snapshot.comparisonId || snapshot.analysisIds.length > 0) return 'continue';
+  if (snapshot.batchId) return 'analyze';
+  if (snapshot.experimentId) return snapshot.experimentApproved ? 'run' : 'design';
+  if (snapshot.hypothesisId) return 'design';
+  if (snapshot.selectedCircuitId) return 'hypothesize';
+  return 'discover';
+}
 
 export function buildFlyLabAgentContext(snapshot: FlyLabAgentSnapshot) {
   const hasCircuit = Boolean(snapshot.selectedCircuitId);
@@ -90,7 +107,7 @@ export function buildFlyLabAgentContext(snapshot: FlyLabAgentSnapshot) {
       title: 'Quantify simulated behavior',
       kind: 'tool',
       status: hasAnalysis ? 'complete' : hasBatch ? 'recommended' : 'blocked',
-      boundary: 'Metrics are derived from simulation-predicted trajectories.',
+      boundary: 'Metrics aggregate simulation-generated per-run summaries; the displayed condition replay is illustrative and separate.',
     },
     {
       name: 'compare_fly_trials',
@@ -103,7 +120,7 @@ export function buildFlyLabAgentContext(snapshot: FlyLabAgentSnapshot) {
       name: 'save_fly_evidence',
       title: 'Save the complete lineage',
       kind: 'tool',
-      status: hasBundle ? 'complete' : hasComparison ? 'recommended' : 'blocked',
+      status: snapshot.evidenceSaveRunning ? 'running' : hasBundle ? 'complete' : hasComparison ? 'recommended' : 'blocked',
       boundary: 'Creates a provenance-rich browser-local bundle and portable JSON export.',
     },
   ];
@@ -117,12 +134,21 @@ export function buildFlyLabAgentContext(snapshot: FlyLabAgentSnapshot) {
         reason: 'Wait for completion or use the visible human cancel control.',
         input_refs: {},
       }
+    : snapshot.evidenceSaveRunning
+      ? {
+          kind: 'wait' as const,
+          name: null,
+          callable: false,
+          blocked_by: 'save_fly_evidence is still preparing',
+          reason: 'Wait for the evidence bundle commit or cancellation before invoking another save.',
+          input_refs: {},
+        }
     : !hasCircuit
       ? { kind: 'tool' as const, name: 'find_fly_circuits', callable: true, blocked_by: null, reason: 'Begin with the bounded source-backed circuit search.', input_refs: {} }
       : !hasHypothesis
-        ? { kind: 'tool' as const, name: 'draft_fly_hypothesis', callable: true, blocked_by: null, reason: 'Create a falsifiable claim linked to returned evidence IDs.', input_refs: { circuit_id: snapshot.selectedCircuitId } }
+        ? { kind: 'tool' as const, name: 'draft_fly_hypothesis', callable: true, blocked_by: null, reason: 'Create a falsifiable claim linked to the discovered evidence IDs.', input_refs: { circuit_id: snapshot.selectedCircuitId, evidence_ids: snapshot.discoveredEvidenceIds } }
         : !hasExperiment
-          ? { kind: 'tool' as const, name: 'design_stimulation_trial', callable: true, blocked_by: null, reason: 'Create visible controls and a reproducible seed manifest.', input_refs: { hypothesis_id: snapshot.hypothesisId, target_circuit_id: snapshot.selectedCircuitId } }
+          ? { kind: 'tool' as const, name: 'design_stimulation_trial', callable: true, blocked_by: null, reason: 'Create visible controls and a reproducible seed manifest.', input_refs: { hypothesis_id: snapshot.hypothesisId, target_circuit_id: snapshot.selectedCircuitId, perturbation: snapshot.hypothesisPerturbation } }
           : !snapshot.experimentApproved
             ? { kind: 'human_gate' as const, name: null, callable: false, blocked_by: 'human_approval', reason: 'A person must review and approve the exact visible protocol.', input_refs: { experiment_id: snapshot.experimentId } }
             : !hasBatch
@@ -130,9 +156,9 @@ export function buildFlyLabAgentContext(snapshot: FlyLabAgentSnapshot) {
               : !hasAnalysis
                 ? { kind: 'tool' as const, name: 'analyze_fly_behavior', callable: true, blocked_by: null, reason: 'Quantify the completed simulation batch.', input_refs: { batch_id: snapshot.batchId } }
                 : !hasComparison
-                  ? { kind: 'tool' as const, name: 'compare_fly_trials', callable: true, blocked_by: null, reason: 'Rank conditions and propose one bounded follow-up.', input_refs: { analysis_ids: snapshot.analysisIds } }
+                  ? { kind: 'tool' as const, name: 'compare_fly_trials', callable: true, blocked_by: null, reason: 'Rank conditions and propose one bounded follow-up.', input_refs: { analysis_ids: snapshot.analysisIds, metrics_by_analysis_id: snapshot.analysisMetricsById } }
                   : !hasBundle
-                    ? { kind: 'tool' as const, name: 'save_fly_evidence', callable: true, blocked_by: null, reason: 'Commit the complete source-to-result lineage.', input_refs: { hypothesis_id: snapshot.hypothesisId, experiment_id: snapshot.experimentId, batch_ids: snapshot.batchId ? [snapshot.batchId] : [], analysis_ids: snapshot.analysisIds, comparison_id: snapshot.comparisonId } }
+                    ? { kind: 'tool' as const, name: 'save_fly_evidence', callable: true, blocked_by: null, reason: 'Commit the complete source-to-result lineage.', input_refs: { hypothesis_id: snapshot.hypothesisId, experiment_id: snapshot.experimentId, batch_ids: snapshot.batchId ? [snapshot.batchId] : [], analysis_ids: snapshot.comparisonAnalysisIds, comparison_id: snapshot.comparisonId } }
                     : { kind: 'complete' as const, name: null, callable: false, blocked_by: null, reason: 'Workflow complete. Review or download the saved evidence bundle.', input_refs: { evidence_bundle_id: snapshot.bundleId } };
 
   return {
@@ -147,18 +173,24 @@ export function buildFlyLabAgentContext(snapshot: FlyLabAgentSnapshot) {
           : 'ready',
     state: {
       revision: snapshot.revision,
-      stage: snapshot.stage,
+      stage: deriveFlyLabAgentStage(snapshot),
       goal: snapshot.goal,
     },
     artifacts: {
       selected_circuit_id: snapshot.selectedCircuitId,
+      discovered_evidence_ids: snapshot.discoveredEvidenceIds,
       hypothesis_id: snapshot.hypothesisId,
+      hypothesis_evidence_ids: snapshot.hypothesisEvidenceIds,
+      hypothesis_predicted_behavior: snapshot.hypothesisPredictedBehavior,
+      hypothesis_perturbation: snapshot.hypothesisPerturbation,
       experiment_id: snapshot.experimentId,
       experiment_approved: snapshot.experimentApproved,
       condition_ids: snapshot.conditionIds,
       batch_id: snapshot.batchId,
       analysis_ids: snapshot.analysisIds,
+      analysis_metrics_by_id: snapshot.analysisMetricsById,
       comparison_id: snapshot.comparisonId,
+      comparison_analysis_ids: snapshot.comparisonAnalysisIds,
       evidence_bundle_id: snapshot.bundleId,
     },
     next_action: next,

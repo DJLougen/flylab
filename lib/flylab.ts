@@ -40,12 +40,14 @@ export const PROVENANCE_DEFINITIONS: Record<ProvenanceLabel, string> = {
 };
 
 export type Laterality = 'bilateral' | 'left' | 'right' | 'none';
-export type MetricName =
-  | 'backward_distance_mm'
-  | 'signed_speed_mm_s'
-  | 'response_latency_ms'
-  | 'heading_change_deg'
-  | 'stance_stability';
+export const ANALYSIS_METRICS = [
+  'backward_distance_mm',
+  'signed_speed_mm_s',
+  'response_latency_ms',
+  'heading_change_deg',
+  'stance_stability',
+] as const;
+export type MetricName = (typeof ANALYSIS_METRICS)[number];
 
 export interface SourceRecord {
   id: string;
@@ -136,7 +138,7 @@ export interface ReplicateResult {
   reverseInitiated: boolean;
   backwardDistanceMm: number;
   signedSpeedMmS: number;
-  responseLatencyMs: number;
+  responseLatencyMs: number | null;
   headingChangeDeg: number;
   stanceStability: number;
 }
@@ -174,7 +176,8 @@ export interface ConditionAnalysis {
   reverseInitiationProbability: number;
   backwardDistanceMm: number;
   signedSpeedMmS: number;
-  responseLatencyMs: number;
+  responseLatencyMs: number | null;
+  responsiveN: number;
   headingChangeDeg: number;
   stanceStability: number;
 }
@@ -185,7 +188,7 @@ export interface Analysis {
   metrics: MetricName[];
   conditions: ConditionAnalysis[];
   windowMs: { start: number; end: number };
-  methodVersion: 'flylab.behavior-metrics.v1';
+  methodVersion: 'flylab.behavior-metrics.v2';
   provenance: ['derived', 'simulation_predicted'];
   warning: string;
 }
@@ -194,7 +197,9 @@ export interface Comparison {
   id: string;
   analysisIds: string[];
   objectiveMetric: MetricName;
-  rankedConditions: Array<{ conditionId: string; label: string; value: number }>;
+  objective: 'maximize' | 'minimize' | 'target';
+  targetValue?: number;
+  rankedConditions: Array<{ conditionId: string; label: string; value: number | null }>;
   proposal: {
     id: string;
     rationale: string;
@@ -207,7 +212,7 @@ export interface Comparison {
 
 export const MODEL_MANIFEST = {
   name: 'FlyLab reduced-order embodiment model',
-  version: '0.1.1',
+  version: '0.1.2',
   controller: 'mdn-inspired-retreat-adapter.v1',
   environment: 'open-field-5mm.v1',
   controllerMapping: {
@@ -495,6 +500,17 @@ export const CIRCUITS: CircuitRecord[] = [
   },
 ];
 
+export function circuitSupportsBehavior(circuitId: string, behavior: string) {
+  return CIRCUITS.find((circuit) => circuit.id === circuitId)?.behaviors.includes(behavior) ?? false;
+}
+
+export function evidenceBundleTitle(
+  perturbation: Experiment['perturbation'],
+  predictedBehavior: string,
+) {
+  return `MDN-inspired ${perturbation === 'silence' ? 'suppression' : 'drive'} and predicted ${predictedBehavior.replaceAll('_', ' ')}`;
+}
+
 export const DEFAULT_GOAL = 'Explore whether a unitless MDN-inspired model drive predicts adult-fly retreat.';
 
 export const METRIC_LABELS: Record<MetricName, { label: string; unit: string }> = {
@@ -535,9 +551,13 @@ function jitter(random: () => number, scale = 1) {
 }
 
 export function makeHypothesis(input: Omit<Hypothesis, 'id' | 'provenance'>): Hypothesis {
-  return {
+  const canonicalInput = {
     ...input,
-    id: `hyp_${stableHash(input)}`,
+    evidenceIds: [...input.evidenceIds].sort(),
+  };
+  return {
+    ...canonicalInput,
+    id: `hyp_${stableHash(canonicalInput)}`,
     provenance: 'agent_hypothesized',
   };
 }
@@ -556,6 +576,24 @@ export function designExperiment(input: {
   includeShamControl: boolean;
   seed: number;
 }): Experiment {
+  if (!Number.isFinite(input.activationLevel) || input.activationLevel < 0 || input.activationLevel > 1) {
+    throw new RangeError('activationLevel must be a finite unitless value from 0 to 1.');
+  }
+  if (!Number.isInteger(input.onsetMs) || input.onsetMs < 0 || input.onsetMs > 5000
+    || !Number.isInteger(input.durationMs) || input.durationMs < 50 || input.durationMs > 5000
+    || !Number.isInteger(input.trialDurationMs) || input.trialDurationMs < 1000 || input.trialDurationMs > 10000
+    || input.onsetMs + input.durationMs > input.trialDurationMs) {
+    throw new RangeError('Experiment timing must use integer milliseconds within the published onset (0–5000), duration (50–5000), and trial (1000–10000) bounds, with onset + duration inside the trial.');
+  }
+  if (!Number.isInteger(input.replicates) || input.replicates < 1 || input.replicates > 20) {
+    throw new RangeError('replicates must be an integer from 1 to 20.');
+  }
+  if (!Number.isInteger(input.seed) || input.seed < 0 || input.seed > 2147483647) {
+    throw new RangeError('seed must be an integer from 0 to 2147483647.');
+  }
+  if (!input.includeBaseline || !input.includeShamControl) {
+    throw new RangeError('The validated FlyLab vertical slice requires baseline and model-sham controls.');
+  }
   const conditions: TrialCondition[] = [];
   if (input.includeBaseline) {
     conditions.push({ id: 'condition_baseline', label: 'Baseline · no model drive', kind: 'baseline', laterality: 'none', activationLevel: 0 });
@@ -571,13 +609,19 @@ export function designExperiment(input: {
     activationLevel: input.activationLevel,
   });
   if (input.laterality === 'bilateral') {
+    const modeLabel = input.perturbation === 'activate' ? 'drive' : 'suppression';
     conditions.push(
-      { id: 'condition_left', label: 'Left-only MDN-inspired model drive', kind: 'perturbation', laterality: 'left', activationLevel: input.activationLevel },
-      { id: 'condition_right', label: 'Right-only MDN-inspired model drive', kind: 'perturbation', laterality: 'right', activationLevel: input.activationLevel },
+      { id: 'condition_left', label: `Left-only MDN-inspired model ${modeLabel}`, kind: 'perturbation', laterality: 'left', activationLevel: input.activationLevel },
+      { id: 'condition_right', label: `Right-only MDN-inspired model ${modeLabel}`, kind: 'perturbation', laterality: 'right', activationLevel: input.activationLevel },
     );
   }
 
-  const identity = { ...input, conditions: conditions.map((condition) => condition.id) };
+  const identity = {
+    ...input,
+    conditions: conditions.map((condition) => condition.id),
+    modelVersion: MODEL_MANIFEST.version,
+    controller: MODEL_MANIFEST.controller,
+  };
   return {
     id: `exp_${stableHash(identity)}`,
     hypothesisId: input.hypothesisId,
@@ -645,11 +689,18 @@ export function simulateExperiment(experiment: Experiment): SimulationBatch {
       const signedSpeedMmS = reverseInitiated
         ? -(0.62 + Math.max(0, effect) * 2.25 + jitter(random, 0.36))
         : 0.92 - Math.max(0, effect) * 0.25 + jitter(random, 0.28);
+      const responseWindowMs = Math.max(0, experiment.trialDurationMs - experiment.onsetMs);
       const responseLatencyMs = reverseInitiated
-        ? clamp(540 + (1 - Math.max(0, effect)) * 1320 + jitter(random, 260), 180, experiment.trialDurationMs)
-        : experiment.trialDurationMs;
-      const activeSeconds = Math.max(0, experiment.trialDurationMs - responseLatencyMs) / 1000;
-      const backwardDistanceMm = reverseInitiated ? Math.abs(signedSpeedMmS) * activeSeconds * (0.72 + random() * 0.2) : 0;
+        ? clamp(
+            540 + (1 - Math.max(0, effect)) * 1320 + jitter(random, 260),
+            Math.min(180, responseWindowMs),
+            responseWindowMs,
+          )
+        : null;
+      const reverseSeconds = responseLatencyMs === null
+        ? 0
+        : Math.max(0, responseWindowMs - responseLatencyMs) / 1000;
+      const backwardDistanceMm = reverseInitiated ? Math.abs(signedSpeedMmS) * reverseSeconds * (0.72 + random() * 0.2) : 0;
       const lateralSign = condition.laterality === 'left' ? -1 : condition.laterality === 'right' ? 1 : 0;
       const headingChangeDeg = lateralSign * (11 + Math.max(0, effect) * 34) + jitter(random, condition.laterality === 'bilateral' ? 7 : 12);
       const stanceStability = clamp(0.91 - Math.max(0, effect) * 0.08 + jitter(random, 0.06), 0.62, 0.98);
@@ -705,8 +756,13 @@ export function analyzeBatch(
   analysisStartMs = 0,
   analysisEndMs = batch.protocol.trialDurationMs,
 ): Analysis {
+  const canonicalMetrics = ANALYSIS_METRICS.filter((metric) => metrics.includes(metric));
   const conditions = batch.conditionRuns.map((run): ConditionAnalysis => {
-    const responsive = run.replicates.filter((replicate) => replicate.reverseInitiated);
+    const responsive = run.replicates.filter(
+      (replicate): replicate is ReplicateResult & { responseLatencyMs: number } => (
+        replicate.reverseInitiated && replicate.responseLatencyMs !== null
+      ),
+    );
     return {
       conditionId: run.conditionId,
       label: run.label,
@@ -714,24 +770,25 @@ export function analyzeBatch(
       reverseInitiationProbability: mean(run.replicates.map((replicate) => replicate.reverseInitiated ? 1 : 0)),
       backwardDistanceMm: mean(run.replicates.map((replicate) => replicate.backwardDistanceMm)),
       signedSpeedMmS: mean(run.replicates.map((replicate) => replicate.signedSpeedMmS)),
-      responseLatencyMs: responsive.length ? mean(responsive.map((replicate) => replicate.responseLatencyMs)) : 5000,
+      responseLatencyMs: responsive.length ? mean(responsive.map((replicate) => replicate.responseLatencyMs)) : null,
+      responsiveN: responsive.length,
       headingChangeDeg: mean(run.replicates.map((replicate) => replicate.headingChangeDeg)),
       stanceStability: mean(run.replicates.map((replicate) => replicate.stanceStability)),
     };
   });
   return {
-    id: `analysis_${stableHash({ batch: batch.id, metrics, analysisStartMs, analysisEndMs })}`,
+    id: `analysis_${stableHash({ batch: batch.id, metrics: canonicalMetrics, analysisStartMs, analysisEndMs })}`,
     batchId: batch.id,
-    metrics,
+    metrics: canonicalMetrics,
     conditions,
     windowMs: { start: analysisStartMs, end: analysisEndMs },
-    methodVersion: 'flylab.behavior-metrics.v1',
+    methodVersion: 'flylab.behavior-metrics.v2',
     provenance: ['derived', 'simulation_predicted'],
-    warning: 'These estimates summarize seeded simulator variation. They are not biological confidence intervals or new experimental evidence.',
+    warning: 'These estimates summarize seeded simulator variation. Response latency is a simulated delay from the nominal protocol onset and is null when no seeded run responds. Values are not biological confidence intervals or new experimental evidence.',
   };
 }
 
-function metricValue(condition: ConditionAnalysis, metric: MetricName) {
+export function conditionMetricValue(condition: ConditionAnalysis, metric: MetricName) {
   switch (metric) {
     case 'backward_distance_mm': return condition.backwardDistanceMm;
     case 'signed_speed_mm_s': return condition.signedSpeedMmS;
@@ -741,28 +798,58 @@ function metricValue(condition: ConditionAnalysis, metric: MetricName) {
   }
 }
 
-export function compareAnalyses(analyses: Analysis[], objectiveMetric: MetricName, objective: 'maximize' | 'minimize' | 'target', targetValue: number | undefined, budget: number): Comparison {
+export function compareAnalyses(
+  analyses: Analysis[],
+  objectiveMetric: MetricName,
+  objective: 'maximize' | 'minimize' | 'target',
+  targetValue: number | undefined,
+  budget: number,
+  experimentContext?: Pick<Experiment, 'activationLevel' | 'primaryLaterality' | 'perturbation'>,
+): Comparison {
   const uniqueConditions = new Map<string, ConditionAnalysis>();
   analyses.flatMap((analysis) => analysis.conditions).forEach((condition) => uniqueConditions.set(condition.conditionId, condition));
   const rows = [...uniqueConditions.values()].map((condition) => ({
     conditionId: condition.conditionId,
     label: condition.label,
-    value: metricValue(condition, objectiveMetric),
+    value: conditionMetricValue(condition, objectiveMetric),
   }));
   rows.sort((a, b) => {
+    if (a.value === null && b.value === null) return a.conditionId.localeCompare(b.conditionId);
+    if (a.value === null) return 1;
+    if (b.value === null) return -1;
     if (objective === 'minimize') return a.value - b.value;
     if (objective === 'target') return Math.abs(a.value - (targetValue ?? 0)) - Math.abs(b.value - (targetValue ?? 0));
     return b.value - a.value;
   });
+  const center = experimentContext?.activationLevel ?? 0.65;
+  const activationLevels = [...new Set([
+    Math.round(clamp(center - 0.15, 0, 1) * 100) / 100,
+    Math.round(clamp(center + 0.15, 0, 1) * 100) / 100,
+  ])];
+  const modeLabel = experimentContext?.perturbation === 'silence' ? 'suppression' : 'drive';
+  const lateralityLabel = experimentContext?.primaryLaterality ?? 'selected';
+  const rationale = `Probe bounded unitless model-${modeLabel} levels near ${center.toFixed(2)} for the ${lateralityLabel} condition to test whether the predicted response is control-sensitive.`;
+  const proposalIdentity = {
+    analysisIds: analyses.map((analysis) => analysis.id),
+    objectiveMetric,
+    objective,
+    targetValue,
+    winner: rows[0]?.conditionId,
+    rationale,
+    activationLevels,
+    replicateBudget: budget,
+  };
   return {
     id: `comparison_${stableHash({ analyses: analyses.map((analysis) => analysis.id), objectiveMetric, objective, targetValue, budget })}`,
     analysisIds: analyses.map((analysis) => analysis.id),
     objectiveMetric,
+    objective,
+    ...(objective === 'target' ? { targetValue } : {}),
     rankedConditions: rows,
     proposal: {
-      id: `proposal_${stableHash({ objectiveMetric, winner: rows[0]?.conditionId, budget })}`,
-      rationale: 'Probe a lower and higher unitless model-drive level around the current bilateral condition to test whether the predicted response is drive-sensitive.',
-      activationLevels: [0.45, 0.8],
+      id: `proposal_${stableHash(proposalIdentity)}`,
+      rationale,
+      activationLevels,
       replicateBudget: budget,
       provenance: 'agent_hypothesized',
     },

@@ -6,14 +6,16 @@ The v6 challenge demo is a generated, narrated sequence of 12 FlyLab interface c
 
 The prior local package remains technically verified at **2:15.821**, below the challenge's three-minute limit. Do not upload it. Public YouTube upload and Devpost submission remain pending until the corrected interface has a regenerated, verified video.
 
-The replacement capture must begin with `00-eight-tools-live.png`, show the new agent control plane, and describe the current surface as **one read-only state inspector plus seven scientific workflow actions**. It must visibly show `inspect_flylab_state` returning the page revision, artifact IDs, person-only blocker, and exactly one next action before discovery and after approval. The seven-tool wording below is retained only because it documents the prior v6 artifact exactly.
+The replacement capture must begin with `00-eight-tools-live.png`, show the new agent control plane, and describe the current surface as **one read-only state inspector plus seven scientific workflow actions**. It must visibly show real browser WebMCP discovery/invocation—not the guided example—with `inspect_flylab_state` returning the page revision, artifact IDs, person-only blocker, and exactly one next action before discovery, after approval, and after a protocol edit. Activity must visibly distinguish `webmcp agent · r#` from `human ui · r#`. The seven-tool wording below is archived historical narration and must not be reused.
+
+Credits for the replacement video/description must identify the BANC v888 static dataset, Harvard Dataverse version 3.0, <https://doi.org/10.7910/DVN/7WTH1N>, CC BY 4.0; six simplified L2 SWC render derivatives; and FlyLab's shared coordinate-transform/topology-preserving-simplification changes. See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
 
 ## Delivery assets
 
 | Asset | Path | Purpose |
 | --- | --- | --- |
-| Video | `outputs/demo/v6/FlyLab-WebMCP-Demo.mp4` | Challenge and YouTube upload |
-| Captions | `outputs/demo/v6/FlyLab-WebMCP-Demo.srt` | Separate English caption upload |
+| Video | `outputs/demo/v6/FlyLab-WebMCP-Demo.mp4` | Archived only; do not upload |
+| Captions | `outputs/demo/v6/FlyLab-WebMCP-Demo.srt` | Archived caption record |
 | Narration | `outputs/demo/v6/FlyLab-WebMCP-Demo-narration.txt` | Spoken-script review |
 | Thumbnail | `outputs/demo/v6/FlyLab-Devpost-Thumbnail.png` | YouTube and challenge-entry thumbnail |
 | Gallery | `outputs/demo/v6/gallery/` | Five submission-ready stills |
@@ -36,7 +38,7 @@ The Three.js view uses six real BANC v888 L2 skeleton reconstructions: four MDNs
 - Glow indicates model selection during replay. It is **not measured neural activity**, calcium signal, voltage, or biological signal propagation.
 - The translucent central-nervous-system shell is schematic.
 - Behavioral trajectories come from FlyLab's deterministic reduced-order model. They are `simulation_predicted`, not FlyGym execution, whole-brain dynamics, or wet-lab measurements.
-- Behavior metrics computed from those trajectories are both `derived` and `simulation_predicted`.
+- The displayed condition replay is an illustrative simulation path. Behavior metrics aggregate separate simulation-generated per-run summaries; they are both `derived` and `simulation_predicted`.
 - The `measured` evidence label refers to findings summarized from cited biological studies; it does not describe the current model drive or generated trajectory.
 
 ## Twelve-frame cue sheet and narration
@@ -143,7 +145,7 @@ The video container ends at 2:15.821, 0.211 seconds after the final caption cue.
 
 ## Canonical prompts behind the captured state
 
-The generated video does not show a live prompt-entry sequence. These are the two prompts used to describe and reproduce the workflow represented by the captures.
+The archived video does not show a live prompt-entry sequence and therefore cannot serve as WebMCP proof. The replacement must show the Browser's site-tool surface or equivalent real invocation evidence. These are the two prompts for reproducing the workflow.
 
 **Prompt 1 — evidence through protocol**
 
@@ -152,33 +154,40 @@ The generated video does not show a live prompt-entry sequence. These are the tw
 Expected tool sequence:
 
 ```text
-find_fly_circuits
+inspect_flylab_state
+→ find_fly_circuits
 → draft_fly_hypothesis
 → design_stimulation_trial
 → human approval required
 ```
 
-After a person clicks **Approve experiment**, use the second prompt.
+After a person clicks **Approve experiment**, set the visible **Next-trial budget** to 5. This is a person-owned control and cannot be overridden by the agent. Then use the second prompt.
+
+Call `inspect_flylab_state` again after approval before executing.
 
 **Prompt 2 — approved execution through evidence**
 
-> Run the exact approved experiment. Analyze backward distance, signed speed, response latency, heading change, and stance stability. Rank the conditions by backward distance, propose one follow-up with a five-replicate budget, do not execute that proposal, and save the complete evidence bundle.
+> Run the exact approved experiment. Analyze backward distance, signed speed, response latency, heading change, and stance stability. Rank the conditions by backward distance using my visible next-trial budget, do not execute the proposed follow-up, and save the exact supporting evidence and comparison lineage.
 
 Expected tool sequence:
 
 ```text
-run_fly_simulation
+inspect_flylab_state
+→ run_fly_simulation
 → analyze_fly_behavior
 → compare_fly_trials
 → save_fly_evidence
 ```
 
-## Final pre-upload checks
+After the saved-bundle view, edit one protocol field and call `inspect_flylab_state` once more. The recording must show a new experiment ID, `waiting_for_human`, no callable next tool, and cleared downstream artifact IDs.
 
-- Confirm the probed duration remains below `00:03:00` and the SHA-256 matches the value above.
-- Watch the exported MP4 from beginning to end with audio on.
-- Confirm the 12 frames appear in the documented order and no capture is cropped or unreadable.
-- Confirm the separate `.srt` matches the embedded English caption track.
+## Replacement pre-upload checks
+
+- Generate new paths, duration, hash, chapters, captions, thumbnail, and gallery from the approved agent-first build; none of the archived v6 values above are reusable submission metadata.
+- Confirm the replacement duration remains below `00:03:00`.
+- Watch the replacement MP4 from beginning to end with audio on.
+- Confirm every replacement segment is uncropped and readable.
+- Confirm the replacement `.srt` matches the embedded English caption track.
 - Confirm “model drive” and “model selection” are never described as measured neural activity.
 - Confirm the BANC lines are described as real reconstruction geometry while the CNS shell remains labeled schematic.
 - Confirm simulation and derived outputs retain their provenance labels.
@@ -187,5 +196,7 @@ run_fly_simulation
 - Confirm the public YouTube URL before replacing `[YOUTUBE_DEMO_URL]`.
 - Confirm the public Devpost URL before replacing `[DEVPOST_ENTRY_URL]`.
 - Confirm the public repository displays the owner-approved Apache-2.0 root `LICENSE` file.
+- Confirm the replacement shows real WebMCP tool use, visible actor/tool/revision activity, and no guided-example state presented as agent evidence.
+- Confirm the BANC CC BY 4.0 attribution and derivative-change notice appear in the public video description or credits.
 
 See [YOUTUBE_DESCRIPTION.md](YOUTUBE_DESCRIPTION.md) for upload-ready title, description, chapters, tags, and asset pointers.

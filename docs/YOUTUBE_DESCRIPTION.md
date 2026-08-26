@@ -4,7 +4,7 @@
 
 This copy belongs to the prior local v6 demo package. That video predates the corrected Three.js arena fly and must not be uploaded. Regenerate the video and update its duration, chapters, thumbnail, and wording before publication. FlyLab's repository is licensed under Apache-2.0; the YouTube video and Devpost entry are not yet public.
 
-## Recommended upload fields
+## Archived v6 metadata — do not use for upload
 
 **Title**
 
@@ -36,7 +36,7 @@ Science & Technology
 
 **Visibility**
 
-Public, after the upload has passed the private/unlisted verification checks below
+Do not upload this artifact
 
 **Audience setting**
 
@@ -53,17 +53,17 @@ Choose the YouTube video-license setting deliberately during upload. That settin
 ## Description
 
 ```text
-FlyLab is an agent-operable, human-auditable virtual fruit-fly lab with one read-only WebMCP state inspector and seven browser-native scientific workflow actions.
+FlyLab is an agent-operable, human-auditable virtual fruit-fly lab created August 26, 2026 for computational-neuroethology researchers, neuroscience educators, and agent-tool builders. It exposes one read-only WebMCP state inspector and seven browser-native scientific workflow actions.
 
 Try FlyLab: https://flylab-neuroethology.d-lougen.chatgpt.site
 Source repository: https://github.com/DJLougen/flylab
 Challenge entry: [DEVPOST_ENTRY_URL] (pending publication)
 
-In this demo, the agent first inspects the shared page revision, artifact IDs, blocker, and exact next action. It then finds cited adult Moonwalker descending-neuron evidence, drafts a falsifiable hypothesis, prepares five controlled conditions, stops for human approval, runs a seeded reduced-order simulation, analyzes preregistered behavior metrics, proposes one non-authorized follow-up, and saves a manifest-hashed evidence bundle.
+The replacement demo must show real Chrome WebMCP discovery and invocations—not the guided example—including visible `webmcp agent · r#` activity, separate `human ui · r#` edits/approval, and same-page mutations. The agent first inspects the shared page revision, artifact IDs, blocker, and exact next action. It then finds cited adult Moonwalker descending-neuron evidence, drafts a falsifiable hypothesis, prepares five controlled conditions, stops for human approval, runs a seeded reduced-order simulation, analyzes preregistered behavior metrics, proposes one non-authorized follow-up, and saves a manifest-hashed exact-lineage evidence bundle. It inspects again after approval and after a protocol edit to demonstrate recovery.
 
-The Three.js circuit view displays six real BANC v888 L2 skeleton reconstructions—four MDNs and two LBL40 cells. Purple shows the selected unitless model-drive targets; cyan shows bundled connectome-inferred structural paths. Glow is model selection, not measured neural activity. The CNS shell is schematic.
+The Three.js circuit view displays six reconstruction-derived cells from the BANC v888 static dataset, Harvard Dataverse version 3.0 (https://doi.org/10.7910/DVN/7WTH1N), licensed CC BY 4.0: four MDNs and two LBL40 cells. FlyLab's six simplified L2 SWC render derivatives apply one shared coordinate transform and topology-preserving simplification; see THIRD_PARTY_NOTICES.md in the repository. Purple shows selected unitless model targets; cyan shows bundled connectome-inferred structural paths. Glow is model selection, not measured neural activity. The CNS shell is schematic.
 
-FlyLab's trajectories are deterministic simulation predictions, not FlyGym execution, whole-brain dynamics, direct BANC simulation, or wet-lab results. Metrics calculated from those trajectories remain labeled both derived and simulation-predicted. Findings summarized from cited biological studies retain a separate measured-evidence label.
+FlyLab's displayed condition replay is a deterministic illustrative simulation prediction, not a raw replicate path, FlyGym execution, whole-brain dynamics, direct BANC simulation, or a wet-lab result. Metric cards aggregate separate simulation-generated per-run summaries and remain labeled derived plus simulation-predicted. Findings summarized from cited biological studies retain a separate measured-evidence label.
 
 Chapters:
 00:00 Evidence boundaries in one shared lab
@@ -80,13 +80,15 @@ Chapters:
 
 The grouped chapter markers above keep every chapter at least ten seconds long. The millisecond-level start and end times for all 12 frames are in [DEMO.md](DEMO.md).
 
-## Upload verification
+## Archived v6 verification record
+
+The checks below describe the obsolete package only. Replacement paths, duration, chapters, captions, thumbnail, and hashes must be generated from the approved agent-first build before any upload.
 
 - Use `2:15.821` in any precise duration field; `2:16` is the reader-friendly description value.
 - Upload the separate English `.srt` even though the MP4 also contains an embedded caption stream.
 - Check that automatic caption processing has not replaced scientific terms such as BANC, MDN, LBL40, FlyGym, or WebMCP.
 - Preview the 1200 × 800 thumbnail in YouTube's 16:9 crop, confirm its text and circuit remain legible at small size, and confirm it does not imply measured neural activity.
-- Make the YouTube video public before adding its URL to the challenge entry.
+- Do not make the archived v6 video public or add it to the challenge entry.
 - Open the published video in a signed-out browser and verify playback, audio, captions, chapters, description links, and visibility.
 - Replace `[YOUTUBE_DEMO_URL]` in the submission docs only after that verification.
 - Replace `[DEVPOST_ENTRY_URL]` only after the challenge entry is published and publicly accessible.

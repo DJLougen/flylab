@@ -21,7 +21,7 @@ The runtime manifest is:
 
 ```text
 model       FlyLab reduced-order embodiment model
-version     0.1.1
+version     0.1.2
 controller  mdn-inspired-retreat-adapter.v1
 environment open-field-5mm.v1
 ```
@@ -80,10 +80,12 @@ The evidence chain used in the demonstration is:
 4. A connectome-inferred record preserves four directed MDN→LBL40 rows totaling 153 putative anatomical contacts in the pinned BANC snapshot.
 5. The agent drafts an explicitly labeled hypothesis.
 6. The FlyLab model produces simulation-predicted trajectories.
-7. The analysis derives metrics from those simulated trajectories.
+7. The analysis aggregates simulation-generated per-run summary records. The displayed condition-level replay trajectory is a separate illustrative path and is not the raw path underlying the metric cards.
 8. The comparison creates an agent-hypothesized follow-up.
 
 No later stage overwrites the provenance of an earlier one.
+
+The operational lineage is equally strict. Discovery records only evidence IDs returned by the active filter. A hypothesis may cite only the selected circuit and those discovered IDs. A trial's target and perturbation must match the saved hypothesis. A comparison accepts analyses from exactly one batch and requires its objective metric in each analysis. Saving requires the current hypothesis, experiment, sole batch, and comparison plus exactly the comparison's complete analysis-ID set. Only the hypothesis-supporting evidence/source closure and those exact analyses are serialized; unrelated catalog context is not relabeled as support.
 
 ## Reproducibility contract
 
@@ -103,15 +105,15 @@ For replicate `r` in condition index `c`, the implementation derives the seed as
 replicate_seed = base_seed + c × 1009 + r × 37
 ```
 
-The same normalized experiment inputs produce the same experiment ID. The same experiment and seed produce identical run IDs, trajectories, replicate summaries, batch ID, and run hash. Changing the seed changes the generated runs. This contract is covered by deterministic local tests.
+The same normalized experiment inputs produce the same experiment ID. Identity covers all design inputs and all three person-editable fields: activation level, duration, and replicate count. UI edits rebuild the full protocol through `designExperiment` instead of patching only the display. The same experiment and seed produce identical run IDs, trajectories, replicate summaries, batch ID, and run hash. Changing the seed changes the generated runs. This contract is covered by deterministic local tests.
 
 IDs and run hashes use a stable FNV-1a-derived identifier. Evidence payloads use SHA-256 when Web Crypto is available, with a labeled FNV-1a fallback otherwise. Saving prepares a downloadable `flylab.evidence-export` schema-version-`1` JSON envelope and attempts to store the same envelope in browser local storage on a best-effort basis. The envelope contains bundle metadata, the complete payload, and the existing payload manifest hash; it does not introduce a second hash.
 
-The saved payload includes source records, evidence records, hypothesis, experiment, simulation batch, analyses, comparison, dataset manifest, model manifest, seeds, and assumptions. A timestamp records when the bundle was saved; it is not part of the scientific result. The manifest hash covers `JSON.stringify(payload)` in its saved property order. It is useful for detecting payload changes, but it is not a digital signature, proof of authorship, or guarantee of immutability.
+The saved payload includes the hypothesis's exact supporting source/evidence closure, hypothesis, experiment, simulation batch, exactly the analyses referenced by the comparison, the comparison, dataset manifest, model manifest, seeds, and assumptions. A timestamp records when the bundle was saved; it is not part of the scientific result. The manifest hash covers `JSON.stringify(payload)` in its saved property order. It is useful for detecting payload changes, but it is not a digital signature, proof of authorship, or guarantee of immutability.
 
 ## Controls and metrics
 
-The default bilateral protocol contains:
+Every accepted protocol contains mandatory baseline and model-sham controls. A bilateral protocol contains:
 
 - baseline: no model drive
 - sham: a zero-drive model control, not an optical or genetic control
@@ -130,7 +132,11 @@ The behavior analysis exposes:
 - absolute heading change in degrees for comparison
 - stance-stability index
 
-The analysis method version is `flylab.behavior-metrics.v1`. These estimates summarize seeded simulator variation. They are not biological confidence intervals, effect sizes from animals, or statistical evidence for a biological hypothesis.
+The analysis method version is `flylab.behavior-metrics.v2`. The tool requires the complete five-metric panel; reverse-initiation probability is also reported as an always-present response summary. These cards average the simulation-generated `replicates` records. The condition-level Three.js replay trajectory is independently generated for illustration and must not be presented as the raw replicate path used to calculate the cards. Response latency is a simulated delay from the protocol's nominal onset, averaged over responsive seeded runs only; the available reverse-travel time is `trial duration − onset − latency`, bounded at zero. For baseline and model-sham arms, the same nominal onset is a comparison reference rather than a delivered perturbation. When no seeded run responds, raw and aggregate latency are JSON `null`, the UI shows `n/a`, and the responsive denominator shows `0/n`; trial duration is never substituted as a fake latency. These estimates summarize seeded simulator variation. They are not biological confidence intervals, effect sizes from animals, or statistical evidence for a biological hypothesis.
+
+## Operational shared-state boundary
+
+Every successful tool call returns `state_revision`. Agent actions and person edits advance one shared monotonic revision. `run_fly_simulation` and `save_fly_evidence` capture the revision before preparation and compare it with the live revision immediately before commit. If it changed, they publish nothing and return non-retryable `STALE_STATE` with expected/actual revisions and `inspect_flylab_state` as recovery. An agent must inspect again and issue a new call with current artifact IDs; it must not blindly retry a stale request. Failure/cancellation activity never rewinds the newer mission's stage.
 
 ## Human approval and autoresearch boundary
 
@@ -144,6 +150,8 @@ Human edits to activation level, duration, or replicate count:
 - clear approval
 - clear prior batch, analyses, comparison, and evidence bundle
 - require another review and approval
+
+Changing the next-trial budget also advances the shared revision and clears any comparison, evidence bundle, and export derived from the prior budget.
 
 `compare_fly_trials` may rank saved analyses and generate one bounded activation-level proposal. The UI calls this **propose only**. The proposal does not create an approved protocol and cannot run a new batch. The person controls the next-trial budget and must explicitly direct and approve any subsequent experiment.
 

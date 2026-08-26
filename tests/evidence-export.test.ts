@@ -35,6 +35,8 @@ describe('FlyLab portable evidence export', () => {
       manifestHash,
       savedAt: '2026-08-26T12:34:56.000Z',
       includedIds: ['exp_123', 'run_123'],
+      supportingEvidenceIds: ['evidence_123'],
+      supportingSourceIds: ['source_123'],
       provenanceCounts,
       boundary: 'Simulation evidence bundle; not a new biological experiment.',
     };
@@ -64,6 +66,8 @@ describe('FlyLab portable evidence export', () => {
       manifestHash,
       savedAt: '2026-08-26T12:34:56.000Z',
       includedIds: ['source_1', 'analysis_1'],
+      supportingEvidenceIds: ['evidence_1'],
+      supportingSourceIds: ['source_1'],
       provenanceCounts,
       boundary: 'Simulation evidence bundle; not a new biological experiment.',
     };

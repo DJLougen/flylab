@@ -10,6 +10,8 @@ export interface EvidenceBundleMetadata {
   manifestHash: string;
   savedAt: string;
   includedIds: string[];
+  supportingEvidenceIds: string[];
+  supportingSourceIds: string[];
   provenanceCounts: Record<ProvenanceLabel, number>;
   boundary: string;
 }

@@ -216,11 +216,182 @@ async function captureCircuitPlayback() {
   await clickButton({ text: 'body', exact: true });
 }
 
-async function verifyProtocolEditInvalidation() {
+async function verifyVisibleProtocol(experiment) {
+  const response = await sendCommand('Runtime.evaluate', {
+    expression: `(() => {
+      const panel = document.querySelector('.protocol-controls');
+      const metadata = Object.fromEntries([...panel?.querySelectorAll('dl div') ?? []].map((row) => [
+        row.querySelector('dt')?.textContent?.trim() ?? '',
+        row.querySelector('dd')?.textContent?.trim() ?? '',
+      ]));
+      return {
+        metadata,
+        slider_labels: [...panel?.querySelectorAll('label > span') ?? []].map((node) => node.textContent?.trim() ?? ''),
+        ranges: [...panel?.querySelectorAll('input[type="range"]') ?? []].map((input) => ({ min: input.min, max: input.max, step: input.step, value: input.value })),
+        stimulus_window: {
+          left: document.querySelector('.stimulus-window')?.style.left ?? null,
+          width: document.querySelector('.stimulus-window')?.style.width ?? null,
+        },
+        approval_text: panel?.querySelector('.protocol-approval-action')?.textContent?.replace(/\\s+/g, ' ').trim() ?? null,
+      };
+    })()`,
+    returnByValue: true,
+  });
+  const visible = response?.result?.value;
+  const expectedMetadata = {
+    'Experiment ID': experiment.id,
+    'Hypothesis ID': experiment.hypothesisId,
+    Target: experiment.targetCircuitId,
+    Perturbation: experiment.perturbation,
+    Laterality: experiment.primaryLaterality,
+  };
+  for (const [label, value] of Object.entries(expectedMetadata)) {
+    if (visible?.metadata?.[label] !== value) {
+      throw new Error(`Visible protocol ${label} did not match the design response: ${JSON.stringify(visible)}`);
+    }
+  }
+  const expectedStimulus = {
+    left: `${(experiment.onsetMs / experiment.trialDurationMs) * 100}%`,
+    width: `${(experiment.durationMs / experiment.trialDurationMs) * 100}%`,
+  };
+  if (!visible?.metadata?.['Trial duration']?.includes(experiment.trialDurationMs.toLocaleString())
+    || !visible?.metadata?.['Required controls']?.includes('baseline')
+    || !visible?.metadata?.['Required controls']?.includes('model-sham')
+    || !experiment.conditions.every((condition) => visible?.metadata?.Arms?.includes(condition.id))
+    || !visible?.slider_labels?.some((label) => label.includes(String(experiment.activationLevel)))
+    || !visible?.slider_labels?.some((label) => label.includes(`${experiment.durationMs} ms`))
+    || !visible?.slider_labels?.some((label) => label.includes(String(experiment.replicates)))
+    || !visible?.approval_text?.includes(experiment.id)
+    || JSON.stringify(visible?.ranges?.map(({ min, max }) => [min, max])) !== JSON.stringify([['0', '1'], ['50', String(Math.min(5000, experiment.trialDurationMs - experiment.onsetMs))], ['1', '20']])
+    || JSON.stringify(visible?.stimulus_window) !== JSON.stringify(expectedStimulus)) {
+    throw new Error(`Visible exact protocol was incomplete: ${JSON.stringify(visible)}`);
+  }
+  return visible;
+}
+
+async function verifyVisibleAnalysis(analysis, primaryConditionId) {
+  const response = await sendCommand('Runtime.evaluate', {
+    expression: `(() => ({
+      title: document.querySelector('.results-panel h2')?.textContent?.trim() ?? null,
+      cards: [...document.querySelectorAll('.metric-grid article')].map((card) => ({
+        label: card.querySelector('span')?.textContent?.trim() ?? '',
+        value: card.querySelector('strong')?.textContent?.replace(/\\s+/g, ' ').trim() ?? '',
+        detail: card.querySelector('small')?.textContent?.trim() ?? '',
+      })),
+    }))()`,
+    returnByValue: true,
+  });
+  const visible = response?.result?.value;
+  const primary = analysis.conditions.find((condition) => condition.conditionId === primaryConditionId);
+  const expectedLabels = ['Reverse initiation', 'Backward distance', 'Signed speed', 'Response latency', 'Heading change', 'Stance stability'];
+  const responseCard = visible?.cards?.find((card) => card.label === 'Response latency');
+  if (!primary
+    || visible?.title !== primary.label
+    || visible?.cards?.length !== expectedLabels.length
+    || !expectedLabels.every((label) => visible.cards.some((card) => card.label === label))
+    || !responseCard?.detail?.includes(`${primary.responsiveN}/${primary.n}`)
+    || (primary.responseLatencyMs === null && responseCard.value !== 'n/a')) {
+    throw new Error(`Visible analysis did not match the returned primary condition: ${JSON.stringify({ visible, primary })}`);
+  }
+  return visible;
+}
+
+async function verifyConditionTabAnalysisParity(analysis, primaryConditionId) {
+  const alternate = analysis.conditions.find((condition) => condition.conditionId !== primaryConditionId);
+  const primary = analysis.conditions.find((condition) => condition.conditionId === primaryConditionId);
+  if (!alternate || !primary) throw new Error('Analysis did not contain both primary and alternate conditions.');
+  const clickCondition = async (label) => sendCommand('Runtime.evaluate', {
+    expression: `(() => {
+      const expected = ${JSON.stringify(label)};
+      const button = [...document.querySelectorAll('.condition-tabs button')]
+        .find((candidate) => candidate.querySelector('span')?.textContent?.trim() === expected);
+      button?.click();
+      return Boolean(button);
+    })()`,
+    returnByValue: true,
+  });
+  const alternateClick = await clickCondition(alternate.label);
+  if (alternateClick?.result?.value !== true) throw new Error(`Could not select alternate condition ${alternate.label}.`);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const alternateTitle = await sendCommand('Runtime.evaluate', {
+    expression: `document.querySelector('.results-panel h2')?.textContent?.trim() ?? null`,
+    returnByValue: true,
+  });
+  if (alternateTitle?.result?.value !== alternate.label) {
+    throw new Error(`Condition tab did not update visible analysis: ${JSON.stringify(alternateTitle)}`);
+  }
+  await clickCondition(primary.label);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  return { alternate_condition: alternate.conditionId, restored_condition: primary.conditionId };
+}
+
+async function setHumanProposalBudget(tools, budget) {
+  const response = await sendCommand('Runtime.evaluate', {
+    expression: `(() => {
+      const select = document.querySelector('.autonomy-card select');
+      if (!(select instanceof HTMLSelectElement)) return false;
+      const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')?.set;
+      setter?.call(select, ${JSON.stringify(String(budget))});
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    })()`,
+    returnByValue: true,
+  });
+  if (response?.result?.value !== true) throw new Error('The visible human proposal-budget control was unavailable.');
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  const context = await inspectAgentContext(tools);
+  if (context.human_controls?.next_trial_budget !== budget) {
+    throw new Error(`Inspector did not expose the human-selected proposal budget: ${JSON.stringify(context)}`);
+  }
+  return { budget, state_revision: context.state.revision };
+}
+
+async function verifyVisibleComparison(comparison) {
+  const response = await sendCommand('Runtime.evaluate', {
+    expression: `(() => ({
+      heading: document.querySelector('.comparison-ranking > span')?.textContent?.trim() ?? null,
+      rows: [...document.querySelectorAll('.comparison-ranking li')].map((row) => row.querySelector('strong')?.textContent?.trim() ?? ''),
+    }))()`,
+    returnByValue: true,
+  });
+  const visible = response?.result?.value;
+  const expectedRows = comparison.rankedConditions.map((row) => row.label);
+  if (!visible?.heading?.includes(comparison.objectiveMetric)
+    || !visible?.heading?.includes(comparison.objective)
+    || JSON.stringify(visible?.rows) !== JSON.stringify(expectedRows)) {
+    throw new Error(`Visible ranking did not match the comparison response: ${JSON.stringify({ visible, expectedRows })}`);
+  }
+  return visible;
+}
+
+async function verifyVisibleBundle(bundle) {
+  const response = await sendCommand('Runtime.evaluate', {
+    expression: `(() => ({
+      metadata: Object.fromEntries([...document.querySelectorAll('.bundle-detail dl > div')].map((row) => [
+        row.querySelector('dt')?.textContent?.trim() ?? '',
+        row.querySelector('dd')?.textContent?.trim() ?? '',
+      ])),
+    }))()`,
+    returnByValue: true,
+  });
+  const metadata = response?.result?.value?.metadata;
+  const expectedCounts = Object.entries(bundle.provenanceCounts)
+    .filter(([, count]) => count > 0)
+    .map(([kind, count]) => `${kind} ${count}`);
+  if (!metadata
+    || !bundle.supportingEvidenceIds.every((id) => metadata['Supporting evidence']?.includes(id))
+    || !bundle.supportingSourceIds.every((id) => metadata['Supporting sources']?.includes(id))
+    || !expectedCounts.every((value) => metadata['Provenance counts']?.includes(value))) {
+    throw new Error(`Visible evidence lineage did not match the saved bundle: ${JSON.stringify({ metadata, bundle })}`);
+  }
+  return metadata;
+}
+
+async function verifyProtocolEditInvalidation(tools, previousExperimentId) {
   await clickButton({ ariaLabel: 'Close evidence ledger' });
   const response = await sendCommand('Runtime.evaluate', {
     expression: `(() => {
-      const input = document.querySelector('input[type="range"][max="1"][step="0.05"]');
+      const input = document.querySelector('.protocol-controls input[type="range"][min="0"][max="1"]');
       if (!(input instanceof HTMLInputElement)) return { edited: false, reason: 'activation slider missing' };
       const nextValue = input.value === '0.7' ? '0.75' : '0.7';
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
@@ -240,6 +411,7 @@ async function verifyProtocolEditInvalidation() {
     expression: `JSON.stringify({
       approval: document.querySelector('.approval-chip')?.textContent?.trim() ?? null,
       primaryAction: document.querySelector('.primary-action')?.textContent?.trim() ?? null,
+      protocolApproval: document.querySelector('.protocol-approval-action')?.textContent?.replace(/\\s+/g, ' ').trim() ?? null,
       resultPanelPresent: Boolean(document.querySelector('.results-panel')),
       proposalPresent: Boolean(document.querySelector('.proposal')),
       playbackDisabled: document.querySelector('button.play-button')?.disabled ?? null,
@@ -250,7 +422,8 @@ async function verifyProtocolEditInvalidation() {
   });
   const value = typeof state?.result?.value === 'string' ? JSON.parse(state.result.value) : null;
   const verified = value?.approval === 'Draft'
-    && value?.primaryAction?.includes('Approve experiment')
+    && value?.primaryAction?.includes('Review exact protocol')
+    && value?.protocolApproval?.includes('Approve this exact experiment')
     && value?.resultPanelPresent === false
     && value?.proposalPresent === false
     && value?.playbackDisabled === true
@@ -259,8 +432,29 @@ async function verifyProtocolEditInvalidation() {
   if (!verified) {
     throw new Error(`Editing did not clear approval and downstream results: ${JSON.stringify(value)}`);
   }
+  const context = await inspectAgentContext(tools);
+  const inspectorVerified = context.agent_status === 'waiting_for_human'
+    && context.next_tool === null
+    && context.next_action?.kind === 'human_gate'
+    && context.human_gate?.status === 'required'
+    && context.artifacts?.experiment_id
+    && context.artifacts.experiment_id !== previousExperimentId
+    && context.artifacts.experiment_approved === false
+    && context.artifacts.batch_id === null
+    && context.artifacts.analysis_ids?.length === 0
+    && context.artifacts.comparison_id === null
+    && context.artifacts.evidence_bundle_id === null;
+  if (!inspectorVerified) {
+    throw new Error(`Inspector did not recover the edited protocol boundary: ${JSON.stringify(context)}`);
+  }
   await captureStage('protocol-edit-invalidates-results');
-  return true;
+  return {
+    ui_cleared: true,
+    inspector_status: context.agent_status,
+    next_tool: context.next_tool,
+    human_gate: context.human_gate.status,
+    revised_experiment_id: context.artifacts.experiment_id,
+  };
 }
 
 async function beginRegisteredToolInvocation(tools, toolName, input) {
@@ -381,6 +575,63 @@ async function verifyRunningSimulationCancellation(tools, experimentId) {
   };
 }
 
+async function readEvidenceSaveState() {
+  const response = await sendCommand('Runtime.evaluate', {
+    expression: `JSON.stringify({
+      activity: document.querySelector('.activity-row strong')?.textContent?.trim() ?? null,
+      ledgerCount: document.querySelector('.topbar .quiet-button span')?.textContent?.trim() ?? null,
+      bundleFooter: document.querySelector('.lab-footer > p:nth-child(2)')?.textContent?.trim() ?? null,
+      localBundleKeys: Object.keys(localStorage).filter((key) => key.startsWith('flylab:')),
+    })`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  const value = response?.result?.value;
+  return typeof value === 'string' ? JSON.parse(value) : null;
+}
+
+async function verifyEvidenceSaveCancellation(tools, input) {
+  const before = await readEvidenceSaveState();
+  const invocation = await beginRegisteredToolInvocation(tools, 'save_fly_evidence', input);
+  const responsePending = waitForEvent(
+    'WebMCP.toolResponded',
+    (event) => event.invocationId === invocation.invocationId,
+  );
+  let running = null;
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    running = await readEvidenceSaveState();
+    if (running?.activity === 'Evidence bundle preparing') break;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  if (running?.activity !== 'Evidence bundle preparing') {
+    throw new Error(`Evidence save did not expose its cancellable preparation phase: ${JSON.stringify(running)}`);
+  }
+  await sendCommand('WebMCP.cancelInvocation', { invocationId: invocation.invocationId });
+  const response = await responsePending;
+  let settled = null;
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    settled = await readEvidenceSaveState();
+    if (settled?.activity === 'Evidence save cancelled' || settled?.activity === 'Evidence bundle saved') break;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  const context = await inspectAgentContext(tools);
+  if (response.status !== 'Canceled'
+    || settled?.activity !== 'Evidence save cancelled'
+    || context.artifacts?.evidence_bundle_id !== null
+    || context.artifacts?.comparison_id !== input.comparison_id
+    || context.next_tool !== 'save_fly_evidence'
+    || JSON.stringify(settled?.localBundleKeys) !== JSON.stringify(before?.localBundleKeys)
+    || settled?.ledgerCount !== before?.ledgerCount) {
+    throw new Error(`Canceled evidence save committed or regressed lineage: ${JSON.stringify({ response, before, running, settled, context })}`);
+  }
+  return {
+    invocation_status: response.status,
+    cancellation_phase: 'visible preparation before manifest commit',
+    completed_bundle_committed: false,
+    next_tool_after_cancel: context.next_tool,
+  };
+}
+
 function decodedOutput(response) {
   if (typeof response?.output !== 'string') return response?.output;
   try {
@@ -403,6 +654,49 @@ async function inspectAgentContext(tools) {
   return successfulEnvelope(response, 'inspect_flylab_state').data.agent_context;
 }
 
+async function verifyCompletedLineageIdempotency(tools, inputs, savedBundle) {
+  const calls = [
+    ['find_fly_circuits', inputs.discovery],
+    ['draft_fly_hypothesis', { ...inputs.hypothesis, evidence_ids: [...inputs.hypothesis.evidence_ids].reverse() }],
+    ['design_stimulation_trial', inputs.design],
+    ['run_fly_simulation', inputs.run],
+    ['analyze_fly_behavior', { ...inputs.analysis, metrics: [...inputs.analysis.metrics].reverse() }],
+    ['compare_fly_trials', inputs.comparison],
+    ['save_fly_evidence', inputs.save],
+  ];
+  const verified = [];
+  let repeatedBundle = null;
+  for (const [toolName, input] of calls) {
+    const response = await invokeRegisteredTool(tools, toolName, input);
+    const envelope = successfulEnvelope(response, toolName);
+    if (envelope.data?.next_action?.kind !== 'complete') {
+      throw new Error(`${toolName} regressed a completed lineage: ${JSON.stringify(envelope.data?.next_action)}`);
+    }
+    if (toolName === 'design_stimulation_trial' && envelope.data.experiment?.approved !== true) {
+      throw new Error(`Idempotent design lost human approval: ${JSON.stringify(envelope.data.experiment)}`);
+    }
+    if (toolName === 'save_fly_evidence') repeatedBundle = envelope.data.bundle;
+    verified.push(toolName);
+  }
+  const context = await inspectAgentContext(tools);
+  if (context.agent_status !== 'complete'
+    || context.state?.stage !== 'saved'
+    || context.artifacts?.evidence_bundle_id !== savedBundle.id
+    || context.artifacts?.analysis_ids?.length !== 1
+    || repeatedBundle?.id !== savedBundle.id
+    || repeatedBundle?.manifestHash !== savedBundle.manifestHash
+    || repeatedBundle?.savedAt !== savedBundle.savedAt) {
+    throw new Error(`Idempotent calls changed the completed artifact lineage: ${JSON.stringify({ context, savedBundle, repeatedBundle })}`);
+  }
+  return {
+    calls: verified,
+    final_stage: context.state.stage,
+    stable_bundle_id: repeatedBundle.id,
+    stable_manifest_hash: repeatedBundle.manifestHash,
+    stable_saved_at: repeatedBundle.savedAt,
+  };
+}
+
 async function runFullWorkflow(tools, discoveryResponse, initialContext) {
   const discovery = successfulEnvelope(discoveryResponse, 'find_fly_circuits');
   const circuit = discovery.data.circuits[0];
@@ -411,23 +705,24 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext) {
     .slice(0, 4)
     .map((record) => record.id);
 
-  const draftedResponse = await invokeRegisteredTool(tools, 'draft_fly_hypothesis', {
+  const hypothesisInput = {
     circuit_id: circuit.id,
     claim: 'Activating adult MDNs in the FlyLab model should increase backward displacement relative to baseline and model-sham controls.',
     predicted_behavior: 'backward_walking',
     perturbation: 'activate',
     evidence_ids: evidenceIds,
     falsification_criterion: 'The prediction fails if bilateral activation does not increase backward distance relative to the model-sham condition.',
-  });
+  };
+  const draftedResponse = await invokeRegisteredTool(tools, 'draft_fly_hypothesis', hypothesisInput);
   const drafted = successfulEnvelope(draftedResponse, 'draft_fly_hypothesis');
   await captureStage('hypothesis-drafted');
 
-  const designedResponse = await invokeRegisteredTool(tools, 'design_stimulation_trial', {
+  const designInput = {
     hypothesis_id: drafted.data.hypothesis.id,
     target_circuit_id: circuit.id,
     perturbation: 'activate',
     laterality: 'bilateral',
-    activation_level: 0.65,
+    activation_level: 0.654321,
     onset_ms: 1000,
     duration_ms: 2000,
     trial_duration_ms: 5000,
@@ -435,9 +730,11 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext) {
     include_baseline: true,
     include_sham_control: true,
     seed: 73142,
-  });
+  };
+  const designedResponse = await invokeRegisteredTool(tools, 'design_stimulation_trial', designInput);
   const designed = successfulEnvelope(designedResponse, 'design_stimulation_trial');
   const experimentId = designed.data.experiment.id;
+  const visibleProtocol = await verifyVisibleProtocol(designed.data.experiment);
   const lockedContext = await inspectAgentContext(tools);
   if (lockedContext.agent_status !== 'waiting_for_human'
     || lockedContext.next_tool !== null
@@ -457,8 +754,7 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext) {
 
   const approval = await sendCommand('Runtime.evaluate', {
     expression: `(() => {
-      const button = [...document.querySelectorAll('button')]
-        .find((candidate) => candidate.textContent?.includes('Approve experiment'));
+      const button = document.querySelector('.protocol-controls .protocol-approval-action');
       const label = button?.textContent?.trim() ?? null;
       button?.click();
       return { clicked: Boolean(button), label };
@@ -486,7 +782,7 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext) {
   await captureStage('simulation-replay');
   await captureCircuitPlayback();
 
-  const analysisResponse = await invokeRegisteredTool(tools, 'analyze_fly_behavior', {
+  const analysisInput = {
     batch_id: run.data.id,
     metrics: [
       'backward_distance_mm',
@@ -495,22 +791,28 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext) {
       'heading_change_deg',
       'stance_stability',
     ],
-    analysis_start_ms: 0,
-    analysis_end_ms: 5000,
-  });
+  };
+  const analysisResponse = await invokeRegisteredTool(tools, 'analyze_fly_behavior', analysisInput);
   const analysis = successfulEnvelope(analysisResponse, 'analyze_fly_behavior');
+  const visibleAnalysis = await verifyVisibleAnalysis(analysis.data.analysis, `condition_${designed.data.experiment.primaryLaterality}`);
+  const conditionTabParity = await verifyConditionTabAnalysisParity(analysis.data.analysis, `condition_${designed.data.experiment.primaryLaterality}`);
+  const humanBudget = await setHumanProposalBudget(tools, 5);
   await captureStage('behavior-analysis');
 
-  const comparisonResponse = await invokeRegisteredTool(tools, 'compare_fly_trials', {
+  const comparisonInput = {
     analysis_ids: [analysis.data.analysis.id],
     objective_metric: 'backward_distance_mm',
     objective: 'maximize',
-    next_experiment_budget: 5,
-  });
+  };
+  const comparisonResponse = await invokeRegisteredTool(tools, 'compare_fly_trials', comparisonInput);
   const comparison = successfulEnvelope(comparisonResponse, 'compare_fly_trials');
+  if (comparison.data.comparison.proposal.replicateBudget !== humanBudget.budget) {
+    throw new Error(`Comparison did not honor the human-selected proposal budget: ${JSON.stringify(comparison.data.comparison)}`);
+  }
+  const visibleComparison = await verifyVisibleComparison(comparison.data.comparison);
   await captureStage('bounded-follow-up');
 
-  const saveResponse = await invokeRegisteredTool(tools, 'save_fly_evidence', {
+  const saveInput = {
     title: 'Adult MDN backward-walking verification run',
     hypothesis_id: drafted.data.hypothesis.id,
     experiment_id: experimentId,
@@ -518,7 +820,9 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext) {
     analysis_ids: [analysis.data.analysis.id],
     comparison_id: comparison.data.comparison.id,
     note: 'Automated live WebMCP verification with a DOM click at the human-only approval boundary.',
-  });
+  };
+  const evidenceCancellation = await verifyEvidenceSaveCancellation(tools, saveInput);
+  const saveResponse = await invokeRegisteredTool(tools, 'save_fly_evidence', saveInput);
   const saved = successfulEnvelope(saveResponse, 'save_fly_evidence');
   const completedContext = await inspectAgentContext(tools);
   if (completedContext.agent_status !== 'complete'
@@ -526,6 +830,15 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext) {
     || completedContext.next_action?.kind !== 'complete') {
     throw new Error(`Inspector did not expose workflow completion: ${JSON.stringify(completedContext)}`);
   }
+  const idempotency = await verifyCompletedLineageIdempotency(tools, {
+    discovery: { query: 'MDN', behavior: 'backward_walking' },
+    hypothesis: hypothesisInput,
+    design: designInput,
+    run: { experiment_id: experimentId },
+    analysis: analysisInput,
+    comparison: comparisonInput,
+    save: saveInput,
+  }, saved.data.bundle);
   await captureStage('evidence-saved');
 
   await sendCommand('Runtime.evaluate', {
@@ -538,8 +851,9 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext) {
     returnByValue: true,
   });
   await new Promise((resolve) => setTimeout(resolve, 200));
+  const visibleBundle = await verifyVisibleBundle(saved.data.bundle);
   await captureStage('evidence-ledger');
-  const editInvalidationVerified = await verifyProtocolEditInvalidation();
+  const editInvalidationVerified = await verifyProtocolEditInvalidation(tools, experimentId);
 
   return {
     sequence: [
@@ -554,6 +868,12 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext) {
       'save_fly_evidence',
     ],
     preapproval_error: lockEnvelope.error.code,
+    visible_protocol_verified: Boolean(visibleProtocol),
+    visible_analysis_verified: Boolean(visibleAnalysis),
+    condition_tab_analysis_parity: conditionTabParity,
+    human_proposal_budget: humanBudget,
+    visible_comparison_verified: Boolean(visibleComparison),
+    visible_bundle_verified: Boolean(visibleBundle),
     inspector: {
       initial_next_tool: initialContext.next_tool,
       blocked_status: lockedContext.agent_status,
@@ -569,7 +889,9 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext) {
       ],
       human_control: humanCancellation,
       webmcp_protocol: webmcpCancellation,
+      evidence_save: evidenceCancellation,
     },
+    completed_lineage_idempotency: idempotency,
     experiment_id: experimentId,
     batch_id: run.data.id,
     analysis_id: analysis.data.analysis.id,

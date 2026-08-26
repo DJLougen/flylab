@@ -5,6 +5,8 @@ import {
   flyLabToolContracts,
   installFlyLabWebMCP,
   prepareCancellableCommit,
+  requireCurrentStateRevision,
+  validateToolInput,
   type FlyLabToolAction,
 } from '../lib/webmcp.js';
 
@@ -82,6 +84,75 @@ describe('FlyLab WebMCP contracts', () => {
       assert.ok(contract.inputSchema.properties);
       assert.ok(Array.isArray(contract.inputSchema.required));
     }
+  });
+
+  test('requires baseline and model-sham controls in every trial design', () => {
+    const input = {
+      hypothesis_id: 'hyp_1',
+      target_circuit_id: 'circuit_mdn_adult',
+      perturbation: 'activate',
+      laterality: 'bilateral',
+      activation_level: 0.65,
+      onset_ms: 1000,
+      duration_ms: 2000,
+      trial_duration_ms: 5000,
+      replicates: 8,
+      include_baseline: true,
+      include_sham_control: false,
+      seed: 73142,
+    };
+
+    assert.throws(
+      () => validateToolInput('design_stimulation_trial', input),
+      (error: unknown) => {
+        assert.equal((error as { code?: string }).code, 'INVALID_INPUT');
+        assert.deepEqual((error as { details?: Record<string, unknown> }).details, {
+          required_controls: ['baseline', 'model_sham'],
+        });
+        return true;
+      },
+    );
+  });
+
+  test('requires the full analysis panel and accepts the complete discovered evidence set', () => {
+    assert.throws(
+      () => validateToolInput('analyze_fly_behavior', {
+        batch_id: 'batch_1',
+        metrics: ['backward_distance_mm'],
+      }),
+      (error: unknown) => {
+        assert.equal((error as { code?: string }).code, 'INVALID_INPUT');
+        return true;
+      },
+    );
+
+    assert.doesNotThrow(() => validateToolInput('analyze_fly_behavior', {
+      batch_id: 'batch_1',
+      metrics: ['backward_distance_mm', 'signed_speed_mm_s', 'response_latency_ms', 'heading_change_deg', 'stance_stability'],
+    }));
+    assert.doesNotThrow(() => validateToolInput('draft_fly_hypothesis', {
+      circuit_id: 'circuit_mdn_adult',
+      claim: 'MDN activation will increase predicted backward walking.',
+      predicted_behavior: 'backward_walking',
+      perturbation: 'activate',
+      evidence_ids: Array.from({ length: 9 }, (_, index) => `evidence_${index}`),
+      falsification_criterion: 'No predicted increase over controls.',
+    }));
+    assert.doesNotThrow(() => validateToolInput('draft_fly_hypothesis', {
+      circuit_id: 'circuit_mdn_adult',
+      claim: 'MDN activation will increase predicted retreat behavior.',
+      predicted_behavior: 'retreat',
+      perturbation: 'activate',
+      evidence_ids: ['evidence_retreat'],
+      falsification_criterion: 'No predicted retreat increase over controls.',
+    }));
+
+    const searchContract = flyLabToolContracts.find((contract) => contract.name === 'find_fly_circuits');
+    const hypothesisContract = flyLabToolContracts.find((contract) => contract.name === 'draft_fly_hypothesis');
+    const searchBehavior = searchContract?.inputSchema.properties.behavior as { enum?: readonly string[] };
+    const predictedBehavior = hypothesisContract?.inputSchema.properties.predicted_behavior as { enum?: readonly string[] };
+    assert.ok(searchBehavior.enum?.includes('retreat'));
+    assert.ok(predictedBehavior.enum?.includes('retreat'));
   });
 });
 
@@ -185,6 +256,25 @@ describe('FlyLab WebMCP registration lifecycle', () => {
     );
     assert.equal(cancelledActionCalls, 0, 'a pre-cancelled invocation must not start its action');
 
+    const postCommitController = new AbortController();
+    actions.find_fly_circuits = async () => {
+      cancelledActionCalls += 1;
+      postCommitController.abort(new DOMException('cancel arrived after commit', 'AbortError'));
+      return {
+        summary: 'committed before cancellation became observable',
+        data: { committed: true },
+        provenance: ['derived'],
+        stateRevision: 3,
+      };
+    };
+    const postCommitResult = await discovery.tool.execute(
+      { query: 'MDN', behavior: 'backward_walking' },
+      { signal: postCommitController.signal },
+    ) as { isError?: boolean; structuredContent?: { ok?: boolean; state_revision?: number } };
+    assert.notEqual(postCommitResult.isError, true, 'a committed synchronous mutation must report success, not cancellation');
+    assert.equal(postCommitResult.structuredContent?.ok, true);
+    assert.equal(postCommitResult.structuredContent?.state_revision, 3);
+
     installation.dispose();
 
     assert.ok(registrations.every(({ signal }) => signal?.aborted === true));
@@ -275,5 +365,48 @@ describe('FlyLab cancellable commit boundary', () => {
 
     assert.deepEqual(result, { id: 'batch_complete' });
     assert.equal(commitCalls, 1);
+  });
+
+  test('honors a synchronous page cancellation request before a deferred signal abort', async () => {
+    const controller = new AbortController();
+    let pageCancellationRequested = false;
+    let commitCalls = 0;
+    let finishPreparation!: (value: { id: string }) => void;
+    const prepared = new Promise<{ id: string }>((resolve) => { finishPreparation = resolve; });
+
+    const execution = prepareCancellableCommit({
+      signal: controller.signal,
+      cancellationRequested: () => pageCancellationRequested,
+      prepare: () => prepared,
+      commit: (value) => {
+        commitCalls += 1;
+        return value;
+      },
+    });
+
+    pageCancellationRequested = true;
+    finishPreparation({ id: 'must_not_commit' });
+
+    await assert.rejects(execution, { name: 'AbortError' });
+    assert.equal(controller.signal.aborted, false, 'the compatibility signal abort may still be deferred');
+    assert.equal(commitCalls, 0);
+  });
+
+  test('rejects a prepared commit after the shared page revision changes', () => {
+    assert.doesNotThrow(() => requireCurrentStateRevision(7, 7));
+    assert.throws(
+      () => requireCurrentStateRevision(7, 8, { expected_experiment_id: 'exp_original' }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.equal((error as { code?: string }).code, 'STALE_STATE');
+        assert.deepEqual((error as { details?: Record<string, unknown> }).details, {
+          expected_state_revision: 7,
+          actual_state_revision: 8,
+          recovery_tool: 'inspect_flylab_state',
+          expected_experiment_id: 'exp_original',
+        });
+        return true;
+      },
+    );
   });
 });

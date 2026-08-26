@@ -20,6 +20,7 @@ import {
 interface FlyBrain3DProps {
   laterality: Laterality;
   driveActive: boolean;
+  perturbation: 'activate' | 'silence';
   conditionLabel: string;
   timeMs: number;
 }
@@ -95,7 +96,7 @@ function makeTextSprite(text: string, color: string, position: [number, number, 
   return sprite;
 }
 
-export function FlyBrain3D({ laterality, driveActive, conditionLabel, timeMs }: FlyBrain3DProps) {
+export function FlyBrain3D({ laterality, driveActive, perturbation, conditionLabel, timeMs }: FlyBrain3DProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
@@ -109,6 +110,7 @@ export function FlyBrain3D({ laterality, driveActive, conditionLabel, timeMs }: 
   const activeMdnSet = useMemo(() => new Set(activity.activeMdnIds), [activity.activeMdnIds]);
   const highlightedLbl40Set = useMemo(() => new Set(activity.highlightedLbl40Ids), [activity.highlightedLbl40Ids]);
   const selectedCell = selectedId ? cellByBancId(selectedId) : undefined;
+  const targetModeLabel = perturbation === 'silence' ? 'suppression' : 'drive';
 
   const applyCameraPreset = useCallback((preset: CameraPreset) => {
     setCameraPreset(preset);
@@ -409,18 +411,18 @@ export function FlyBrain3D({ laterality, driveActive, conditionLabel, timeMs }: 
         <div className="brain-viewer-status">
           <span className={`viewer-load ${loadState}`}>{loadState === 'loading' ? 'loading reconstructions' : loadState === 'ready' ? 'BANC v888 reconstructions' : '3D assets unavailable'}</span>
           <strong>{conditionLabel}</strong>
-          <small>{timeMs.toLocaleString()} ms · {driveActive ? `${laterality} model target illuminated` : 'no model drive'}</small>
+          <small>{timeMs.toLocaleString()} ms · {driveActive ? `${laterality} model-${targetModeLabel} target selected` : 'no active model target'}</small>
         </div>
         <div className="brain-camera-controls" aria-label="3D camera controls">
           {(['whole', 'brain', 'vnc'] as CameraPreset[]).map((preset) => (
-            <button className={cameraPreset === preset ? 'active' : ''} type="button" onClick={() => applyCameraPreset(preset)} key={preset}>{preset}</button>
+            <button className={cameraPreset === preset ? 'active' : ''} type="button" aria-pressed={cameraPreset === preset} onClick={() => applyCameraPreset(preset)} key={preset}>{preset}</button>
           ))}
-          <button className={shellVisible ? 'active' : ''} type="button" onClick={() => setShellVisible((visible) => !visible)}>shell</button>
+          <button className={shellVisible ? 'active' : ''} type="button" aria-pressed={shellVisible} onClick={() => setShellVisible((visible) => !visible)}>shell</button>
         </div>
         <div className="brain-orientation" aria-hidden="true"><span>L</span><i /><span>R</span></div>
         {hoveredId && <div className="brain-hover-card"><strong>{cellByBancId(hoveredId)?.cell_type}</strong><span>{cellByBancId(hoveredId)?.side} · {compactId(hoveredId)}</span></div>}
         <div className="brain-legend">
-          <span><i className="model-target" /><ViewerProvenanceTag kind="agent_hypothesized" /> model-drive target</span>
+          <span><i className="model-target" /><ViewerProvenanceTag kind="agent_hypothesized" /> model-{targetModeLabel} target</span>
           <span><i className="structural-target" /><ViewerProvenanceTag kind="connectome_inferred" /> linked target</span>
           <span><i className="reconstruction" /><ViewerProvenanceTag kind="derived" /> BANC reconstruction</span>
         </div>
@@ -436,12 +438,13 @@ export function FlyBrain3D({ laterality, driveActive, conditionLabel, timeMs }: 
               <button
                 className={`${selectedId === cell.banc_888_id ? 'selected' : ''} ${isActive ? 'model-active' : ''} ${isLinked ? 'path-active' : ''}`}
                 type="button"
+                aria-pressed={selectedId === cell.banc_888_id}
                 onClick={() => selectNeuron(cell.banc_888_id)}
                 key={cell.banc_888_id}
               >
                 <i />
                 <span><strong>{cell.cell_type} · {cell.side}</strong><small>{compactId(cell.banc_888_id)}</small></span>
-                <b>{isActive ? 'drive' : isLinked ? 'path' : 'view'}</b>
+                <b>{isActive ? targetModeLabel : isLinked ? 'path' : 'view'}</b>
               </button>
             );
           })}
