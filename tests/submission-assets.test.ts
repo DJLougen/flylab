@@ -10,6 +10,24 @@ describe('FlyLab submission assets', () => {
     assert.doesNotMatch(builder, /\/usr\/bin\/say|SAY_BIN|FLYLAB_DEMO_VOICE/);
     assert.match(builder, /FLYLAB_NARRATION_RIGHTS_CONFIRMED/);
     assert.match(builder, /externally_supplied_per_segment/);
+    assert.match(builder, /ui_approval/);
+    assert.doesNotMatch(builder, /rm\(finalOutputReport/);
+  });
+
+  it('fails the direct video build closed until the interface is explicitly approved', () => {
+    const result = spawnSync(process.execPath, ['scripts/build-demo-video.mjs'], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        FLYLAB_UI_APPROVED: '0',
+        FLYLAB_NARRATION_RIGHTS_CONFIRMED: '1',
+        FLYLAB_DEMO_FRAMES: '/definitely-missing-flylab-frames',
+        FLYLAB_NARRATION_DIR: '/definitely-missing-flylab-narration',
+      },
+    });
+
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /interface owner explicitly approves the final UI/i);
   });
 
   it('ships a standard social-preview image generated from the FlyLab interface', () => {

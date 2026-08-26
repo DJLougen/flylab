@@ -128,7 +128,7 @@ inspect shared page state
 - Visible human-approval boundary
 - Bounded next-experiment proposal
 - Exact-lineage evidence bundle and directly returned portable evidence export with separately scoped hypothesis-support, circuit-context, and model-method source closures, field-addressed provenance, lineage edges, model manifests, and payload hash
-- 58 automated tests for the model, model-card parity, recovery state machine, claim-compatible evidence gating, exact evidence export, synchronized public agent manifest and generated contract document, unsupported/active transport handoffs, absent-API fail-closed behavior, WebMCP v2 contracts, and publication-safe 15-frame submission preflight gates
+- 59 automated tests for the model, model-card parity, recovery state machine, claim-compatible evidence gating, exact evidence export, synchronized public agent manifest and generated contract document, unsupported/active transport handoffs, absent-API fail-closed behavior, WebMCP v2 contracts, and publication-safe 15-frame submission and direct-build gates
 
 **Not claimed**
 
@@ -206,7 +206,7 @@ These eligibility and ownership facts must be verified personally by the entrant
 - [x] Confirm Chrome with the official WebMCP testing feature accepts all eight registrations.
 - [ ] Optional, rollout-dependent QA: confirm ChatGPT's in-app browser discovers exactly eight tools in a model/account/workspace where Site Tools are available. This is not a submission blocker because the challenge rules also accept the independently verified Chrome 149+ path. The current Codex in-app runtime has been verified to fail closed with `agent_invocation_available: false`, explicit unsupported-runtime copy, and read-only contract/state discovery instead of claiming registration.
 - [x] Run `npm test`, `npm run lint`, and `npm run build` against the release candidate.
-- [x] Re-clone the public GitHub repository and pass dependency installation, all 58 tests, lint, and production build from only the published files.
+- [x] Re-clone the public GitHub repository and pass dependency installation, all 59 tests, lint, and production build from only the published files.
 - [x] Add public CI for exact dependency installation, tests, lint, build, and dependency audit.
 - [x] Confirm the deployed workflow stops at the non-WebMCP review gate before the visible approval click.
 - [x] Confirm on the final deployment that editing a protocol clears approval, playback, analyses, and the follow-up proposal.
@@ -224,6 +224,7 @@ These eligibility and ownership facts must be verified personally by the entrant
 - [x] Remove macOS System Voice recording from the demo builder; require separately supplied narration and explicit publication-rights confirmation.
 - [x] Prepare concise judge instructions and a no-login Chrome fallback in [JUDGE_TESTING.md](JUDGE_TESTING.md).
 - [ ] Confirm the public app remains free and unrestricted through the end of judging on September 21, 2026 at 5:00 p.m. PT.
+- [ ] Freeze the submitted Devpost entry, public repository, and live site after the September 3, 2026 1:00 p.m. PT deadline until winners are announced, except for a modification Devpost or the Sponsor expressly permits under the official rules. See the challenge [resource guidance](https://webmcp.devpost.com/resources) and modification rules.
 - [ ] Confirm the replacement video contains no unauthorized music, third-party trademarks, or other protected media.
 - [ ] Publish a public YouTube demo under three minutes with audio.
 - [ ] Verify the YouTube video in a signed-out browser, then replace `[YOUTUBE_DEMO_URL]`.

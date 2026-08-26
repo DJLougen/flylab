@@ -10,6 +10,7 @@ const finalOutputDirectory = resolve(process.env.FLYLAB_DEMO_OUTPUT ?? 'outputs/
 const narrationDirectory = resolve(process.env.FLYLAB_NARRATION_DIR ?? 'outputs/demo/v7/narration');
 const ffmpeg = process.env.FFMPEG_BIN ?? '/opt/homebrew/bin/ffmpeg';
 const ffprobe = process.env.FFPROBE_BIN ?? '/opt/homebrew/bin/ffprobe';
+const uiApproved = process.env.FLYLAB_UI_APPROVED === '1';
 const narrationRightsConfirmed = process.env.FLYLAB_NARRATION_RIGHTS_CONFIRMED === '1';
 const finalOutputVideo = join(finalOutputDirectory, 'FlyLab-WebMCP-Demo.mp4');
 const finalOutputCaptions = join(finalOutputDirectory, 'FlyLab-WebMCP-Demo.srt');
@@ -110,7 +111,6 @@ if (process.argv.includes('--check')) {
   const missingNarration = narrationPlan
     .map((segment) => segment.audio_file)
     .filter((file) => !existsSync(join(narrationDirectory, file)));
-  const uiApproved = process.env.FLYLAB_UI_APPROVED === '1';
   const readyToBuild = uiApproved
     && narrationRightsConfirmed
     && missingFrames.length === 0
@@ -155,6 +155,9 @@ function timestamp(seconds) {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')},${String(remainingMilliseconds).padStart(3, '0')}`;
 }
 
+if (!uiApproved) {
+  throw new Error('Set FLYLAB_UI_APPROVED=1 only after the interface owner explicitly approves the final UI. The video builder fails closed before reading or generating media.');
+}
 if (!narrationRightsConfirmed) {
   throw new Error('Set FLYLAB_NARRATION_RIGHTS_CONFIRMED=1 only after supplying narration you own or are explicitly licensed to publish. The builder never records macOS System Voices.');
 }
@@ -170,7 +173,6 @@ for (let index = 0; index < segments.length; index += 1) {
 }
 
 await mkdir(finalOutputDirectory, { recursive: true });
-await rm(finalOutputReport, { force: true });
 
 const temporaryDirectory = await mkdtemp(join(tmpdir(), 'flylab-demo-'));
 const outputDirectory = join(temporaryDirectory, 'delivery');
@@ -362,6 +364,9 @@ try {
     size_bytes: Number(report.format?.size),
     sha256: videoSha256,
     artifact_sha256: artifactHashes,
+    ui_approval: {
+      confirmed_by_builder_invocation: true,
+    },
     narration_input: {
       mode: 'externally_supplied_per_segment',
       rights_confirmed_by_builder_invocation: true,

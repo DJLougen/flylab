@@ -104,7 +104,7 @@ FlyLab runs its deterministic, hand-authored reduced-order model `0.1.3`; it doe
 
 The current pinned BANC boundary is four directed MDN→LBL40 rows totaling 153 **v3-predicted synaptic links** after the released postsynapse-size ≥10-voxel filter. This is the Dataverse v3 future-work product; the Bates et al. paper analyses use v2 with a ≥5-voxel filter. These specimen-level structural counts are not physiological weights, connection probabilities, activity measurements, or causal efficacy, and FlyLab does not assign the retained `norm` field a biological interpretation.
 
-The release contains 58 automated tests. For local verification, run:
+The current source contains 59 automated tests. For local verification, run:
 
 ```bash
 npm ci

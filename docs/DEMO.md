@@ -4,7 +4,7 @@
 
 The agent-first application is public and the canonical 13 page-state captures have passed visual and workflow QA. The final challenge video has **not** been generated or uploaded. Build it only after the interface owner explicitly approves the UI.
 
-Two headed-browser proof composites and 15 rights-cleared narration clips are still required. The builder fails closed when any source is missing, when narration rights are not explicitly confirmed, or when the finished video is three minutes or longer.
+Two headed-browser proof composites and 15 rights-cleared narration clips are still required. The builder itself—not only the preflight—fails closed until UI approval is explicitly supplied. It also fails when any source is missing, when narration rights are not explicitly confirmed, or when the finished video is three minutes or longer.
 
 The [official challenge rules](https://webmcp.devpost.com/rules) require a public YouTube video under three minutes with audio that clearly shows the functioning project and explains how it uses WebMCP. The recording must not include unauthorized music, trademarks, or other protected media.
 
@@ -81,11 +81,12 @@ Build only after confirming the rights of every clip:
 
 ```bash
 FLYLAB_NARRATION_DIR=outputs/demo/v7/narration \
+FLYLAB_UI_APPROVED=1 \
 FLYLAB_NARRATION_RIGHTS_CONFIRMED=1 \
 npm run demo:video
 ```
 
-The delivery report records the SHA-256 hash of every narration input without copying the raw clips into the promoted gallery.
+The delivery report records that UI approval was explicitly supplied and the SHA-256 hash of every narration input without copying the raw clips into the promoted gallery. An unsuccessful rebuild leaves any prior delivery report in place instead of deleting its audit record before the replacement passes validation.
 
 ## Scientific wording boundaries
 
