@@ -144,6 +144,7 @@ See [DEMO.md](DEMO.md) for the timed two-minute recording script.
 ## Submission checklist
 
 - [x] Verify the live HTTPS URL without private-site authentication.
+- [x] Confirm Chrome with the official WebMCP testing feature accepts all seven registrations.
 - [ ] Confirm ChatGPT's in-app browser discovers exactly seven tools.
 - [x] Run `npm test`, `npm run lint`, and `npm run build` against the submitted commit.
 - [ ] Confirm the first demo prompt stops at human approval.

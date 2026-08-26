@@ -34,9 +34,10 @@ Verification commands:
 npm test
 npm run lint
 npm run build
+npm run verify:webmcp
 ```
 
-`npm test` compiles the TypeScript test target and runs Node's built-in test runner. The deterministic suite covers same-seed reproducibility, changed-seed divergence, control-arm construction, provenance labels, exactly seven WebMCP contracts, current annotation keys, and registration disposal.
+`npm test` compiles the TypeScript test target and runs Node's built-in test runner. The deterministic suite covers same-seed reproducibility, changed-seed divergence, control-arm construction, provenance labels, exactly seven WebMCP contracts, current annotation keys, and registration disposal. `npm run verify:webmcp` opens the public deployment in an isolated Chrome profile with Chrome's official WebMCP testing feature, verifies the real browser API, and confirms that all seven registrations complete.
 
 ## Human-agent workflow
 

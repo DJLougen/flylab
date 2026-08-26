@@ -14,6 +14,16 @@ The WebMCP test suite supplies a compatible `modelContext`, verifies that exactl
 
 These checks prove the registration code and tool contracts. They do not prove that a particular browser account has received the WebMCP rollout.
 
+## Automated live-browser check
+
+With Chrome 149 or newer installed, run:
+
+```bash
+npm run verify:webmcp
+```
+
+The command creates an isolated temporary Chrome profile, enables Chrome's official `WebMCPTesting` feature for that process, loads the public deployment, and checks that the real page exposes `document.modelContext.registerTool`, is origin-keyed, and reaches **7 tools live**. It closes the isolated browser and removes the temporary profile afterward. Set `CHROME_BIN` to override the Chrome executable or `FLYLAB_URL` to check another deployment.
+
 ## Live discovery check
 
 Open the [public FlyLab deployment](https://flylab-neuroethology.d-lougen.chatgpt.site) in the ChatGPT desktop app's built-in browser, then:

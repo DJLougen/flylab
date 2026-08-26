@@ -10,7 +10,8 @@
     "build": "vinext build",
     "start": "vinext start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "test": "tsc -p tests/tsconfig.json && node --test tests/.compiled/tests/*.test.js"
+    "test": "tsc -p tests/tsconfig.json && node --test tests/.compiled/tests/*.test.js",
+    "verify:webmcp": "node scripts/verify-live-webmcp.mjs"
   },
   "dependencies": {
     "next": "16.2.6",
