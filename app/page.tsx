@@ -509,7 +509,7 @@ export default function Home() {
   const [goalDraft, setGoalDraft] = useState(initialState.goal);
   const labRef = useRef(lab);
   const [webmcpStatus, setWebmcpStatus] = useState<FlyLabWebMCPStatus>('checking');
-  const [notice, setNotice] = useState('State a behavior goal, then ask the agent to investigate.');
+  const [notice, setNotice] = useState(`Mission published at r${initialState.revision}. Agent should inspect fresh state.`);
   const [selectedConditionId, setSelectedConditionId] = useState('condition_bilateral');
   const [playhead, setPlayhead] = useState(0);
   const playheadRef = useRef(playhead);
@@ -2073,27 +2073,17 @@ export default function Home() {
   const agentNextDisplay = agentContext.next_tool
     ?? (agentContext.next_action.blocked_by ? `blocked · ${agentContext.next_action.blocked_by}` : agentContext.agent_status);
   const humanGate = !lab.experiment
-    ? 'required before any simulation'
+    ? 'not applicable · required after design'
     : lab.experiment.approved
       ? 'approved for this exact protocol'
       : 'waiting for protocol approval';
-  const handoffStatus = webmcpStatus === 'checking'
-    ? 'Checking whether this browser can call site tools'
-    : webmcpStatus === 'unsupported'
-      ? 'Tool calls are unavailable in this browser'
-      : webmcpStatus === 'failed'
-        ? 'Tool registration failed safely'
-        : agentContext.next_tool
-          ? 'Agent has a callable next tool'
-          : agentContext.next_action.kind === 'human_gate'
-            ? 'Agent is correctly paused'
-            : agentContext.agent_status;
 
   return (
     <main className="lab-shell">
       <script id="flylab-agent-context" type="application/json">{JSON.stringify(agentContext).replaceAll('<', '\\u003c')}</script>
       <script id="flylab-agent-runtime" type="application/json">{JSON.stringify(agentRuntime).replaceAll('<', '\\u003c')}</script>
       <script id="flylab-agent-handoff" type="application/json">{JSON.stringify(agentHandoff).replaceAll('<', '\\u003c')}</script>
+      <h1 className="sr-only">FlyLab agent workspace</h1>
       <header className="topbar">
         <a className="brand" href="#workspace" aria-label="FlyLab home">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
@@ -2122,28 +2112,35 @@ export default function Home() {
         data-tools-callable={webmcpStatus === 'active'}
       >
         <div className="agent-bridge-identity">
-          <span><i /> WebMCP site tools</span>
-          <strong>{siteToolStatus}</strong>
-          {webmcpStatus !== 'active' && <a className="agent-contract-link" href="/flylab-tool-contracts.json">exact contracts ↗</a>}
+          <span><i /> Agent runtime</span>
+          <strong>{siteToolStatus} · r{lab.revision}</strong>
         </div>
-        <div>
-          <span>Shared page session</span>
-          <strong>r{lab.revision} · {agentContext.agent_status}</strong>
-        </div>
-        <div>
-          <span>Next workflow action</span>
+        <div className="agent-bridge-next">
+          <span>{toolsCallable ? 'Next agent tool' : 'Recommended when connected'}</span>
           <code>{agentNextDisplay}</code>
         </div>
         <div className="agent-bridge-gate">
-          <span>Supervisor review gate</span>
+          <span>Human gate</span>
           <strong>{humanGate}</strong>
         </div>
       </section>
 
-      <section className="workspace" id="workspace">
-        <aside className="workflow-rail">
+      <section className={`workspace ${lab.experiment && !lab.experiment.approved ? 'human-review-mode' : ''}`} id="workspace">
+        <aside className="workflow-rail" aria-label="Agent operator panel">
+          <section className="agent-handoff-rail" aria-labelledby="agent-handoff-title">
+            <div className="section-title-row"><p className="eyebrow" id="agent-handoff-title">Agent handoff</p><span>r{lab.revision}</span></div>
+            <strong>{toolsCallable ? 'Ready for a WebMCP agent' : 'Read-only in this browser'}</strong>
+            <small>Copy the current revision, exact input references, and recovery path as one machine-readable packet.</small>
+            {webmcpStatus === 'unsupported' && (
+              <p className="agent-runtime-fallback">
+                WebMCP is unavailable here; the <a href="/flylab-agent-manifest.json">manifest</a> and <a href="/flylab-tool-contracts.json">contracts</a> remain inspectable.
+              </p>
+            )}
+            <button type="button" onClick={() => void copyAgentBrief()}>Copy live agent handoff</button>
+          </section>
+
           <div className="goal-block">
-            <p className="eyebrow">Supervisor mission boundary</p>
+            <div className="section-title-row"><p className="eyebrow">Mission boundary</p><span>Human-owned</span></div>
             <label className="sr-only" htmlFor="behavior-goal">Behavior goal</label>
             <textarea
               id="behavior-goal"
@@ -2154,67 +2151,58 @@ export default function Home() {
             <button className="mission-commit" type="button" onClick={startNewMission} disabled={!goalDraft.trim() || goalDraft.trim() === lab.goal}>
               {lab.hypothesis || lab.experiment || lab.batch ? 'Publish new mission · clear artifacts' : 'Publish mission to agent state'}
             </button>
-            <p className="goal-hint">Drafting does not change agent state. Commit once; then <code>inspect_flylab_state</code> exposes the new revision.</p>
+            <p className="goal-hint">{goalDraft.trim() === lab.goal ? <>Published at r{lab.revision}. The agent should call <code>inspect_flylab_state</code> before acting.</> : <>This is only a draft until published; publishing creates a new revision for <code>inspect_flylab_state</code>.</>}</p>
           </div>
 
-          <nav className="agent-run-graph" role="list" aria-label="Agent tool pipeline">
-            <div className="section-title-row agent-run-heading">
-              <p className="eyebrow">Agent run graph</p>
-              <span>{agentContext.pipeline.filter((step) => step.status === 'complete').length}/{agentContext.pipeline.length - 1} complete</span>
-            </div>
-            {agentContext.pipeline.map((step, index) => (
-              <div className={`agent-run-step ${step.status} ${step.kind}`} role="listitem" aria-label={`${step.title}: ${step.status.replace('_', ' ')}. ${step.boundary}`} key={step.name}>
-                <span>{step.kind === 'human_gate' ? 'H' : String(index).padStart(2, '0')}</span>
-                <div><strong>{step.title}</strong><code>{step.name}</code><small className="agent-step-status">{step.status.replace('_', ' ')}</small></div>
-                <i />
-              </div>
-            ))}
-          </nav>
-
-          <section className="agent-activity" aria-labelledby="agent-activity-title">
-            <div className="section-title-row">
-              <p className="eyebrow" id="agent-activity-title">Shared audit activity</p>
-              <span className={`tool-status ${webmcpStatus === 'active' ? 'live' : ''}`}>{siteToolStatus}</span>
-            </div>
-            {lab.activity.slice(0, 3).map((item) => (
-              <article className={`activity-row ${item.status}`} key={item.id}>
-                <i />
-                <div>
-                  <strong>{item.title}</strong>
-                  {(item.toolName || item.actor) && <small className="activity-contract">{item.toolName && <code>{item.toolName}</code>}<span>{item.actor?.replace('_', ' ')} · r{item.revision}</span></small>}
-                  <p>{item.detail}</p>
+          <details className="rail-disclosure">
+            <summary><span>Workflow</span><b>{agentContext.pipeline.filter((step) => step.status === 'complete').length}/{agentContext.pipeline.length - 1}</b></summary>
+            <nav className="agent-run-graph" role="list" aria-label="Agent tool pipeline">
+              {agentContext.pipeline.map((step, index) => (
+                <div className={`agent-run-step ${step.status} ${step.kind}`} role="listitem" aria-label={`${step.title}: ${step.status.replace('_', ' ')}. ${step.boundary}`} key={step.name}>
+                  <span>{step.kind === 'human_gate' ? 'H' : String(index).padStart(2, '0')}</span>
+                  <div><strong>{step.title}</strong><code>{step.name}</code><small className="agent-step-status">{step.status.replace('_', ' ')}</small></div>
+                  <i />
                 </div>
-              </article>
-            ))}
-          </section>
+              ))}
+            </nav>
+          </details>
 
-          <section className="agent-handoff-rail" aria-labelledby="agent-handoff-title">
-            <div className="section-title-row"><p className="eyebrow" id="agent-handoff-title">Primary interface</p><span>WebMCP</span></div>
-            <strong>{handoffStatus}</strong>
-            <code>{agentNextDisplay}</code>
-            <small>Fresh state first: <b>inspect_flylab_state</b> · r{lab.revision}</small>
-            {webmcpStatus === 'unsupported' && (
-              <p className="agent-runtime-fallback">
-                This page still exposes its <a href="/flylab-agent-manifest.json">agent manifest</a>, <a href="/flylab-tool-contracts.json">exact tool schemas</a>, and inline state for inspection. Those references do not make tools callable; execution requires a compatible WebMCP runtime.
-              </p>
-            )}
-            <button type="button" onClick={() => void copyAgentBrief()}>Copy live agent handoff</button>
-          </section>
+          <details className="rail-disclosure" open={simulationRunning || evidenceSaveRunning ? true : undefined}>
+            <summary><span>Activity</span><b>{lab.activity.length}</b></summary>
+            <section className="agent-activity" aria-labelledby="agent-activity-title">
+              <div className="section-title-row">
+                <p className="eyebrow" id="agent-activity-title">Shared audit activity</p>
+                <span className={`tool-status ${webmcpStatus === 'active' ? 'live' : ''}`}>{siteToolStatus}</span>
+              </div>
+              {lab.activity.slice(0, 3).map((item) => (
+                <article className={`activity-row ${item.status}`} key={item.id}>
+                  <i />
+                  <div>
+                    <strong>{item.title}</strong>
+                    {(item.toolName || item.actor) && <small className="activity-contract">{item.toolName && <code>{item.toolName}</code>}<span>{item.actor?.replace('_', ' ')} · r{item.revision}</span></small>}
+                    <p>{item.detail}</p>
+                  </div>
+                </article>
+              ))}
+            </section>
+          </details>
 
-          <div className="manual-action-wrap">
-            <span>Optional local UI test</span>
-            <button className="manual-action" type="button" onClick={() => void primaryAction.action()}>
-              <span>{primaryAction.label}</span><b aria-hidden="true">→</b>
-            </button>
-            <small>{primaryAction.detail}. This optional walkthrough mirrors the tool workflow for a supervisor; it is not the primary agent interface.</small>
-          </div>
+          <details className="rail-disclosure" open={simulationRunning ? true : undefined}>
+            <summary><span>Optional human walkthrough</span></summary>
+            <div className="manual-action-wrap">
+              <button className="manual-action" type="button" onClick={() => void primaryAction.action()}>
+                <span>{primaryAction.label}</span><b aria-hidden="true">→</b>
+              </button>
+              <small>{primaryAction.detail}. This mirrors the tool workflow for supervision; it is not the primary agent interface.</small>
+            </div>
+          </details>
         </aside>
 
         <section className="main-stage" aria-labelledby="arena-title">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">Human audit viewport</p>
-              <h1 id="arena-title">{arenaView === 'circuit' ? <>BANC v888 circuit <span>· Three.js reconstruction</span></> : <>Open-field trial <span>· Three.js 3D fly</span></>}</h1>
+              <p className="eyebrow">Optional visual audit</p>
+              <h2 id="arena-title">{arenaView === 'circuit' ? <>BANC v888 circuit <span>· Three.js reconstruction</span></> : <>Open-field trial <span>· Three.js 3D fly</span></>}</h2>
             </div>
             <div className="view-switch" aria-label="Arena view">
               {(['body', 'circuit', 'trace'] as const).map((view) => (
@@ -2313,58 +2301,10 @@ export default function Home() {
           )}
         </section>
 
-        <aside className={`inspector-panel ${lab.experiment && !lab.batch ? 'protocol-review-active' : ''}`}>
-          <section className="agent-context-card" aria-labelledby="agent-brief-title">
-            <div className="section-title-row"><p className="eyebrow" id="agent-brief-title">Agent runtime contract</p><span>{toolsCallable ? agentContext.agent_status : webmcpStatus === 'checking' ? 'checking' : 'read-only'}</span></div>
-            <h2>{toolsCallable ? 'WebMCP-operable. Supervisor-auditable. Scientifically bounded.' : webmcpStatus === 'checking' ? 'Checking WebMCP availability.' : 'Contracts present. WebMCP invocation unavailable here.'}</h2>
-            <p>{toolsCallable ? 'The agent works through typed site tools and exact artifact references. This visual surface exists for supervision, approval, and scientific audit.' : webmcpStatus === 'checking' ? 'FlyLab assumes zero callable tools until all eight registrations succeed.' : 'This browser has zero registered FlyLab tools. The page exposes read-only contract, runtime, and workflow-state JSON without pretending those documents are an alternate execution transport.'}</p>
-            <div className="agent-next-card">
-              <span>{toolsCallable ? (agentContext.next_tool ? 'Invocable site tool' : 'Agent is blocked') : 'Workflow recommendation only'}</span>
-              <code>{agentNextDisplay}</code>
-              <small>{toolsCallable ? agentContext.next_action.reason : 'Not callable in this browser. Use a compatible WebMCP runtime, then inspect fresh state.'}</small>
-            </div>
-            <dl className="agent-artifact-ids">
-              <div><dt>State</dt><dd>r{lab.revision}</dd></div>
-              <div><dt>Circuit</dt><dd>{agentContext.artifacts.selected_circuit_id ?? 'not created'}</dd></div>
-              <div><dt>Experiment</dt><dd>{agentContext.artifacts.experiment_id ?? 'not created'}</dd></div>
-              <div><dt>Batch</dt><dd>{agentContext.artifacts.batch_id ?? 'not created'}</dd></div>
-              <div><dt>Analysis</dt><dd>{agentContext.artifacts.analysis_ids.join(' · ') || 'not created'}</dd></div>
-              <div><dt>Comparison</dt><dd>{agentContext.artifacts.comparison_id ?? 'not created'}</dd></div>
-              <div><dt>Bundle</dt><dd>{agentContext.artifacts.evidence_bundle_id ?? 'not created'}</dd></div>
-            </dl>
-            <button type="button" onClick={() => void copyAgentBrief()}>Copy live recovery packet</button>
-          </section>
-
-          <section className="autonomy-card">
-            <div className="section-title-row"><p className="eyebrow">Bounded autoresearch</p>{lab.comparison ? <div className="badge-pair">{lab.comparison.provenance.map((kind) => <Badge key={kind} kind={kind} />)}</div> : <span>propose only</span>}</div>
-            <label><span>Next-trial budget</span><select value={lab.nextTrialBudget} onChange={(event) => changeNextTrialBudget(Number(event.target.value))}><option value="2">2 replicates</option><option value="5">5 replicates</option><option value="10">10 replicates</option></select></label>
-            <p>The agent may rank and propose a follow-up. It cannot execute a new batch without approval.</p>
-            {lab.comparison && (
-              <div className="comparison-ranking">
-                <span>Ranked to <code>{lab.comparison.objective}</code> <code>{lab.comparison.objectiveMetric}</code></span>
-                <ol>
-                  {lab.comparison.rankedConditions.map((condition) => (
-                    <li key={condition.conditionId}><strong>{condition.label}</strong><b>{condition.value === null ? 'n/a' : round(condition.value, 3)}</b></li>
-                  ))}
-                </ol>
-              </div>
-            )}
-            {lab.comparison && <div className="proposal"><Badge kind="agent_hypothesized" /><strong>{lab.comparison.proposal.rationale}</strong><small>levels {lab.comparison.proposal.activationLevels.join(' / ')} · budget {lab.comparison.proposal.replicateBudget}</small></div>}
-          </section>
-
-          <section className={`hypothesis-card ${lab.hypothesis ? '' : 'empty-artifact'}`}>
-            <div className="section-title-row"><p className="eyebrow">Current hypothesis</p>{lab.hypothesis && <Badge kind="agent_hypothesized" />}</div>
-            <h2>{lab.hypothesis?.claim ?? 'No hypothesis artifact'}</h2>
-            <p>{lab.hypothesis?.falsificationCriterion ?? 'Call draft_fly_hypothesis after discovery. FlyLab will not display a claim before the agent creates one.'}</p>
-            {lab.hypothesis && <small className="artifact-lineage">Causal support <code>{lab.hypothesis.causalEvidenceIds.join(' · ')}</code><br />Full cited set <code>{lab.hypothesis.evidenceIds.join(' · ')}</code></small>}
-          </section>
-
-          <section className={`target-card ${selectedCircuit ? '' : 'empty-artifact'}`}>
-            <div className="neuron-orbit" aria-hidden="true"><i /><i /><i /></div>
-            <div><div className="target-card-heading"><span>Neural target</span>{selectedCircuit && <Badge kind={selectedCircuit.provenance[0]} />}</div><strong>{selectedCircuit?.name ?? 'No circuit selected'}</strong><small>{selectedCircuit ? `${selectedCircuit.id} · ${selectedCircuit.summary}` : 'Call find_fly_circuits to create the selected-circuit artifact.'}</small></div>
-          </section>
-
-          <section className="protocol-controls" aria-labelledby="protocol-title">
+        <aside className={`inspector-panel ${lab.experiment && !lab.batch ? 'protocol-review-active' : ''}`} aria-label="Run details">
+          <details className="inspector-disclosure protocol-disclosure" key={`protocol-${lab.experiment?.id ?? 'empty'}`} open={Boolean(lab.experiment)}>
+            <summary><span>Exact protocol</span><b>{!lab.experiment ? 'Not created' : lab.experiment.approved ? 'Approved' : 'Human approval required'}</b></summary>
+            <section className="protocol-controls" aria-labelledby="protocol-title">
             <div className="section-title-row"><p className="eyebrow" id="protocol-title">Exact protocol for human review</p><div className="badge-pair">{lab.experiment && <Badge kind={lab.experiment.provenance[0]} />}<span className={`approval-chip ${lab.experiment?.approved ? 'approved' : ''}`}>{!lab.experiment ? 'Not created' : lab.experiment.approved ? 'Approved' : 'Draft'}</span></div></div>
             {!lab.experiment ? (
               <p className="empty-protocol">No protocol artifact exists. The design tool must create a hypothesis-linked, controlled protocol before approval becomes available.</p>
@@ -2405,15 +2345,82 @@ export default function Home() {
                 ) : <p className="protocol-approved-note">Human approval applies only to <code>{lab.experiment.id}</code>. Any edit revokes it and clears downstream artifacts.</p>}
               </>
             )}
-          </section>
+            </section>
+          </details>
 
-          <section className="evidence-summary">
-            <div className="section-title-row"><p className="eyebrow">Evidence boundaries</p><button type="button" onClick={() => setEvidenceOpen(true)}>inspect all ↗</button></div>
-            <div className="evidence-badges">
-              {(Object.keys(provenanceMeta) as ProvenanceLabel[]).map((kind) => <Badge key={kind} kind={kind} />)}
-            </div>
-            <p>{MODEL_MANIFEST.boundary}</p>
-          </section>
+          {lab.hypothesis && (
+            <details className="inspector-disclosure" open={!lab.experiment ? true : undefined}>
+              <summary><span>Hypothesis</span><b>{lab.hypothesis.id}</b></summary>
+              <section className="hypothesis-card">
+                <div className="section-title-row"><p className="eyebrow">Current hypothesis</p><Badge kind="agent_hypothesized" /></div>
+                <h2>{lab.hypothesis.claim}</h2>
+                <p>{lab.hypothesis.falsificationCriterion}</p>
+                <small className="artifact-lineage">Causal support <code>{lab.hypothesis.causalEvidenceIds.join(' · ')}</code><br />Full cited set <code>{lab.hypothesis.evidenceIds.join(' · ')}</code></small>
+              </section>
+            </details>
+          )}
+
+          {selectedCircuit && (
+            <details className="inspector-disclosure">
+              <summary><span>Neural target</span><b>{selectedCircuit.id}</b></summary>
+              <section className="target-card">
+                <div><div className="target-card-heading"><span>Neural target</span><Badge kind={selectedCircuit.provenance[0]} /></div><strong>{selectedCircuit.name}</strong><small>{selectedCircuit.id} · {selectedCircuit.summary}</small></div>
+              </section>
+            </details>
+          )}
+
+          <details className="inspector-disclosure" key={`autoresearch-${lab.comparison?.id ?? analysis?.id ?? 'empty'}`} open={Boolean(analysis || lab.comparison)}>
+            <summary><span>Bounded autoresearch</span><b>{lab.comparison ? 'Proposal ready' : `${lab.nextTrialBudget} replicate budget`}</b></summary>
+            <section className="autonomy-card">
+              <div className="section-title-row"><p className="eyebrow">Bounded autoresearch</p>{lab.comparison ? <div className="badge-pair">{lab.comparison.provenance.map((kind) => <Badge key={kind} kind={kind} />)}</div> : <span>propose only</span>}</div>
+              <label><span>Next-trial budget</span><select value={lab.nextTrialBudget} onChange={(event) => changeNextTrialBudget(Number(event.target.value))}><option value="2">2 replicates</option><option value="5">5 replicates</option><option value="10">10 replicates</option></select></label>
+              <p>The agent may rank and propose a follow-up. It cannot execute a new batch without approval.</p>
+              {lab.comparison && (
+                <div className="comparison-ranking">
+                  <span>Ranked to <code>{lab.comparison.objective}</code> <code>{lab.comparison.objectiveMetric}</code></span>
+                  <ol>
+                    {lab.comparison.rankedConditions.map((condition) => (
+                      <li key={condition.conditionId}><strong>{condition.label}</strong><b>{condition.value === null ? 'n/a' : round(condition.value, 3)}</b></li>
+                    ))}
+                  </ol>
+                </div>
+              )}
+              {lab.comparison && <div className="proposal"><Badge kind="agent_hypothesized" /><strong>{lab.comparison.proposal.rationale}</strong><small>levels {lab.comparison.proposal.activationLevels.join(' / ')} · budget {lab.comparison.proposal.replicateBudget}</small></div>}
+            </section>
+          </details>
+
+          <details className="inspector-disclosure">
+            <summary><span>Artifact state</span><b>r{lab.revision}</b></summary>
+            <section className="agent-context-card" aria-labelledby="agent-brief-title">
+              <div className="section-title-row"><p className="eyebrow" id="agent-brief-title">Agent runtime contract</p><span>{toolsCallable ? agentContext.agent_status : webmcpStatus === 'checking' ? 'checking' : 'read-only'}</span></div>
+              <div className="agent-next-card">
+                <span>{toolsCallable ? (agentContext.next_tool ? 'Invocable site tool' : 'Agent is blocked') : 'Workflow recommendation only'}</span>
+                <code>{agentNextDisplay}</code>
+                <small>{toolsCallable ? agentContext.next_action.reason : 'Not callable in this browser. Use a compatible WebMCP runtime, then inspect fresh state.'}</small>
+              </div>
+              <dl className="agent-artifact-ids">
+                <div><dt>State</dt><dd>r{lab.revision}</dd></div>
+                {agentContext.artifacts.selected_circuit_id && <div><dt>Circuit</dt><dd>{agentContext.artifacts.selected_circuit_id}</dd></div>}
+                {agentContext.artifacts.experiment_id && <div><dt>Experiment</dt><dd>{agentContext.artifacts.experiment_id}</dd></div>}
+                {agentContext.artifacts.batch_id && <div><dt>Batch</dt><dd>{agentContext.artifacts.batch_id}</dd></div>}
+                {agentContext.artifacts.analysis_ids.length > 0 && <div><dt>Analysis</dt><dd>{agentContext.artifacts.analysis_ids.join(' · ')}</dd></div>}
+                {agentContext.artifacts.comparison_id && <div><dt>Comparison</dt><dd>{agentContext.artifacts.comparison_id}</dd></div>}
+                {agentContext.artifacts.evidence_bundle_id && <div><dt>Bundle</dt><dd>{agentContext.artifacts.evidence_bundle_id}</dd></div>}
+              </dl>
+              <button type="button" onClick={() => void copyAgentBrief()}>Copy live recovery packet</button>
+            </section>
+          </details>
+
+          <details className="inspector-disclosure">
+            <summary><span>Evidence boundaries</span><b>{EVIDENCE.length + (lab.bundle ? 1 : 0)} records</b></summary>
+            <section className="evidence-summary">
+              <div className="section-title-row"><p className="eyebrow">Evidence boundaries</p><button type="button" onClick={() => setEvidenceOpen(true)}>inspect all ↗</button></div>
+              <div className="evidence-badges">
+                {(Object.keys(provenanceMeta) as ProvenanceLabel[]).map((kind) => <Badge key={kind} kind={kind} />)}
+              </div>
+              <p>{MODEL_MANIFEST.boundary}</p>
+            </section>
+          </details>
 
         </aside>
       </section>
