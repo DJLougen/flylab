@@ -1,6 +1,6 @@
 # WebMCP verification
 
-FlyLab registers seven site tools through `document.modelContext.registerTool(...)`. The application keeps its full human interface available when that experimental browser API is absent.
+FlyLab registers eight site tools through `document.modelContext.registerTool(...)`: one read-only state inspector plus seven structured scientific workflow actions. The application keeps its full human interface available when that experimental browser API is absent.
 
 ## Automated contract checks
 
@@ -10,9 +10,9 @@ Run:
 npm test
 ```
 
-The WebMCP test suite supplies a compatible `modelContext`, verifies that exactly seven tools register, checks their closed schemas and current annotations, invokes a registered tool through its shared handler, and confirms that aborting the registration signal disposes all tools. It also proves that a pre-cancelled invocation never starts its action.
+The WebMCP test suite supplies a compatible `modelContext`, verifies that exactly eight tools register, checks their closed schemas and current annotations, invokes registered tools through the shared handler, rejects unexpected inspector fields, and confirms that aborting the registration signal disposes all tools. Pure agent-context tests cover every artifact transition, the person-only gate, running state, completion, fixed null/array fields, and the one-next-action rule. The suite also proves that a pre-cancelled invocation never starts its action.
 
-The cancellation regression test exercises the same prepare/check/commit helper used by `run_fly_simulation`. It waits until preparation has started, aborts the invocation, then releases the prepared batch. The promise rejects with `AbortError`, the commit callback is called zero times, and the completed-batch state remains `null`. A companion success case proves that an active invocation commits exactly once.
+The cancellation regression test exercises the same prepare/check/commit helper used by `run_fly_simulation` and `save_fly_evidence`. It waits until preparation has started, aborts the invocation, then releases the prepared artifact. The promise rejects with `AbortError`, the commit callback is called zero times, and no prepared state is published. A companion success case proves that an active invocation commits exactly once.
 
 These checks prove the registration code and tool contracts. They do not prove that a particular browser account has received the WebMCP rollout.
 
@@ -24,9 +24,9 @@ With Chrome 149 or newer installed, run:
 npm run verify:webmcp
 ```
 
-The command creates an isolated temporary Chrome profile, enables Chrome's official `WebMCPTesting` feature for that process, loads the public deployment, and checks that the real page exposes `document.modelContext.registerTool`, is origin-keyed, and reaches **7 tools live**. It then uses Chrome's WebMCP debugging protocol to enumerate the exact seven tool names and complete a live `find_fly_circuits` invocation. It closes the isolated browser and removes the temporary profile afterward. Set `CHROME_BIN` to override the Chrome executable or `FLYLAB_URL` to check another deployment.
+The command creates an isolated temporary Chrome profile, enables Chrome's official `WebMCPTesting` feature for that process, loads the public deployment, and checks that the real page exposes `document.modelContext.registerTool`, is origin-keyed, and reaches **8 tools live**. It then uses Chrome's WebMCP debugging protocol to enumerate the exact eight tool names, invoke `inspect_flylab_state`, verify that the initial next tool is `find_fly_circuits`, and complete that discovery call. It closes the isolated browser and removes the temporary profile afterward. Set `CHROME_BIN` to override the Chrome executable or `FLYLAB_URL` to check another deployment.
 
-For an end-to-end verification of all seven tools and the approval boundary, run `FLYLAB_VERIFY_WORKFLOW=1 npm run verify:webmcp`. The isolated test first confirms that simulation is blocked with `APPROVAL_REQUIRED` and clicks the visible human-only approval control through the DOM. Before the successful run, it exercises two post-start cancellation paths:
+For an end-to-end verification of all eight tools and the approval boundary, run `FLYLAB_VERIFY_WORKFLOW=1 npm run verify:webmcp`. The isolated test verifies the inspector before discovery, at the blocked person-only gate, after approval, and after workflow completion. It also confirms that simulation is blocked with `APPROVAL_REQUIRED` and clicks the visible human-only approval control through the DOM. Before the successful run, it exercises two post-start cancellation paths:
 
 1. It invokes `run_fly_simulation`, waits until the visible activity is **Simulation batch running**, calls Chrome's `WebMCP.cancelInvocation`, requires protocol status `Canceled`, and verifies that the primary action returns to **Run MDN-inspired drive**, playback remains disabled, all five conditions remain `approved`, and no results panel or completed batch appears.
 2. It starts another run, waits for the same visible running state, clicks **Cancel running simulation**, requires a non-completed invocation response, and verifies the same no-batch state.
@@ -48,7 +48,8 @@ Open the [public FlyLab deployment](https://flylab-neuroethology.d-lougen.chatgp
 1. Use GPT-5.6 Sol or GPT-5.6 Terra and update the desktop app to the latest version.
 2. Confirm **Enable site tools** is on under **Settings → Browser → Permissions**.
 3. Select **Site tools** in the browser address bar.
-4. Open **Available site tools** and confirm these seven names:
+4. Open **Available site tools** and confirm these eight names:
+   - `inspect_flylab_state`
    - `find_fly_circuits`
    - `draft_fly_hypothesis`
    - `design_stimulation_trial`

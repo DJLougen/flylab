@@ -1,6 +1,6 @@
 # FlyLab
 
-FlyLab is a WebMCP-enabled virtual neuroethology lab for investigating how an adult fruit-fly neural circuit could influence behavior. A person and an agent share one visible workflow: find source-backed evidence, write a falsifiable hypothesis, design controls, approve a protocol, run a seeded simulation, quantify behavior, select a follow-up, and save the complete evidence lineage.
+FlyLab is a WebMCP-enabled virtual neuroethology lab for investigating how an adult fruit-fly neural circuit could influence behavior. It is agent-operable, human-auditable, and scientifically bounded: a person and an agent share one visible page session while structured site tools expose the exact workflow state, next valid action, approval boundary, and evidence lineage.
 
 - **Live lab:** [flylab-neuroethology.d-lougen.chatgpt.site](https://flylab-neuroethology.d-lougen.chatgpt.site)
 - **Public source:** [github.com/DJLougen/flylab](https://github.com/DJLougen/flylab)
@@ -9,7 +9,7 @@ FlyLab is a WebMCP-enabled virtual neuroethology lab for investigating how an ad
 
 ## What the challenge release demonstrates
 
-- Seven browser-native WebMCP tools that operate the same lab interface a person sees.
+- One read-only WebMCP state inspector plus seven structured scientific workflow actions that operate the same page interface a person sees.
 - A curated, primary-source-backed adult MDN evidence path.
 - A procedural Three.js adult-fly arena model with six legs, one wing pair plus halteres, compound eyes, branched aristae, a segmented abdomen, replay-linked heading, and an explicitly schematic morphology boundary.
 - An orbitable Three.js CNS viewer with six reconstruction-derived BANC v888 neuron skeletons, camera presets, cell inspection, and replay-linked laterality highlighting.
@@ -39,20 +39,21 @@ npm run build
 npm run verify:webmcp
 ```
 
-`npm test` compiles the TypeScript test target and runs Node's built-in test runner. The deterministic suite covers same-seed reproducibility, changed-seed divergence, control-arm construction, provenance labels, laterality-to-circuit mapping, morphology checksums, exactly seven WebMCP contracts, current annotation keys, and registration disposal. `npm run verify:webmcp` opens the public deployment in an isolated Chrome profile with Chrome's official WebMCP testing feature, verifies the real browser API, enumerates the exact seven tools through Chrome's WebMCP protocol, and completes a live `find_fly_circuits` invocation.
+`npm test` compiles the TypeScript test target and runs Node's built-in test runner. The deterministic suite covers same-seed reproducibility, changed-seed divergence, control-arm construction, provenance labels, laterality-to-circuit mapping, morphology checksums, the eight WebMCP contracts, agent-state transitions, current annotation keys, and registration disposal. `npm run verify:webmcp` opens the public deployment in an isolated Chrome profile with Chrome's official WebMCP testing feature, verifies the real browser API, enumerates the exact eight tools through Chrome's WebMCP protocol, calls `inspect_flylab_state`, and completes a live `find_fly_circuits` invocation.
 
 ## Human-agent workflow
 
 The intended sequence is deliberately explicit:
 
-1. The agent calls `find_fly_circuits` to search FlyLab's bounded evidence catalog.
-2. It calls `draft_fly_hypothesis` to create a falsifiable claim labeled `agent_hypothesized`.
-3. It calls `design_stimulation_trial` to create the visible controlled protocol.
-4. **A person reviews or edits the protocol and approves it.** Editing clears approval and all downstream results.
-5. The agent may call `run_fly_simulation` for that exact approved experiment.
-6. It calls `analyze_fly_behavior` to compute versioned metrics from simulation-predicted run outputs.
-7. It calls `compare_fly_trials` to rank conditions and propose, but not execute, one bounded follow-up.
-8. It calls `save_fly_evidence` to commit the full visible lineage to the evidence ledger. A person can then download that exact saved bundle as versioned JSON instead of relying on best-effort browser-local storage.
+1. The agent calls `inspect_flylab_state` first and after interruptions or person edits. It receives the current revision, artifact IDs, gate status, person-selected limits, and exactly one valid next action without scraping the page.
+2. It calls `find_fly_circuits` to search FlyLab's bounded evidence catalog.
+3. It calls `draft_fly_hypothesis` to create a falsifiable claim labeled `agent_hypothesized`.
+4. It calls `design_stimulation_trial` to create the visible controlled protocol.
+5. **A person reviews or edits the protocol and approves it.** Editing clears approval and all downstream results. While blocked, the inspector reports `waiting_for_human`, `next_tool: null`, and `blocked_by: human_approval`.
+6. The agent may call `run_fly_simulation` for that exact approved experiment.
+7. It calls `analyze_fly_behavior` to compute versioned metrics from simulation-predicted run outputs.
+8. It calls `compare_fly_trials` to rank conditions and propose, but not execute, one bounded follow-up.
+9. It calls `save_fly_evidence` to commit the full visible lineage to the evidence ledger. A person can then download that exact saved bundle as versioned JSON instead of relying on best-effort browser-local storage.
 
 The approval step is intentionally not a WebMCP tool. It remains a human action in the shared interface.
 
@@ -60,7 +61,8 @@ The approval step is intentionally not a WebMCP tool. It remains a human action 
 
 | Tool | Purpose | State and trust boundary |
 |---|---|---|
-| `find_fly_circuits` | Return matching adult circuits, evidence records, citations, and dataset versions. | Read-only; externally sourced content is marked untrusted. |
+| `inspect_flylab_state` | Return the current page revision, artifact IDs, person-only gate, limits, pipeline, and exactly one next action. | Sole read-only tool; operational and provenance-free. Human-authored goal text is marked untrusted. |
+| `find_fly_circuits` | Return matching adult circuits, evidence records, citations, and dataset versions. | Selects the circuit in shared page state; externally sourced content is marked untrusted. |
 | `draft_fly_hypothesis` | Create an editable claim, prediction, evidence links, and falsification criterion. | Writes lab state; output remains an agent hypothesis. |
 | `design_stimulation_trial` | Create controls, timing, laterality, activation level, replicate count, and seed manifest. | Writes a draft protocol; execution remains locked. |
 | `run_fly_simulation` | Execute an approved experiment or return its existing deterministic batch. | Writes simulation runs; results are `simulation_predicted`. |
@@ -68,7 +70,7 @@ The approval step is intentionally not a WebMCP tool. It remains a human action 
 | `compare_fly_trials` | Rank compatible analyses and create one next-experiment proposal. | Writes a comparison; the proposal is not execution authority. |
 | `save_fly_evidence` | Save sources, claims, model assumptions, protocol, seeds, runs, analyses, and comparison. | Prepares a manifest-hashed, downloadable JSON envelope and attempts a browser-local convenience copy. |
 
-The current WebMCP implementation uses `document.modelContext.registerTool(...)`, closed object schemas, `readOnlyHint`, `untrustedContentHint`, cancellable execution, and AbortSignal-owned registration lifecycle. Running simulations use a tested prepare/check/synchronous-commit boundary: the browser invocation signal, the visible human cancel control, and Chrome 151's `toolcancel` compatibility event all feed one page-owned abort controller, so a cancellation observed before commit cannot publish a completed batch.
+The current WebMCP implementation uses `document.modelContext.registerTool(...)`, closed object schemas, `readOnlyHint`, `untrustedContentHint`, cancellable execution, and AbortSignal-owned registration lifecycle. Long-running simulation and evidence-save work use a tested prepare/check/synchronous-commit boundary, so a cancellation observed before commit cannot publish the prepared batch or bundle. Every success uses a versioned structured envelope; domain failures are machine-readable, and the inspector is the canonical recovery contract.
 It follows OpenAI's [Site tools documentation](https://learn.chatgpt.com/docs/webmcp) for making website capabilities directly available to agents.
 
 ## Reproducibility and provenance
@@ -120,8 +122,9 @@ FlyLab's original source code and documentation are licensed under the [Apache L
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 - [Challenge submission copy](docs/CHALLENGE_SUBMISSION.md)
 - `lib/flylab.ts` — evidence records, manifests, deterministic model, metrics, and comparison logic
+- `lib/agent-context.ts` — pure shared-page state machine, approval gate, artifact references, and next-action contract
 - `lib/evidence-export.ts` — portable evidence-envelope schema, serialization, and filename helpers
-- `lib/webmcp.ts` — seven tool contracts, validation, result envelopes, and registration lifecycle
+- `lib/webmcp.ts` — eight tool contracts, validation, result envelopes, and registration lifecycle
 - `components/FlyBrain3D.tsx` — Three.js BANC morphology viewer and accessible six-neuron inspector
 - `components/FlyArena3D.tsx` — procedural Three.js adult-fly arena renderer and replay-linked pose
 - `scripts/build-banc-morphology.mjs` — reproducible SWC download, checksum, transform, and render-asset build

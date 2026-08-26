@@ -14,6 +14,7 @@ const expectedNames = [
   'design_stimulation_trial',
   'draft_fly_hypothesis',
   'find_fly_circuits',
+  'inspect_flylab_state',
   'run_fly_simulation',
   'save_fly_evidence',
 ];
@@ -23,11 +24,11 @@ afterEach(() => {
 });
 
 describe('FlyLab WebMCP contracts', () => {
-  test('exposes exactly the seven intended, uniquely named scientific tools', () => {
+  test('exposes one inspector and seven uniquely named scientific workflow actions', () => {
     const names = flyLabToolContracts.map((contract) => contract.name);
 
-    assert.equal(flyLabToolContracts.length, 7);
-    assert.equal(new Set(names).size, 7);
+    assert.equal(flyLabToolContracts.length, 8);
+    assert.equal(new Set(names).size, 8);
     assert.deepEqual([...names].sort(), expectedNames);
     for (const name of names) {
       assert.match(name, /^[A-Za-z0-9_.-]{1,128}$/);
@@ -51,8 +52,12 @@ describe('FlyLab WebMCP contracts', () => {
     const annotations = Object.fromEntries(
       flyLabToolContracts.map((contract) => [contract.name, contract.annotations]),
     );
-    assert.deepEqual(annotations.find_fly_circuits, {
+    assert.deepEqual(annotations.inspect_flylab_state, {
       readOnlyHint: true,
+      untrustedContentHint: true,
+    });
+    assert.deepEqual(annotations.find_fly_circuits, {
+      readOnlyHint: false,
       untrustedContentHint: true,
     });
     assert.equal(
@@ -64,7 +69,7 @@ describe('FlyLab WebMCP contracts', () => {
         .filter((contract) => contract.annotations.untrustedContentHint)
         .map((contract) => contract.name)
         .sort(),
-      ['draft_fly_hypothesis', 'find_fly_circuits', 'save_fly_evidence'],
+      ['draft_fly_hypothesis', 'find_fly_circuits', 'inspect_flylab_state', 'save_fly_evidence'],
     );
   });
 
@@ -81,7 +86,7 @@ describe('FlyLab WebMCP contracts', () => {
 });
 
 describe('FlyLab WebMCP registration lifecycle', () => {
-  test('registers and invokes all seven contracts, then unregisters them on dispose', async () => {
+  test('registers and invokes all eight contracts, then unregisters them on dispose', async () => {
     const registrations: Array<{
       tool: {
         name: string;
@@ -120,7 +125,7 @@ describe('FlyLab WebMCP registration lifecycle', () => {
     const installation = await installFlyLabWebMCP(actions);
 
     assert.equal(installation.supported, true);
-    assert.equal(registrations.length, 7);
+    assert.equal(registrations.length, 8);
     assert.deepEqual(
       registrations.map(({ tool }) => tool.name).sort(),
       expectedNames,
@@ -141,6 +146,23 @@ describe('FlyLab WebMCP registration lifecycle', () => {
     assert.equal(result.structuredContent?.ok, true);
     assert.equal(result.structuredContent?.tool, 'find_fly_circuits');
     assert.equal(result.structuredContent?.summary, 'ok');
+
+    const inspector = registrations.find(({ tool }) => tool.name === 'inspect_flylab_state');
+    assert.ok(inspector);
+    const inspection = await inspector.tool.execute({}) as {
+      isError?: boolean;
+      structuredContent?: { ok?: boolean; tool?: string };
+    };
+    assert.notEqual(inspection.isError, true);
+    assert.equal(inspection.structuredContent?.ok, true);
+    assert.equal(inspection.structuredContent?.tool, 'inspect_flylab_state');
+
+    const invalidInspection = await inspector.tool.execute({ unexpected: true }) as {
+      isError?: boolean;
+      structuredContent?: { error?: { code?: string } };
+    };
+    assert.equal(invalidInspection.isError, true);
+    assert.equal(invalidInspection.structuredContent?.error?.code, 'INVALID_INPUT');
 
     let cancelledActionCalls = 0;
     actions.find_fly_circuits = async () => {
@@ -200,7 +222,7 @@ describe('FlyLab WebMCP registration lifecycle', () => {
       installFlyLabWebMCP(actions),
       /WebMCP registration failed for design_stimulation_trial: schema rejected/,
     );
-    assert.equal(registrationSignals.length, 3);
+    assert.equal(registrationSignals.length, 4);
     assert.equal(new Set(registrationSignals).size, 1);
     assert.ok(registrationSignals.every((signal) => signal.aborted));
   });

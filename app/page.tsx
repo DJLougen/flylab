@@ -31,6 +31,7 @@ import {
   FlyLabDomainError,
   installFlyLabWebMCP,
   prepareCancellableCommit,
+  type FlyLabActionActor,
   type FlyLabToolAction,
 } from '@/lib/webmcp';
 import {
@@ -41,6 +42,7 @@ import {
   type EvidenceBundleMetadata,
   type EvidenceExportEnvelope,
 } from '@/lib/evidence-export';
+import { buildFlyLabAgentContext, type FlyLabAgentSnapshot } from '@/lib/agent-context';
 
 type Stage = 'discover' | 'hypothesize' | 'design' | 'run' | 'analyze' | 'continue' | 'saved';
 
@@ -52,6 +54,9 @@ interface ActivityItem {
   title: string;
   detail: string;
   status: 'complete' | 'running' | 'waiting';
+  actor?: FlyLabActionActor | 'system';
+  toolName?: string;
+  revision?: number;
 }
 
 interface LabState {
@@ -87,18 +92,11 @@ const initialState: LabState = {
       title: 'Laboratory ready',
       detail: 'Waiting for a behavior goal or a WebMCP tool call.',
       status: 'waiting',
+      actor: 'system',
+      revision: 1,
     },
   ],
 };
-
-const stages: Array<{ id: Exclude<Stage, 'saved'>; label: string }> = [
-  { id: 'discover', label: 'Discover' },
-  { id: 'hypothesize', label: 'Hypothesize' },
-  { id: 'design', label: 'Design' },
-  { id: 'run', label: 'Run' },
-  { id: 'analyze', label: 'Analyze' },
-  { id: 'continue', label: 'Continue' },
-];
 
 const provenanceMeta: Record<ProvenanceLabel, { label: string; short: string }> = {
   measured: { label: 'Measured', short: 'M' },
@@ -136,6 +134,25 @@ function stringArrayInput(input: Record<string, unknown>, key: string) {
   return Array.isArray(input[key]) ? (input[key] as unknown[]).filter((value): value is string => typeof value === 'string') : [];
 }
 
+function agentSnapshot(current: LabState, simulationRunning: boolean, nextTrialBudget: number): FlyLabAgentSnapshot {
+  return {
+    revision: current.revision,
+    stage: current.stage,
+    goal: current.goal,
+    simulationRunning,
+    selectedCircuitId: current.selectedCircuitId,
+    hypothesisId: current.hypothesis?.id ?? null,
+    experimentId: current.experiment?.id ?? null,
+    experimentApproved: Boolean(current.experiment?.approved),
+    conditionIds: current.experiment?.conditions.map((condition) => condition.id) ?? [],
+    batchId: current.batch?.id ?? null,
+    analysisIds: current.analyses.map((analysis) => analysis.id),
+    comparisonId: current.comparison?.id ?? null,
+    bundleId: current.bundle?.id ?? null,
+    nextTrialBudget,
+  };
+}
+
 export default function Home() {
   const [lab, setLab] = useState<LabState>(initialState);
   const labRef = useRef(lab);
@@ -159,17 +176,32 @@ export default function Home() {
     return next;
   }, []);
 
-  const pushActivity = useCallback((current: LabState, item: Omit<ActivityItem, 'id'>) => ({
+  const pushActivity = useCallback((current: LabState, item: Omit<ActivityItem, 'id' | 'revision'>) => ({
     ...current,
     revision: current.revision + 1,
     activity: [
-      { ...item, id: `activity_${current.revision + 1}_${stableHash(item)}` },
+      { ...item, revision: current.revision + 1, id: `activity_${current.revision + 1}_${stableHash(item)}` },
       ...current.activity.map((entry) => entry.status === 'running' ? { ...entry, status: 'complete' as const } : entry),
     ].slice(0, 5),
   }), []);
 
   const actions = useMemo<Record<string, FlyLabToolAction>>(() => ({
-    find_fly_circuits: async (input) => {
+    inspect_flylab_state: async () => {
+      const current = labRef.current;
+      const agentContext = buildFlyLabAgentContext(agentSnapshot(
+        current,
+        Boolean(activeSimulationControllerRef.current),
+        autoBudget,
+      ));
+      return {
+        summary: `FlyLab is ${agentContext.agent_status}; ${agentContext.next_tool ? `next call ${agentContext.next_tool}` : agentContext.next_action.reason}`,
+        data: { agent_context: agentContext },
+        provenance: [],
+        stateRevision: current.revision,
+      };
+    },
+
+    find_fly_circuits: async (input, { actor }) => {
       const query = stringInput(input, 'query').toLowerCase();
       const behavior = stringInput(input, 'behavior', 'any');
       const requestedLabels = stringArrayInput(input, 'evidence_labels');
@@ -188,11 +220,20 @@ export default function Home() {
       const next = commit((current) => pushActivity({
         ...current,
         stage: matches.length ? 'hypothesize' : 'discover',
-        selectedCircuitId: matches[0]?.id ?? current.selectedCircuitId,
+        selectedCircuitId: matches[0]?.id ?? null,
+        hypothesis: matches[0]?.id === current.selectedCircuitId ? current.hypothesis : null,
+        experiment: matches[0]?.id === current.selectedCircuitId ? current.experiment : null,
+        batch: matches[0]?.id === current.selectedCircuitId ? current.batch : null,
+        analyses: matches[0]?.id === current.selectedCircuitId ? current.analyses : [],
+        comparison: matches[0]?.id === current.selectedCircuitId ? current.comparison : null,
+        bundle: matches[0]?.id === current.selectedCircuitId ? current.bundle : null,
+        evidenceExport: matches[0]?.id === current.selectedCircuitId ? current.evidenceExport : null,
       }, {
         title: matches.length ? 'Circuit evidence found' : 'No curated circuit matched',
         detail: matches.length ? `MDN selected with ${evidence.length} source-backed evidence records.` : 'Try MDN, backward walking, or retreat.',
         status: 'complete',
+        actor,
+        toolName: 'find_fly_circuits',
       }));
       setNotice(matches.length ? 'MDN is highlighted. The next step is a falsifiable hypothesis.' : 'No match in the bounded challenge catalog.');
       return {
@@ -208,13 +249,26 @@ export default function Home() {
           },
           dataset_versions: DATASET_MANIFEST,
           coverage_warning: 'FlyLab challenge release currently exposes the validated adult MDN vertical slice.',
+          next_action: matches.length
+            ? {
+                kind: 'tool',
+                name: 'draft_fly_hypothesis',
+                callable: true,
+                input_refs: { circuit_id: matches[0].id, evidence_ids: evidence.map((record) => record.id) },
+              }
+            : {
+                kind: 'tool',
+                name: 'find_fly_circuits',
+                callable: true,
+                reason: 'Try MDN, backward walking, or retreat within the bounded catalog.',
+              },
         },
         provenance: [...new Set(evidence.map((record) => record.provenance))],
         stateRevision: next.revision,
       };
     },
 
-    draft_fly_hypothesis: async (input) => {
+    draft_fly_hypothesis: async (input, { actor }) => {
       const circuitId = stringInput(input, 'circuit_id');
       const circuit = CIRCUITS.find((item) => item.id === circuitId);
       if (!circuit) throw new FlyLabDomainError('NOT_FOUND', `Circuit ${circuitId} is not in the curated catalog.`);
@@ -229,21 +283,42 @@ export default function Home() {
         evidenceIds,
         falsificationCriterion: stringInput(input, 'falsification_criterion'),
       });
-      const next = commit((current) => pushActivity({ ...current, stage: 'design', hypothesis, selectedCircuitId: circuitId }, {
+      const next = commit((current) => pushActivity({
+        ...current,
+        stage: 'design',
+        hypothesis,
+        selectedCircuitId: circuitId,
+        experiment: current.hypothesis?.id === hypothesis.id ? current.experiment : null,
+        batch: current.hypothesis?.id === hypothesis.id ? current.batch : null,
+        analyses: current.hypothesis?.id === hypothesis.id ? current.analyses : [],
+        comparison: current.hypothesis?.id === hypothesis.id ? current.comparison : null,
+        bundle: current.hypothesis?.id === hypothesis.id ? current.bundle : null,
+        evidenceExport: current.hypothesis?.id === hypothesis.id ? current.evidenceExport : null,
+      }, {
         title: 'Hypothesis drafted',
         detail: 'The claim is marked as an agent hypothesis and remains editable.',
         status: 'complete',
+        actor,
+        toolName: 'draft_fly_hypothesis',
       }));
       setNotice('Hypothesis created without upgrading it to measured evidence.');
       return {
         summary: 'Created an editable, falsifiable MDN hypothesis.',
-        data: { hypothesis, next_actions: ['design_stimulation_trial'] },
+        data: {
+          hypothesis,
+          next_action: {
+            kind: 'tool',
+            name: 'design_stimulation_trial',
+            callable: true,
+            input_refs: { hypothesis_id: hypothesis.id, target_circuit_id: hypothesis.circuitId },
+          },
+        },
         provenance: ['agent_hypothesized'],
         stateRevision: next.revision,
       };
     },
 
-    design_stimulation_trial: async (input) => {
+    design_stimulation_trial: async (input, { actor }) => {
       const current = labRef.current;
       if (!current.hypothesis || current.hypothesis.id !== stringInput(input, 'hypothesis_id')) {
         throw new FlyLabDomainError('NOT_FOUND', 'Create or select the referenced hypothesis first.');
@@ -278,24 +353,65 @@ export default function Home() {
         title: 'Controlled trial designed',
         detail: `${experiment.conditions.length} arms · ${experiment.replicates} replicates each · awaiting human approval.`,
         status: 'waiting',
+        actor,
+        toolName: 'design_stimulation_trial',
       }));
       setSelectedConditionId(experiment.conditions.find((condition) => condition.laterality === experiment.primaryLaterality)?.id ?? experiment.conditions[0].id);
       setNotice('Protocol is ready for human review. The agent cannot run it until you approve.');
       return {
         summary: 'Created a controlled MDN perturbation experiment that requires human approval.',
-        data: { experiment, approval_required: true, next_actions: ['human_approval', 'run_fly_simulation'] },
+        data: {
+          experiment,
+          approval_required: true,
+          agent_status: 'waiting_for_human',
+          blocked_by: 'human_approval',
+          agent_actionable: false,
+          human_gate: {
+            id: 'approve_experiment',
+            status: 'required',
+            subject_experiment_id: experiment.id,
+            blocks_tool: 'run_fly_simulation',
+            agent_can_satisfy: false,
+          },
+          next_action: {
+            kind: 'human_gate',
+            name: null,
+            callable: false,
+            blocked_by: 'human_approval',
+            input_refs: { experiment_id: experiment.id },
+          },
+        },
         provenance: ['agent_hypothesized', 'connectome_inferred'],
         stateRevision: next.revision,
       };
     },
 
-    run_fly_simulation: async (input, { signal }) => {
+    run_fly_simulation: async (input, { signal, actor }) => {
       const current = labRef.current;
       if (!current.experiment || current.experiment.id !== stringInput(input, 'experiment_id')) {
         throw new FlyLabDomainError('NOT_FOUND', 'The requested experiment does not exist in this page session.');
       }
       if (!current.experiment.approved) {
-        throw new FlyLabDomainError('APPROVAL_REQUIRED', 'A person must approve the visible protocol before the simulation can run.', true, { experiment_id: current.experiment.id });
+        throw new FlyLabDomainError('APPROVAL_REQUIRED', 'A person must approve the visible protocol before the simulation can run.', false, {
+          experiment_id: current.experiment.id,
+          state_revision: current.revision,
+          blocked_by: 'human_approval',
+          agent_actionable: false,
+          human_gate: {
+            id: 'approve_experiment',
+            status: 'required',
+            subject_experiment_id: current.experiment.id,
+            blocks_tool: 'run_fly_simulation',
+            agent_can_satisfy: false,
+          },
+          next_action: {
+            kind: 'human_gate',
+            name: null,
+            callable: false,
+            blocked_by: 'human_approval',
+            input_refs: { experiment_id: current.experiment.id },
+          },
+        });
       }
       if (current.batch?.experimentId === current.experiment.id) {
         return {
@@ -305,11 +421,7 @@ export default function Home() {
           stateRevision: current.revision,
         };
       }
-      const requestedConditionIds = stringArrayInput(input, 'condition_ids');
-      const experiment = requestedConditionIds.length
-        ? { ...current.experiment, conditions: current.experiment.conditions.filter((condition) => requestedConditionIds.includes(condition.id)) }
-        : current.experiment;
-      if (!experiment.conditions.length) throw new FlyLabDomainError('NOT_FOUND', 'No requested condition IDs belong to this experiment.');
+      const experiment = current.experiment;
       if (activeSimulationControllerRef.current) {
         throw new FlyLabDomainError('SIMULATION_UNAVAILABLE', 'A FlyLab simulation batch is already running.', true);
       }
@@ -323,6 +435,8 @@ export default function Home() {
         title: 'Simulation batch running',
         detail: `${experiment.conditions.length * experiment.replicates} deterministic virtual trials are being evaluated.`,
         status: 'running',
+        actor,
+        toolName: 'run_fly_simulation',
       }));
       setNotice('Running the seeded FlyLab model. All resulting claims remain simulation predictions.');
       let completed: { batch: SimulationBatch; stateRevision: number };
@@ -338,6 +452,8 @@ export default function Home() {
               title: 'Simulation batch complete',
               detail: `${batch.conditionRuns.reduce((count, run) => count + run.replicates.length, 0)} runs · ${batch.runHash}`,
               status: 'complete',
+              actor,
+              toolName: 'run_fly_simulation',
             }));
             return { batch, stateRevision: next.revision };
           },
@@ -348,6 +464,8 @@ export default function Home() {
           title: 'Simulation cancelled',
           detail: 'No completed batch or result record was committed.',
           status: 'waiting',
+          actor,
+          toolName: 'run_fly_simulation',
         }));
         setNotice('Simulation cancelled. No results were committed.');
         throw error;
@@ -363,13 +481,17 @@ export default function Home() {
       setNotice('Simulation complete. Inspect the replay, then quantify the behavior.');
       return {
         summary: 'Completed the approved deterministic simulation batch.',
-        data: { ...batch, boundary: MODEL_MANIFEST.boundary, next_actions: ['analyze_fly_behavior'] },
+        data: {
+          ...batch,
+          boundary: MODEL_MANIFEST.boundary,
+          next_action: { kind: 'tool', name: 'analyze_fly_behavior', callable: true, input_refs: { batch_id: batch.id } },
+        },
         provenance: ['simulation_predicted'],
         stateRevision,
       };
     },
 
-    analyze_fly_behavior: async (input) => {
+    analyze_fly_behavior: async (input, { actor }) => {
       const current = labRef.current;
       if (!current.batch || current.batch.id !== stringInput(input, 'batch_id')) {
         throw new FlyLabDomainError('INCOMPLETE_BATCH', 'Run the referenced simulation batch before analysis.');
@@ -383,21 +505,30 @@ export default function Home() {
         });
       }
       const analysis = analyzeBatch(current.batch, metrics, analysisStartMs, analysisEndMs);
-      const next = commit((state) => pushActivity({ ...state, stage: 'continue', analyses: [analysis] }, {
+      const next = commit((state) => pushActivity({
+        ...state,
+        stage: 'continue',
+        analyses: [...state.analyses.filter((item) => item.id !== analysis.id), analysis],
+      }, {
         title: 'Behavior quantified',
         detail: `${metrics.length} preregistered metrics analyzed across ${analysis.conditions.length} conditions.`,
         status: 'complete',
+        actor,
+        toolName: 'analyze_fly_behavior',
       }));
       setNotice('Behavior summaries are derived from simulated trajectories, not measured flies.');
       return {
         summary: 'Computed method-versioned behavioral metrics from the completed simulation batch.',
-        data: { analysis, next_actions: ['compare_fly_trials'] },
+        data: {
+          analysis,
+          next_action: { kind: 'tool', name: 'compare_fly_trials', callable: true, input_refs: { analysis_ids: [analysis.id] } },
+        },
         provenance: ['derived', 'simulation_predicted'],
         stateRevision: next.revision,
       };
     },
 
-    compare_fly_trials: async (input) => {
+    compare_fly_trials: async (input, { actor }) => {
       const ids = stringArrayInput(input, 'analysis_ids');
       const analyses = labRef.current.analyses.filter((analysis) => ids.includes(analysis.id));
       if (!analyses.length || analyses.length !== ids.length) {
@@ -414,17 +545,23 @@ export default function Home() {
         title: 'Next experiment proposed',
         detail: 'Conditions ranked; a bounded model-drive follow-up awaits human direction.',
         status: 'waiting',
+        actor,
+        toolName: 'compare_fly_trials',
       }));
       setNotice('The agent selected a next experiment but did not run it automatically.');
       return {
         summary: 'Ranked simulated conditions and proposed one bounded follow-up experiment.',
-        data: { comparison, execution_authorized: false, next_actions: ['save_fly_evidence', 'human_review'] },
+        data: {
+          comparison,
+          execution_authorized: false,
+          next_action: { kind: 'tool', name: 'save_fly_evidence', callable: true },
+        },
         provenance: ['derived', 'simulation_predicted', 'agent_hypothesized'],
         stateRevision: next.revision,
       };
     },
 
-    save_fly_evidence: async (input) => {
+    save_fly_evidence: async (input, { actor, signal }) => {
       const current = labRef.current;
       const hypothesisId = stringInput(input, 'hypothesis_id');
       const experimentId = stringInput(input, 'experiment_id');
@@ -450,45 +587,60 @@ export default function Home() {
         datasets: DATASET_MANIFEST,
         model: MODEL_MANIFEST,
       };
-      const manifestHash = await sha256(payload);
-      const provenanceCounts: Record<ProvenanceLabel, number> = {
-        measured: 0,
-        derived: 0,
-        connectome_inferred: 0,
-        simulation_predicted: 0,
-        agent_hypothesized: 0,
-      };
-      EVIDENCE.forEach((record) => { provenanceCounts[record.provenance] += 1; });
-      provenanceCounts.agent_hypothesized += 1;
-      provenanceCounts.simulation_predicted += 1;
-      current.analyses.forEach((record) => record.provenance.forEach((kind) => { provenanceCounts[kind] += 1; }));
-      provenanceCounts.derived += 1;
-      provenanceCounts.simulation_predicted += 1;
-      provenanceCounts.agent_hypothesized += 1;
-      const bundle: EvidenceBundleMetadata = {
-        id: `evidence_${stableHash({ manifestHash, title: payload.title })}`,
-        title: payload.title,
-        manifestHash,
-        savedAt: new Date().toISOString(),
-        includedIds: [...SOURCES.map((record) => record.id), ...EVIDENCE.map((record) => record.id), hypothesisId, experimentId, current.batch.id, ...analysisIds, current.comparison.id],
-        provenanceCounts,
-        boundary: 'Simulation evidence bundle; not a new biological experiment.',
-      };
-      const evidenceExport = createEvidenceExportEnvelope(bundle, payload);
-      const serializedExport = serializeEvidenceExport(evidenceExport);
-      try { localStorage.setItem(`flylab:${bundle.id}`, serializedExport); } catch { /* local persistence is best effort */ }
-      const next = commit((state) => pushActivity({ ...state, stage: 'saved', bundle, evidenceExport }, {
-        title: 'Evidence bundle saved',
-        detail: `${bundle.id} · portable JSON ready in the evidence ledger.`,
-        status: 'complete',
-      }));
-      setSelectedEvidenceId(bundle.id);
-      setNotice('Evidence bundle saved. Download the portable JSON from the evidence ledger.');
+      const completed = await prepareCancellableCommit({
+        signal,
+        prepare: async () => {
+          const manifestHash = await sha256(payload);
+          const provenanceCounts: Record<ProvenanceLabel, number> = {
+            measured: 0,
+            derived: 0,
+            connectome_inferred: 0,
+            simulation_predicted: 0,
+            agent_hypothesized: 0,
+          };
+          EVIDENCE.forEach((record) => { provenanceCounts[record.provenance] += 1; });
+          provenanceCounts.agent_hypothesized += 1;
+          provenanceCounts.simulation_predicted += 1;
+          current.analyses.forEach((record) => record.provenance.forEach((kind) => { provenanceCounts[kind] += 1; }));
+          provenanceCounts.derived += 1;
+          provenanceCounts.simulation_predicted += 1;
+          provenanceCounts.agent_hypothesized += 1;
+          const bundle: EvidenceBundleMetadata = {
+            id: `evidence_${stableHash({ manifestHash, title: payload.title })}`,
+            title: payload.title,
+            manifestHash,
+            savedAt: new Date().toISOString(),
+            includedIds: [...SOURCES.map((record) => record.id), ...EVIDENCE.map((record) => record.id), hypothesisId, experimentId, current.batch.id, ...analysisIds, current.comparison.id],
+            provenanceCounts,
+            boundary: 'Simulation evidence bundle; not a new biological experiment.',
+          };
+          const evidenceExport = createEvidenceExportEnvelope(bundle, payload);
+          return { bundle, evidenceExport, serializedExport: serializeEvidenceExport(evidenceExport) };
+        },
+        commit: ({ bundle, evidenceExport, serializedExport }) => {
+          try { localStorage.setItem(`flylab:${bundle.id}`, serializedExport); } catch { /* local persistence is best effort */ }
+          const next = commit((state) => pushActivity({ ...state, stage: 'saved', bundle, evidenceExport }, {
+            title: 'Evidence bundle saved',
+            detail: `${bundle.id} · portable JSON ready in the evidence ledger.`,
+            status: 'complete',
+            actor,
+            toolName: 'save_fly_evidence',
+          }));
+          setSelectedEvidenceId(bundle.id);
+          setNotice('Evidence bundle saved. Download the portable JSON from the evidence ledger.');
+          return { bundle, stateRevision: next.revision };
+        },
+      });
       return {
         summary: 'Saved a manifest-hashed, provenance-rich FlyLab evidence snapshot.',
-        data: { bundle, local_reference: bundle.id, storage_scope: 'best-effort browser origin' },
+        data: {
+          bundle: completed.bundle,
+          local_reference: completed.bundle.id,
+          storage_scope: 'best-effort browser origin',
+          next_action: { kind: 'complete', name: null, callable: false },
+        },
         provenance: ['measured', 'derived', 'connectome_inferred', 'simulation_predicted', 'agent_hypothesized'],
-        stateRevision: next.revision,
+        stateRevision: completed.stateRevision,
       };
     },
   }), [autoBudget, commit, pushActivity]);
@@ -559,10 +711,10 @@ export default function Home() {
     return () => window.clearInterval(timer);
   }, [playing, playbackDurationMs]);
 
-  const invoke = useCallback(async (name: string, input: Record<string, unknown>) => {
+  const invoke = useCallback(async (name: string, input: Record<string, unknown>, actor: FlyLabActionActor = 'human_ui') => {
     const controller = new AbortController();
     try {
-      return await actions[name](input, { signal: controller.signal });
+      return await actions[name](input, { signal: controller.signal, actor });
     } catch (error) {
       setNotice(error instanceof Error ? error.message : 'The action could not complete.');
       return null;
@@ -575,7 +727,7 @@ export default function Home() {
       behavior: 'backward_walking',
       evidence_labels: ['measured', 'derived', 'connectome_inferred'],
       limit: 5,
-    });
+    }, 'guided_example');
     if (!found) return;
     const hypothesisResult = await invoke('draft_fly_hypothesis', {
       circuit_id: 'circuit_mdn_adult',
@@ -584,7 +736,7 @@ export default function Home() {
       perturbation: 'activate',
       evidence_ids: ['E-MDN-ACTIVATION-001', 'E-MDN-LATERALITY-006', 'E-BANC-PATH-003'],
       falsification_criterion: 'The model shows no increase in reverse initiation or backward distance relative to both controls.',
-    });
+    }, 'guided_example');
     if (!hypothesisResult || !labRef.current.hypothesis) return;
     await invoke('design_stimulation_trial', {
       hypothesis_id: labRef.current.hypothesis.id,
@@ -599,7 +751,7 @@ export default function Home() {
       include_baseline: true,
       include_sham_control: true,
       seed: 73142,
-    });
+    }, 'guided_example');
   }, [invoke]);
 
   const approveExperiment = useCallback(() => {
@@ -612,6 +764,7 @@ export default function Home() {
       title: 'Protocol approved by human',
       detail: 'The agent may now execute this exact experiment and seed manifest.',
       status: 'complete',
+      actor: 'human_ui',
     }));
     setNotice('Approved. The simulation tool can now run the exact visible protocol.');
     return next;
@@ -665,6 +818,23 @@ export default function Home() {
     });
   }, [invoke]);
 
+  const agentBrief = useMemo(() => [
+    `Mission: ${lab.goal}`,
+    '',
+    'Use FlyLab site tools on the currently open page. Begin with inspect_flylab_state, then use find_fly_circuits → draft_fly_hypothesis → design_stimulation_trial. Stop for person approval; approval is intentionally not a site tool.',
+    '',
+    'After approval, use run_fly_simulation → analyze_fly_behavior → compare_fly_trials → save_fly_evidence. Treat wiring as structural inference, trajectories as simulation predictions, calculated metrics as derived from simulation, and follow-ups as proposals only. Do not execute a follow-up automatically.',
+  ].join('\n'), [lab.goal]);
+
+  const copyAgentBrief = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText(agentBrief);
+      setNotice('Agent brief copied. Give it to the agent while this FlyLab page remains open.');
+    } catch {
+      setNotice('Clipboard access was unavailable. The agent brief remains visible in the inspector.');
+    }
+  }, [agentBrief]);
+
   const downloadEvidence = useCallback(() => {
     const current = labRef.current;
     if (!current.bundle || !current.evidenceExport) {
@@ -696,6 +866,7 @@ export default function Home() {
         title: 'Human edited protocol',
         detail: `${field} updated; prior approval and downstream runs were cleared.`,
         status: 'waiting',
+        actor: 'human_ui',
       });
     });
     setNotice('Protocol changed. Review and approve the revised experiment before running.');
@@ -703,7 +874,7 @@ export default function Home() {
 
   const primaryAction = useMemo(() => {
     if (simulationRunning) return { label: 'Cancel running simulation', action: cancelRunningSimulation, detail: 'discard prepared work · keep protocol approved' };
-    if (!lab.hypothesis || !lab.experiment) return { label: 'Ask agent to investigate', action: investigate, detail: 'research → hypothesis → protocol' };
+    if (!lab.hypothesis || !lab.experiment) return { label: 'Run guided example', action: investigate, detail: 'local walkthrough using the same validated actions' };
     if (!lab.experiment.approved) return { label: 'Approve experiment', action: approveExperiment, detail: `${lab.experiment.conditions.length} arms · ${lab.experiment.replicates} each` };
     if (!lab.batch) return { label: 'Run MDN-inspired drive', action: runExperiment, detail: `seed ${lab.experiment.seed.toLocaleString()}` };
     if (!lab.analyses.length) return { label: 'Analyze behavior', action: analyzeExperiment, detail: '5 preregistered metrics' };
@@ -728,7 +899,6 @@ export default function Home() {
     return activeCondition.trajectory[Math.min(activeCondition.trajectory.length - 1, Math.floor(playhead * (activeCondition.trajectory.length - 1)))];
   }, [activeCondition, playhead]);
 
-  const stageIndex = stages.findIndex((stage) => stage.id === (lab.stage === 'saved' ? 'continue' : lab.stage));
   const selectedBundle = lab.bundle?.id === selectedEvidenceId ? lab.bundle : null;
   const selectedEvidence = EVIDENCE.find((record) => record.id === selectedEvidenceId) ?? (selectedBundle ? null : EVIDENCE[0]);
   const selectedSources = selectedEvidence ? SOURCES.filter((source) => selectedEvidence.sourceIds.includes(source.id)) : [];
@@ -736,10 +906,18 @@ export default function Home() {
   const bestResult = analysis?.conditions.find((condition) => condition.conditionId === 'condition_bilateral') ?? analysis?.conditions[0] ?? null;
   const siteToolStatus = {
     checking: 'checking site tools',
-    active: '7 tools live',
+    active: '8 tools live',
     unsupported: 'browser API unavailable',
     failed: 'tool registration failed',
   }[webmcpStatus];
+  const agentContext = buildFlyLabAgentContext(agentSnapshot(lab, simulationRunning, autoBudget));
+  const agentNextDisplay = agentContext.next_tool
+    ?? (agentContext.next_action.blocked_by ? `blocked · ${agentContext.next_action.blocked_by}` : agentContext.agent_status);
+  const humanGate = !lab.experiment
+    ? 'required before any simulation'
+    : lab.experiment.approved
+      ? 'approved for this exact protocol'
+      : 'waiting for protocol approval';
 
   return (
     <main className="lab-shell">
@@ -747,7 +925,7 @@ export default function Home() {
         <a className="brand" href="#workspace" aria-label="FlyLab home">
           <span className="brand-mark" aria-hidden="true"><i /><i /><i /></span>
           <span>FlyLab</span>
-          <small>virtual neuroethology</small>
+          <small>agent-native neuroethology</small>
         </a>
         <div className="top-status" aria-label="Laboratory versions">
           <span className="live-dot" /> Adult · BANC v888 · model {MODEL_MANIFEST.version}
@@ -757,25 +935,67 @@ export default function Home() {
         </button>
       </header>
 
+      <section
+        className="agent-bridge"
+        aria-label="WebMCP agent control plane"
+        data-state-revision={lab.revision}
+        data-agent-status={agentContext.agent_status}
+        data-next-action={agentContext.next_tool ?? ''}
+      >
+        <div className="agent-bridge-identity">
+          <span><i /> WebMCP site tools</span>
+          <strong>{siteToolStatus}</strong>
+        </div>
+        <div>
+          <span>Shared page session</span>
+          <strong>r{lab.revision} · {agentContext.agent_status}</strong>
+        </div>
+        <div>
+          <span>Next agent action</span>
+          <code>{agentNextDisplay}</code>
+        </div>
+        <div className="agent-bridge-gate">
+          <span>Person-only checkpoint</span>
+          <strong>{humanGate}</strong>
+        </div>
+      </section>
+
       <section className="workspace" id="workspace">
         <aside className="workflow-rail">
           <div className="goal-block">
-            <p className="eyebrow">Behavior objective</p>
+            <p className="eyebrow">Shared agent mission</p>
             <label className="sr-only" htmlFor="behavior-goal">Behavior goal</label>
             <textarea
               id="behavior-goal"
               value={lab.goal}
-              onChange={(event) => commit((current) => ({ ...current, goal: event.target.value, revision: current.revision + 1 }))}
+              onChange={(event) => commit((current) => ({
+                ...current,
+                revision: current.revision + 1,
+                stage: 'discover',
+                goal: event.target.value,
+                selectedCircuitId: null,
+                hypothesis: null,
+                experiment: null,
+                batch: null,
+                analyses: [],
+                comparison: null,
+                bundle: null,
+                evidenceExport: null,
+              }))}
               rows={3}
             />
-            <p className="goal-hint">The agent searches curated evidence before making a prediction.</p>
+            <p className="goal-hint">Readable through <code>inspect_flylab_state</code>. The agent starts from cited evidence, not screen coordinates.</p>
           </div>
 
-          <nav className="stage-list" aria-label="Experiment workflow">
-            {stages.map((stage, index) => (
-              <div className={index < stageIndex ? 'done' : index === stageIndex ? 'active' : ''} key={stage.id}>
-                <span>{String(index + 1).padStart(2, '0')}</span>
-                <strong>{stage.label}</strong>
+          <nav className="agent-run-graph" aria-label="Agent tool pipeline">
+            <div className="section-title-row agent-run-heading">
+              <p className="eyebrow">Agent run graph</p>
+              <span>{agentContext.pipeline.filter((step) => step.status === 'complete').length}/{agentContext.pipeline.length - 1} complete</span>
+            </div>
+            {agentContext.pipeline.map((step, index) => (
+              <div className={`agent-run-step ${step.status} ${step.kind}`} title={step.boundary} key={step.name}>
+                <span>{step.kind === 'human_gate' ? 'H' : String(index).padStart(2, '0')}</span>
+                <div><strong>{step.title}</strong><code>{step.name}</code></div>
                 <i />
               </div>
             ))}
@@ -789,7 +1009,11 @@ export default function Home() {
             {lab.activity.slice(0, 3).map((item) => (
               <article className={`activity-row ${item.status}`} key={item.id}>
                 <i />
-                <div><strong>{item.title}</strong><p>{item.detail}</p></div>
+                <div>
+                  <strong>{item.title}</strong>
+                  {item.toolName && <small className="activity-contract"><code>{item.toolName}</code><span>{item.actor?.replace('_', ' ')} · r{item.revision}</span></small>}
+                  <p>{item.detail}</p>
+                </div>
               </article>
             ))}
           </section>
@@ -805,7 +1029,7 @@ export default function Home() {
         <section className="main-stage" aria-labelledby="arena-title">
           <div className="panel-heading">
             <div>
-              <p className="eyebrow">Shared simulation arena</p>
+              <p className="eyebrow">Shared state inspector</p>
               <h1 id="arena-title">{arenaView === 'circuit' ? <>BANC v888 circuit <span>· Three.js reconstruction</span></> : <>Open-field trial <span>· Three.js 3D fly</span></>}</h1>
             </div>
             <div className="view-switch" aria-label="Arena view">
@@ -903,6 +1127,22 @@ export default function Home() {
         </section>
 
         <aside className="inspector-panel">
+          <section className="agent-context-card" aria-labelledby="agent-brief-title">
+            <div className="section-title-row"><p className="eyebrow" id="agent-brief-title">Agent brief</p><span>{agentContext.agent_status}</span></div>
+            <h2>Agent-operable. Human-auditable. Scientifically bounded.</h2>
+            <p>Site-tool calls and person edits update this same open page session. The 3D views let a person inspect what changed.</p>
+            <div className="agent-next-card">
+              <span>{agentContext.next_tool ? 'Recommended site tool' : 'Agent is blocked'}</span>
+              <code>{agentNextDisplay}</code>
+              <small>{agentContext.next_action.reason}</small>
+            </div>
+            <dl className="agent-artifact-ids">
+              <div><dt>State</dt><dd>r{lab.revision}</dd></div>
+              <div><dt>Experiment</dt><dd>{agentContext.artifacts.experiment_id ?? 'not created'}</dd></div>
+            </dl>
+            <button type="button" onClick={() => void copyAgentBrief()}>Copy agent mission brief</button>
+          </section>
+
           <section className="hypothesis-card">
             <div className="section-title-row"><p className="eyebrow">Current hypothesis</p><Badge kind="agent_hypothesized" /></div>
             <h2>{lab.hypothesis?.claim ?? 'A bilateral MDN-inspired model drive may increase predicted backward-walking initiation.'}</h2>
@@ -955,7 +1195,7 @@ export default function Home() {
       <footer className="lab-footer" aria-live="polite">
         <p><span className="agent-pulse" /> {notice}</p>
         <p>{lab.bundle ? `${lab.bundle.id} · ${lab.bundle.manifestHash.slice(0, 22)}…` : `state revision ${lab.revision}`}</p>
-        <div className="footer-tools"><span>{webmcpStatus === 'active' ? 'WebMCP active' : 'WebMCP contracts wired'}</span><span>7 scientific tools</span></div>
+        <div className="footer-tools"><span>{webmcpStatus === 'active' ? 'WebMCP active' : 'WebMCP contracts wired'}</span><span>8 agent tools</span></div>
       </footer>
 
       {evidenceOpen && (

@@ -134,6 +134,8 @@ The analysis method version is `flylab.behavior-metrics.v1`. These estimates sum
 
 ## Human approval and autoresearch boundary
 
+`inspect_flylab_state` is an operational, read-only recovery tool. It reports the current open-page revision, fixed artifact references, person-selected proposal budget, approval status, and exactly one valid next action. It returns no scientific provenance, cannot approve a protocol, cannot run an experiment, and must not be interpreted as evidence about a fly.
+
 `design_stimulation_trial` always creates an unapproved experiment. `run_fly_simulation` refuses to run it with `APPROVAL_REQUIRED` until a person clicks the visible approval control.
 
 Human edits to activation level, duration, or replicate count:

@@ -6,6 +6,8 @@ The v6 challenge demo is a generated, narrated sequence of 12 FlyLab interface c
 
 The prior local package remains technically verified at **2:15.821**, below the challenge's three-minute limit. Do not upload it. Public YouTube upload and Devpost submission remain pending until the corrected interface has a regenerated, verified video.
 
+The replacement capture must begin with `00-eight-tools-live.png`, show the new agent control plane, and describe the current surface as **one read-only state inspector plus seven scientific workflow actions**. It must visibly show `inspect_flylab_state` returning the page revision, artifact IDs, person-only blocker, and exactly one next action before discovery and after approval. The seven-tool wording below is retained only because it documents the prior v6 artifact exactly.
+
 ## Delivery assets
 
 | Asset | Path | Purpose |

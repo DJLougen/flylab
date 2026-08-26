@@ -32,9 +32,11 @@ export interface ToolActionResult {
   stateRevision: number;
 }
 
+export type FlyLabActionActor = 'webmcp_agent' | 'human_ui' | 'guided_example';
+
 export type FlyLabToolAction = (
   input: Record<string, unknown>,
-  context: { signal: AbortSignal },
+  context: { signal: AbortSignal; actor: FlyLabActionActor },
 ) => Promise<ToolActionResult>;
 
 function throwIfCancelled(signal: AbortSignal) {
@@ -97,10 +99,17 @@ const objectSchema = (properties: Record<string, unknown>, required: string[] = 
 
 export const flyLabToolContracts = [
   {
+    name: 'inspect_flylab_state',
+    title: 'Inspect FlyLab state',
+    description: 'Read the current shared FlyLab page state before starting or resuming work. Returns the state revision, artifact IDs, exact next valid action, blockers, person-only gates, and the complete tool pipeline. It does not modify the page.',
+    annotations: { readOnlyHint: true, untrustedContentHint: true },
+    inputSchema: objectSchema({}),
+  },
+  {
     name: 'find_fly_circuits',
     title: 'Find fly circuits',
     description: "Search FlyLab's curated adult Drosophila evidence index by behavior, circuit, or neuron name. Use before drafting a hypothesis. Returns stable circuit IDs, citations, and explicit evidence labels; it does not run a simulation.",
-    annotations: { readOnlyHint: true, untrustedContentHint: true },
+    annotations: { readOnlyHint: false, untrustedContentHint: true },
     inputSchema: objectSchema({
       query: { type: 'string', minLength: 1, maxLength: 240, description: 'Behavior, circuit, neuron type, or scientific question to search.' },
       behavior: { type: 'string', enum: ['backward_walking', 'forward_walking', 'turning', 'escape', 'grooming', 'any'], default: 'any' },
@@ -149,7 +158,6 @@ export const flyLabToolContracts = [
     annotations: { readOnlyHint: false, untrustedContentHint: false },
     inputSchema: objectSchema({
       experiment_id: { type: 'string', minLength: 1, maxLength: 100 },
-      condition_ids: { type: 'array', items: { type: 'string', minLength: 1, maxLength: 100 }, minItems: 1, maxItems: 8, uniqueItems: true },
     }, ['experiment_id']),
   },
   {
@@ -174,7 +182,7 @@ export const flyLabToolContracts = [
       objective_metric: { type: 'string', enum: metricEnum },
       objective: { type: 'string', enum: ['maximize', 'minimize', 'target'] },
       target_value: { type: 'number' },
-      next_experiment_budget: { type: 'integer', minimum: 1, maximum: 20, default: 5 },
+      next_experiment_budget: { type: 'integer', minimum: 1, maximum: 20, description: 'If omitted, uses the person-selected budget shown by inspect_flylab_state.' },
     }, ['analysis_ids', 'objective_metric', 'objective']),
   },
   {
@@ -243,6 +251,8 @@ export function validateToolInput(toolName: string, rawInput: unknown): Record<s
     throw new FlyLabDomainError('INVALID_INPUT', 'Tool input contains unsupported fields.', false, { fields: unexpected });
   }
   switch (toolName) {
+    case 'inspect_flylab_state':
+      break;
     case 'find_fly_circuits':
       requireString(input, 'query', 1, 240);
       if (input.behavior !== undefined) requireEnum(input, 'behavior', [...behaviorEnum, 'any']);
@@ -264,7 +274,6 @@ export function validateToolInput(toolName: string, rawInput: unknown): Record<s
       break;
     case 'run_fly_simulation':
       requireString(input, 'experiment_id', 1, 100);
-      if (input.condition_ids !== undefined) requireStringArray(input, 'condition_ids');
       break;
     case 'analyze_fly_behavior':
       requireString(input, 'batch_id', 1, 100); requireStringArray(input, 'metrics', 1, 5, metricEnum);
@@ -357,7 +366,7 @@ export async function installFlyLabWebMCP(actions: Record<string, FlyLabToolActi
               const input = validateToolInput(contract.name, rawInput);
               const action = actions[contract.name];
               if (!action) throw new FlyLabDomainError('SIMULATION_UNAVAILABLE', `${contract.name} is not connected.`);
-              const result = await action(input, { signal });
+              const result = await action(input, { signal, actor: 'webmcp_agent' });
               throwIfCancelled(signal);
               return toolSuccess(contract.name, result);
             } catch (error) {

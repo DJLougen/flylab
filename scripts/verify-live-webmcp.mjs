@@ -11,6 +11,7 @@ const expectedToolNames = [
   'design_stimulation_trial',
   'draft_fly_hypothesis',
   'find_fly_circuits',
+  'inspect_flylab_state',
   'run_fly_simulation',
   'save_fly_evidence',
 ];
@@ -397,7 +398,12 @@ function successfulEnvelope(response, toolName) {
   return envelope;
 }
 
-async function runFullWorkflow(tools, discoveryResponse) {
+async function inspectAgentContext(tools) {
+  const response = await invokeRegisteredTool(tools, 'inspect_flylab_state', {});
+  return successfulEnvelope(response, 'inspect_flylab_state').data.agent_context;
+}
+
+async function runFullWorkflow(tools, discoveryResponse, initialContext) {
   const discovery = successfulEnvelope(discoveryResponse, 'find_fly_circuits');
   const circuit = discovery.data.circuits[0];
   const evidenceIds = discovery.data.evidence
@@ -432,6 +438,13 @@ async function runFullWorkflow(tools, discoveryResponse) {
   });
   const designed = successfulEnvelope(designedResponse, 'design_stimulation_trial');
   const experimentId = designed.data.experiment.id;
+  const lockedContext = await inspectAgentContext(tools);
+  if (lockedContext.agent_status !== 'waiting_for_human'
+    || lockedContext.next_tool !== null
+    || lockedContext.next_action?.kind !== 'human_gate'
+    || lockedContext.human_gate?.status !== 'required') {
+    throw new Error(`Inspector did not expose the person-only gate: ${JSON.stringify(lockedContext)}`);
+  }
 
   const lockedRun = await invokeRegisteredTool(tools, 'run_fly_simulation', {
     experiment_id: experimentId,
@@ -454,6 +467,11 @@ async function runFullWorkflow(tools, discoveryResponse) {
   });
   if (approval?.result?.value?.clicked !== true) {
     throw new Error(`The human-only approval control was not available: ${JSON.stringify(approval)}`);
+  }
+  const approvedContext = await inspectAgentContext(tools);
+  if (approvedContext.next_tool !== 'run_fly_simulation'
+    || approvedContext.human_gate?.status !== 'satisfied') {
+    throw new Error(`Inspector did not expose the approved run transition: ${JSON.stringify(approvedContext)}`);
   }
   await captureStage('human-approved');
 
@@ -502,6 +520,12 @@ async function runFullWorkflow(tools, discoveryResponse) {
     note: 'Automated live WebMCP verification with a DOM click at the human-only approval boundary.',
   });
   const saved = successfulEnvelope(saveResponse, 'save_fly_evidence');
+  const completedContext = await inspectAgentContext(tools);
+  if (completedContext.agent_status !== 'complete'
+    || completedContext.next_tool !== null
+    || completedContext.next_action?.kind !== 'complete') {
+    throw new Error(`Inspector did not expose workflow completion: ${JSON.stringify(completedContext)}`);
+  }
   await captureStage('evidence-saved');
 
   await sendCommand('Runtime.evaluate', {
@@ -519,6 +543,7 @@ async function runFullWorkflow(tools, discoveryResponse) {
 
   return {
     sequence: [
+      'inspect_flylab_state',
       'find_fly_circuits',
       'draft_fly_hypothesis',
       'design_stimulation_trial',
@@ -529,6 +554,12 @@ async function runFullWorkflow(tools, discoveryResponse) {
       'save_fly_evidence',
     ],
     preapproval_error: lockEnvelope.error.code,
+    inspector: {
+      initial_next_tool: initialContext.next_tool,
+      blocked_status: lockedContext.agent_status,
+      post_approval_next_tool: approvedContext.next_tool,
+      final_status: completedContext.agent_status,
+    },
     cancellation: {
       commit_boundary: 'prepare -> combined AbortSignal check -> synchronous state commit',
       abort_sources: [
@@ -578,7 +609,7 @@ try {
   let status;
   for (let attempt = 0; attempt < 40; attempt += 1) {
     status = await readRuntimeStatus();
-    if (status.status === '7 tools live') break;
+    if (status.status === '8 tools live') break;
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
 
@@ -586,7 +617,12 @@ try {
   await sendCommand('WebMCP.enable');
   const registeredTools = await toolsAdded;
   const actualToolNames = registeredTools.tools.map((tool) => tool.name).sort();
-  await captureStage('seven-tools-live');
+  await captureStage('eight-tools-live');
+  const initialContext = await inspectAgentContext(registeredTools.tools);
+  if (initialContext.next_tool !== 'find_fly_circuits'
+    || initialContext.agent_status !== 'ready') {
+    throw new Error(`Inspector did not expose the initial agent action: ${JSON.stringify(initialContext)}`);
+  }
   const response = await invokeRegisteredTool(
     registeredTools.tools,
     'find_fly_circuits',
@@ -596,7 +632,7 @@ try {
 
   const verified = status?.modelContextType === 'object'
     && status?.registerToolType === 'function'
-    && status?.status === '7 tools live'
+    && status?.status === '8 tools live'
     && status?.originAgentCluster === true
     && JSON.stringify(actualToolNames) === JSON.stringify(expectedToolNames)
     && response.status === 'Completed';
@@ -606,7 +642,7 @@ try {
   }
 
   const workflow = process.env.FLYLAB_VERIFY_WORKFLOW === '1'
-    ? await runFullWorkflow(registeredTools.tools, response)
+    ? await runFullWorkflow(registeredTools.tools, response, initialContext)
     : undefined;
 
   const report = {
@@ -614,7 +650,7 @@ try {
     url: status.location,
     browser_api: 'document.modelContext.registerTool',
     registered_tools: actualToolNames,
-    invoked_tool: 'find_fly_circuits',
+    invoked_tools: ['inspect_flylab_state', 'find_fly_circuits'],
     invocation_status: response.status,
     origin_agent_cluster: true,
     browser_user_agent: status.userAgent,

@@ -4,8 +4,8 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 
-const framesDirectory = resolve(process.env.FLYLAB_DEMO_FRAMES ?? 'outputs/demo/v6/frames');
-const outputDirectory = resolve(process.env.FLYLAB_DEMO_OUTPUT ?? 'outputs/demo/v6');
+const framesDirectory = resolve(process.env.FLYLAB_DEMO_FRAMES ?? 'outputs/demo/v7/frames');
+const outputDirectory = resolve(process.env.FLYLAB_DEMO_OUTPUT ?? 'outputs/demo/v7');
 const ffmpeg = process.env.FFMPEG_BIN ?? '/opt/homebrew/bin/ffmpeg';
 const ffprobe = process.env.FFPROBE_BIN ?? '/opt/homebrew/bin/ffprobe';
 const say = process.env.SAY_BIN ?? '/usr/bin/say';
@@ -19,8 +19,8 @@ const galleryDirectory = join(outputDirectory, 'gallery');
 
 const segments = [
   {
-    frame: '00-seven-tools-live.png',
-    narration: 'FlyLab keeps measured evidence, structural connectomes, model output, and new hypotheses visibly separate while a person and an agent share one virtual fruit-fly laboratory.',
+    frame: '00-eight-tools-live.png',
+    narration: 'FlyLab is agent-operable, human-auditable, and scientifically bounded. One read-only state inspector and seven workflow actions share the same visible fruit-fly laboratory with a person.',
   },
   {
     frame: '01-circuit-found.png',
@@ -64,7 +64,7 @@ const segments = [
   },
   {
     frame: '11-evidence-ledger.png',
-    narration: 'This is the core of FlyLab. Seven Web M C P tools let an agent explore and run a transparent virtual neuroethology workflow, while every claim retains its source and a person retains control.',
+    narration: 'This is the core of FlyLab. One inspector plus seven Web M C P workflow actions let an agent recover, explore, and run a transparent virtual neuroethology workflow while every claim keeps its source and a person keeps control.',
   },
 ];
 

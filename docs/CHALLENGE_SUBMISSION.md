@@ -12,17 +12,17 @@ FlyLab
 
 **Tagline**
 
-A source-aware virtual fruit-fly lab where people and agents design controlled experiments together without blurring evidence, simulation, and hypothesis.
+Agent-operable, human-auditable neuroethology without blurring evidence, simulation, and hypothesis.
 
 **One-sentence summary**
 
-FlyLab uses seven WebMCP tools to turn an adult MDN backward-walking question into a cited hypothesis, human-approved virtual experiment, reproducible simulation analysis, bounded next-experiment proposal, and provenance-rich evidence bundle inside one shared interface.
+FlyLab gives agents one read-only state inspector and seven WebMCP scientific actions that turn an adult MDN backward-walking question into a cited hypothesis, human-approved virtual experiment, reproducible analysis, bounded follow-up, and provenance-rich evidence bundle inside one shared page session.
 
 **Submission description**
 
-FlyLab is an agent-native virtual neuroethology lab built around a scientifically transparent adult *Drosophila* MDN backward-walking vertical slice. Instead of asking an agent to guess its way through a complex brain viewer, the site exposes seven structured scientific actions: find curated circuits, draft a falsifiable hypothesis, design controls, run an approved simulation, quantify behavior, compare trials, and save the evidence lineage.
+FlyLab is an agent-native virtual neuroethology lab built around a scientifically transparent adult *Drosophila* MDN backward-walking vertical slice. Instead of asking an agent to guess its way through a complex brain viewer, the site exposes one read-only control-plane inspector plus seven structured scientific actions: find curated circuits, draft a falsifiable hypothesis, design controls, run an approved simulation, quantify behavior, compare trials, and save the evidence lineage.
 
-The person and agent share the same laboratory state. The agent can gather cited evidence and prepare a controlled baseline/sham/bilateral/lateralized protocol, but simulation is locked until the person reviews and approves the visible parameters. If the person edits the protocol, approval and downstream results are cleared. After execution, every trajectory and metric remains labeled as a simulation prediction or a derivation from one. The agent can propose a bounded follow-up, but it cannot execute that proposal automatically.
+The person and agent share the same open-page state. `inspect_flylab_state` lets an agent recover the current revision, artifact IDs, person-selected limits, blocker, and exactly one valid next action after a person edit or interruption—without scraping the interface. The agent can gather cited evidence and prepare a controlled baseline/sham/bilateral/lateralized protocol, but simulation is locked until the person reviews and approves the visible parameters. While blocked, the inspector returns `waiting_for_human` and no callable next tool. If the person edits the protocol, approval and downstream results are cleared. After execution, every trajectory and metric remains labeled as a simulation prediction or a derivation from one. The agent can propose a bounded follow-up, but it cannot execute that proposal automatically.
 
 FlyLab's current embodiment is a deterministic reduced-order model, version `0.1.1`, with the MDN-inspired `mdn-inspired-retreat-adapter.v1`. It is not FlyGym, a complete fly brain, or a wet-lab experiment. Sources, assumptions, dataset and model versions, seeds, run IDs, analyses, limitations, and a manifest hash are saved together so a compelling result never loses its boundary. The WebMCP surface follows OpenAI's [Site tools documentation](https://learn.chatgpt.com/docs/webmcp).
 
@@ -49,22 +49,24 @@ FlyLab makes the scientific workflow itself callable. WebMCP gives the agent hig
 
 ## WebMCP implementation
 
-FlyLab registers exactly seven tools using the current `document.modelContext` API:
+FlyLab registers exactly eight tools using the current `document.modelContext` API—one read-only agent-state inspector and seven scientific workflow actions:
 
-1. `find_fly_circuits`
-2. `draft_fly_hypothesis`
-3. `design_stimulation_trial`
-4. `run_fly_simulation`
-5. `analyze_fly_behavior`
-6. `compare_fly_trials`
-7. `save_fly_evidence`
+1. `inspect_flylab_state`
+2. `find_fly_circuits`
+3. `draft_fly_hypothesis`
+4. `design_stimulation_trial`
+5. `run_fly_simulation`
+6. `analyze_fly_behavior`
+7. `compare_fly_trials`
+8. `save_fly_evidence`
 
-The tools use closed object schemas, strict runtime validation, standard `readOnlyHint` and `untrustedContentHint` annotations, cancellable execution, structured domain failures, and AbortSignal-owned registration lifecycle. Read-only discovery is distinguished from state-changing laboratory actions. Externally sourced or authored text is marked untrusted.
+The tools use closed object schemas, strict runtime validation, standard `readOnlyHint` and `untrustedContentHint` annotations, cancellable execution, structured domain failures, and AbortSignal-owned registration lifecycle. The inspector is the sole read-only action and returns operational state with no scientific provenance. State-changing laboratory actions remain distinct, and externally sourced or person-authored text is marked untrusted.
 
 The canonical workflow is:
 
 ```text
-find evidence
+inspect shared page state
+→ find evidence
 → draft hypothesis
 → design controlled protocol
 → human review and approval
@@ -150,8 +152,8 @@ See [DEMO.md](DEMO.md) for the generated 12-frame narration and cue sheet, and [
 ## Submission checklist
 
 - [x] Verify the live HTTPS URL without private-site authentication.
-- [x] Confirm Chrome with the official WebMCP testing feature accepts all seven registrations.
-- [ ] Confirm ChatGPT's in-app browser discovers exactly seven tools.
+- [x] Confirm Chrome with the official WebMCP testing feature accepts all eight registrations.
+- [ ] Confirm ChatGPT's in-app browser discovers exactly eight tools.
 - [x] Run `npm test`, `npm run lint`, and `npm run build` against the submitted commit.
 - [x] Confirm the workflow stops at human approval before the visible person-only approval click.
 - [x] Confirm live that editing a protocol clears approval, playback, analyses, and the follow-up proposal.

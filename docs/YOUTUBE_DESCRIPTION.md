@@ -53,13 +53,13 @@ Choose the YouTube video-license setting deliberately during upload. That settin
 ## Description
 
 ```text
-FlyLab is a source-aware virtual fruit-fly lab where a person and an agent design a controlled MDN backward-walking experiment together using seven browser-native WebMCP tools.
+FlyLab is an agent-operable, human-auditable virtual fruit-fly lab with one read-only WebMCP state inspector and seven browser-native scientific workflow actions.
 
 Try FlyLab: https://flylab-neuroethology.d-lougen.chatgpt.site
 Source repository: https://github.com/DJLougen/flylab
 Challenge entry: [DEVPOST_ENTRY_URL] (pending publication)
 
-In this 2:16 demo, the agent finds cited adult Moonwalker descending-neuron evidence, drafts a falsifiable hypothesis, prepares five controlled conditions, stops for human approval, runs a seeded reduced-order simulation, analyzes preregistered behavior metrics, proposes one non-authorized follow-up, and saves a manifest-hashed evidence bundle.
+In this demo, the agent first inspects the shared page revision, artifact IDs, blocker, and exact next action. It then finds cited adult Moonwalker descending-neuron evidence, drafts a falsifiable hypothesis, prepares five controlled conditions, stops for human approval, runs a seeded reduced-order simulation, analyzes preregistered behavior metrics, proposes one non-authorized follow-up, and saves a manifest-hashed evidence bundle.
 
 The Three.js circuit view displays six real BANC v888 L2 skeleton reconstructions—four MDNs and two LBL40 cells. Purple shows the selected unitless model-drive targets; cyan shows bundled connectome-inferred structural paths. Glow is model selection, not measured neural activity. The CNS shell is schematic.
 
