@@ -27,11 +27,11 @@ const segments = [
   },
   {
     frame: '00-eight-tools-live.png',
-    narration: 'The agent inspects the shared revision, artifacts, human gate, blocker, and one valid next action. The person sees the same state.',
+    narration: 'The agent inspects the shared revision, artifact IDs, supervisor review gate, blocker, and one valid next action. The supervisor sees the same state.',
   },
   {
     frame: '01-circuit-found.png',
-    narration: 'A site tool finds the adult Moonwalker descending-neuron circuit with primary sources, pinned BANC data, and coverage warnings.',
+    narration: 'A site tool finds the adult Moonwalker descending-neuron circuit. The ledger shows a measured claim, its assay boundary, and linked primary sources.',
   },
   {
     frame: '02-hypothesis-drafted.png',
@@ -39,11 +39,11 @@ const segments = [
   },
   {
     frame: '03-protocol-locked.png',
-    narration: 'The agent designs five controlled arms. Timing, model drive, replicates, seed, controller version, and assumptions stay visible.',
+    narration: 'The agent designs five controlled arms. The review card shows exact identifiers, controls, timing, unitless model drive, replicates, seed, and controller version.',
   },
   {
     frame: '04-human-approved.png',
-    narration: 'A person reviews and approves the exact protocol; approval is not a tool. The agent then re-inspects before continuing.',
+    narration: 'A supervisor reviews and approves the exact protocol. Approval is absent from the WebMCP tool surface, and the agent re-inspects before continuing.',
   },
   {
     frame: '05-simulation-replay.png',
@@ -59,27 +59,27 @@ const segments = [
   },
   {
     frame: '08-behavior-analysis.png',
-    narration: 'The agent calculates preregistered behavior metrics. Results carry derived and simulation-predicted labels, separating arithmetic on a model from measurements of flies.',
+    narration: 'The agent calculates the predefined required behavior metrics. Results carry derived and simulation-predicted labels, separating arithmetic on a model from measurements of flies.',
   },
   {
     frame: '09-bounded-follow-up.png',
-    narration: 'FlyLab can rank conditions and propose one bounded follow-up, but that proposal has no execution authority. A new or edited experiment would require another human review.',
+    narration: 'FlyLab ranks the visible conditions and proposes one bounded follow-up, but that proposal has no execution authority. A new or edited experiment requires another supervisor review.',
   },
   {
     frame: '10-evidence-saved.png',
-    narration: 'The agent saves sources, evidence classes, protocol, seeds, runs, model versions, analyses, limitations, and the proposal in one manifest-hashed bundle.',
+    narration: 'The saved bundle exposes its identifier and manifest hash, separates supporting claim evidence from model-method evidence, and lists the exact source IDs behind both.',
   },
   {
     frame: '11-evidence-ledger.png',
-    narration: 'The ledger keeps measured, derived, connectome-inferred, simulation-predicted, and agent-hypothesized claims distinct. Every result keeps its source and model boundary.',
+    narration: 'Selecting the pinned connectome record shows its connectome-inferred label, anatomical-contact boundary, and primary source, separate from measured findings and derived model context.',
   },
   {
     frame: '12-protocol-edit-invalidates-results.png',
-    narration: 'A person edit advances the revision, clears approval and downstream artifacts, and returns the agent to the human gate with no callable next tool.',
+    narration: 'A supervisor edit advances the revision, clears approval and downstream artifacts, and returns the agent to the supervisor review gate with no callable next tool.',
   },
   {
     frame: 'proof-webmcp-invocations.png',
-    narration: 'The browser records completed WebMCP calls and structured results. FlyLab makes research agent-operable while keeping execution and scientific interpretation human-auditable.',
+    narration: 'The browser records completed WebMCP calls and structured results. FlyLab makes research agent-operable while keeping execution and scientific interpretation supervisor-auditable.',
   },
 ];
 

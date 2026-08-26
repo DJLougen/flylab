@@ -19,26 +19,39 @@ const provenanceCounts = {
   agent_hypothesized: 2,
 };
 
+const annotation = {
+  id: 'annotation_123',
+  title: 'MDN-inspired trial',
+  note: 'Model evidence only.',
+  author: 'webmcp_agent' as const,
+  trust: 'untrusted_annotation' as const,
+  purpose: 'administrative_annotation_not_evidence' as const,
+  boundary: 'Administrative annotation; not scientific evidence.',
+};
+
 describe('FlyLab portable evidence export', () => {
   test('preserves the exact saved metadata and full payload in a versioned envelope', async () => {
     const payload = {
-      format: 'flylab.evidence-bundle.v1',
-      title: 'MDN-inspired trial',
-      note: 'Model evidence only.',
+      format: 'flylab.evidence-bundle.v2',
+      annotation,
       experiment: { id: 'exp_123', seed: 73142 },
       runs: [{ id: 'run_123', trajectory: [0, -1.2, -2.4] }],
     };
     const manifestHash = await sha256(payload);
     const bundle: EvidenceBundleMetadata = {
       id: 'evidence_123',
-      title: payload.title,
+      title: payload.annotation.title,
       manifestHash,
       savedAt: '2026-08-26T12:34:56.000Z',
       includedIds: ['exp_123', 'run_123'],
       supportingEvidenceIds: ['evidence_123'],
       supportingSourceIds: ['source_123'],
+      methodEvidenceIds: ['method_evidence_123'],
+      methodSourceIds: ['method_source_123'],
       provenanceCounts,
       boundary: 'Simulation evidence bundle; not a new biological experiment.',
+      provenance: ['derived'],
+      annotation,
     };
 
     const envelope = createEvidenceExportEnvelope(bundle, payload);
@@ -55,7 +68,7 @@ describe('FlyLab portable evidence export', () => {
 
   test('serializes deterministically and retains the existing payload manifest hash', async () => {
     const payload = {
-      format: 'flylab.evidence-bundle.v1',
+      format: 'flylab.evidence-bundle.v2',
       sources: [{ id: 'source_1', title: 'Pinned source' }],
       analysis: { id: 'analysis_1', values: [1.25, 2.5] },
     };
@@ -68,8 +81,12 @@ describe('FlyLab portable evidence export', () => {
       includedIds: ['source_1', 'analysis_1'],
       supportingEvidenceIds: ['evidence_1'],
       supportingSourceIds: ['source_1'],
+      methodEvidenceIds: ['method_evidence_1'],
+      methodSourceIds: ['method_source_1'],
       provenanceCounts,
       boundary: 'Simulation evidence bundle; not a new biological experiment.',
+      provenance: ['derived'],
+      annotation: { ...annotation, title: 'Hash round trip' },
     };
     const envelope = createEvidenceExportEnvelope(bundle, payload);
     const first = serializeEvidenceExport(envelope);

@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 
 import {
+  CIRCUITS,
   EVIDENCE,
+  MODEL_PARAMETERS,
   analyzeBatch,
   circuitSupportsBehavior,
   compareAnalyses,
@@ -143,14 +146,16 @@ describe('FlyLab reduced-order simulation', () => {
       label: 'Baseline · no model drive',
       kind: 'baseline',
       laterality: 'none',
-      activationLevel: 0,
+      nominalControlLevel: 0,
+      expectedModelEffect: 'no_retreat_drive',
     });
     assert.deepEqual(conditions.get('condition_sham'), {
       id: 'condition_sham',
-      label: 'Model sham control',
+      label: 'Model sham · nominal control, zero effect',
       kind: 'sham',
       laterality: 'none',
-      activationLevel: baseExperimentInput.activationLevel,
+      nominalControlLevel: baseExperimentInput.activationLevel,
+      expectedModelEffect: 'zero_effect_sham',
     });
     assert.equal(conditions.get('condition_bilateral')?.kind, 'perturbation');
     assert.equal(conditions.get('condition_left')?.laterality, 'left');
@@ -165,6 +170,27 @@ describe('FlyLab reduced-order simulation', () => {
 
     assert.ok(labels.every((label) => label.includes('suppression')));
     assert.ok(labels.every((label) => !label.includes('drive')));
+  });
+
+  test('stronger silencing reduces the hand-authored reference retreat response', () => {
+    const weak = analyzeBatch(simulateExperiment(makeExperiment({
+      perturbation: 'silence',
+      activationLevel: 0.1,
+    })), ['backward_distance_mm']);
+    const strong = analyzeBatch(simulateExperiment(makeExperiment({
+      perturbation: 'silence',
+      activationLevel: 0.9,
+    })), ['backward_distance_mm']);
+    const weakPrimary = weak.conditions.find((condition) => condition.conditionId === 'condition_bilateral');
+    const strongPrimary = strong.conditions.find((condition) => condition.conditionId === 'condition_bilateral');
+    const weakBaseline = weak.conditions.find((condition) => condition.conditionId === 'condition_baseline');
+    const strongBaseline = strong.conditions.find((condition) => condition.conditionId === 'condition_baseline');
+
+    assert.ok(weakPrimary && strongPrimary && weakBaseline && strongBaseline);
+    assert.ok(strongPrimary.reverseInitiationProbability <= weakPrimary.reverseInitiationProbability);
+    assert.ok(strongPrimary.backwardDistanceMm < weakPrimary.backwardDistanceMm);
+    assert.equal(strongBaseline.reverseInitiationProbability, weakBaseline.reverseInitiationProbability);
+    assert.equal(strongBaseline.backwardDistanceMm, weakBaseline.backwardDistanceMm);
   });
 
   test('follow-up proposals inherit the actual laterality, mode, and nearby control level', () => {
@@ -202,7 +228,7 @@ describe('FlyLab reduced-order simulation', () => {
     assert.equal(activationEdit.approved, false);
     assert.ok(activationEdit.conditions
       .filter((condition) => condition.kind !== 'baseline')
-      .every((condition) => condition.activationLevel === 0.77));
+      .every((condition) => condition.nominalControlLevel === 0.77));
   });
 
   test('the shared design constructor rejects impossible timing and missing controls', () => {
@@ -286,6 +312,39 @@ describe('FlyLab provenance', () => {
 
     assert.equal(second.id, first.id);
     assert.deepEqual(second.evidenceIds, first.evidenceIds);
+    assert.deepEqual(second.causalEvidenceIds, ['E-MDN-ACTIVATION-001']);
+  });
+
+  test('rejects structural-only and wrong-perturbation evidence as causal hypothesis support', () => {
+    const base = {
+      circuitId: 'circuit_mdn_adult',
+      claim: 'Bilateral MDN activation will increase backward walking.',
+      predictedBehavior: 'backward_walking',
+      perturbation: 'activate' as const,
+      falsificationCriterion: 'No increase over baseline in backward distance.',
+    };
+
+    assert.throws(() => makeHypothesis({ ...base, evidenceIds: ['E-BANC-PATH-003'] }), /perturbation_effect/);
+    assert.throws(() => makeHypothesis({ ...base, evidenceIds: ['E-MDN-SILENCING-005'] }), /matching activate/);
+  });
+
+  test('keeps every claim locator closed over the evidence source IDs', () => {
+    for (const record of EVIDENCE) {
+      assert.deepEqual(
+        [...new Set(record.sourceSupport.map((mapping) => mapping.sourceId))].sort(),
+        [...record.sourceIds].sort(),
+        `${record.id} sourceSupport must map every declared source exactly`,
+      );
+      assert.ok(record.sourceSupport.every((mapping) => mapping.locator && mapping.supports));
+    }
+  });
+
+  test('keeps the model card canonical parameter block identical to the runtime model', () => {
+    const modelCard = readFileSync('docs/MODEL_CARD.md', 'utf8');
+    const match = modelCard.match(/<!-- MODEL_PARAMETERS_JSON_START -->\s*```json\s*([\s\S]*?)\s*```\s*<!-- MODEL_PARAMETERS_JSON_END -->/);
+
+    assert.ok(match, 'model card must contain the machine-checked parameter block');
+    assert.deepEqual(JSON.parse(match[1]), MODEL_PARAMETERS);
   });
 
   test('evidence and every generated stage use only the five declared provenance labels', () => {
@@ -305,7 +364,8 @@ describe('FlyLab provenance', () => {
       evidenceIds: ['E-MDN-ACTIVATION-001'],
       falsificationCriterion: 'No increase over baseline in backward distance.',
     });
-    const batch = simulateExperiment(makeExperiment({ hypothesisId: hypothesis.id }));
+    const experiment = makeExperiment({ hypothesisId: hypothesis.id });
+    const batch = simulateExperiment(experiment);
     const analysis = analyzeBatch(batch, [
       'backward_distance_mm',
       'signed_speed_mm_s',
@@ -321,9 +381,12 @@ describe('FlyLab provenance', () => {
 
     const observed: ProvenanceLabel[] = [
       ...EVIDENCE.map((record) => record.provenance),
+      ...CIRCUITS.flatMap((record) => record.provenance),
       hypothesis.provenance,
+      ...experiment.provenance,
       ...batch.provenance,
       ...analysis.provenance,
+      ...comparison.provenance,
       comparison.proposal.provenance,
     ];
 
@@ -332,11 +395,13 @@ describe('FlyLab provenance', () => {
       'measured',
       'derived',
       'connectome_inferred',
-      'simulation_predicted',
     ]));
     assert.deepEqual(batch.provenance, ['simulation_predicted']);
     assert.deepEqual(analysis.provenance, ['derived', 'simulation_predicted']);
+    assert.deepEqual(CIRCUITS[0].provenance, ['derived']);
     assert.equal(hypothesis.provenance, 'agent_hypothesized');
+    assert.deepEqual(experiment.provenance, ['agent_hypothesized']);
+    assert.deepEqual(comparison.provenance, ['derived', 'simulation_predicted']);
     assert.equal(comparison.proposal.provenance, 'agent_hypothesized');
   });
 });

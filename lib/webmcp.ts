@@ -119,7 +119,7 @@ export const flyLabToolContracts = [
   {
     name: 'inspect_flylab_state',
     title: 'Inspect FlyLab state',
-    description: 'Read the current shared FlyLab page state before starting or resuming work. Returns the state revision, artifact IDs, exact next valid action, blockers, person-only gates, and the complete tool pipeline. It does not modify the page.',
+    description: 'Read the current shared FlyLab page state before starting or resuming work. Returns the state revision, artifact IDs, exact next valid action, blockers, the visible non-WebMCP review gate, and the complete tool pipeline. It does not modify the page.',
     annotations: { readOnlyHint: true, untrustedContentHint: true },
     inputSchema: objectSchema({}),
   },
@@ -138,14 +138,14 @@ export const flyLabToolContracts = [
   {
     name: 'draft_fly_hypothesis',
     title: 'Draft fly hypothesis',
-    description: 'Create a visible, editable and falsifiable hypothesis from a selected circuit and cited evidence. Returns an agent_hypothesized record; it does not claim experimental validation or run a simulation.',
+    description: 'Create a visible, editable and falsifiable hypothesis from a selected circuit and discovered evidence. At least one cited role=hypothesis_support record must have kind=perturbation_effect matching the requested perturbation and behavior; structural, inventory, and motor-context records are supplemental only. Returns an agent_hypothesized record and does not run a simulation.',
     annotations: { readOnlyHint: false, untrustedContentHint: true },
     inputSchema: objectSchema({
       circuit_id: { type: 'string', minLength: 1, maxLength: 100 },
       claim: { type: 'string', minLength: 10, maxLength: 500 },
       predicted_behavior: { type: 'string', enum: behaviorEnum },
       perturbation: { type: 'string', enum: ['activate', 'silence'] },
-      evidence_ids: { type: 'array', items: { type: 'string', minLength: 1, maxLength: 100 }, minItems: 1, maxItems: 20, uniqueItems: true },
+      evidence_ids: { type: 'array', items: { type: 'string', minLength: 1, maxLength: 100 }, minItems: 1, maxItems: 20, uniqueItems: true, description: 'Discovered hypothesis-support IDs. Must include at least one perturbation_effect record matching perturbation and predicted_behavior; structural, inventory, and motor-context IDs may only supplement it.' },
       falsification_criterion: { type: 'string', minLength: 5, maxLength: 300 },
     }, ['circuit_id', 'claim', 'predicted_behavior', 'perturbation', 'evidence_ids', 'falsification_criterion']),
   },
@@ -181,11 +181,11 @@ export const flyLabToolContracts = [
   {
     name: 'analyze_fly_behavior',
     title: 'Analyze fly behavior',
-    description: 'Compute and save FlyLab\'s complete preregistered five-metric panel by aggregating simulation-generated per-run summaries. Also returns reverse-initiation frequency. The displayed condition replay is illustrative and separate; outputs are not wet-lab evidence.',
+    description: 'Compute and save FlyLab\'s predefined, required five-metric panel by aggregating simulation-generated per-run summaries. Also returns reverse-initiation frequency. The displayed condition replay is illustrative and separate; outputs are not wet-lab evidence.',
     annotations: { readOnlyHint: false, untrustedContentHint: false },
     inputSchema: objectSchema({
       batch_id: { type: 'string', minLength: 1, maxLength: 100 },
-      metrics: { type: 'array', items: { type: 'string', enum: metricEnum }, minItems: 5, maxItems: 5, uniqueItems: true, description: 'The complete preregistered metric set; partial panels are not supported in this release.' },
+      metrics: { type: 'array', items: { type: 'string', enum: metricEnum }, minItems: 5, maxItems: 5, uniqueItems: true, description: 'The complete predefined metric set; partial panels are not supported in this release.' },
     }, ['batch_id', 'metrics']),
   },
   {
@@ -297,7 +297,7 @@ export function validateToolInput(toolName: string, rawInput: unknown): Record<s
     case 'analyze_fly_behavior':
       requireString(input, 'batch_id', 1, 100); requireStringArray(input, 'metrics', 5, 5, metricEnum);
       if (!(metricEnum.every((metric) => (input.metrics as string[]).includes(metric)))) {
-        throw new FlyLabDomainError('METRIC_UNAVAILABLE', 'The challenge release requires the complete preregistered five-metric panel.', false, {
+        throw new FlyLabDomainError('METRIC_UNAVAILABLE', 'The challenge release requires the complete predefined five-metric panel.', false, {
           required_metrics: metricEnum,
         });
       }

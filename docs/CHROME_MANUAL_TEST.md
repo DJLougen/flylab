@@ -36,7 +36,7 @@ Run `find_fly_circuits` with:
 Copy:
 
 - `circuits[0].id` as `CIRCUIT_ID`
-- the first four `evidence` records in returned order whose provenance is `measured` as `EVIDENCE_IDS`: `E-MDN-ACTIVATION-001`, `E-DN-SCREEN-002`, `E-MDN-SILENCING-005`, and `E-MDN-LATERALITY-006`
+- `hypothesis_eligible_evidence_ids` as the allowed support set. For the activation example, use measured records whose `role` is `hypothesis_support`: `E-MDN-ACTIVATION-001` and `E-MDN-LATERALITY-006`. Do not pass `E-DN-SCREEN-002`; it is `catalog_context` and the hypothesis tool must reject it.
 
 ## 3. Draft the hypothesis
 
@@ -48,7 +48,7 @@ Run `draft_fly_hypothesis`, replacing the placeholders with the copied values:
   "claim": "Activating adult MDNs in the FlyLab model should increase backward displacement relative to baseline and model-sham controls.",
   "predicted_behavior": "backward_walking",
   "perturbation": "activate",
-  "evidence_ids": ["EVIDENCE_ID_1", "EVIDENCE_ID_2", "EVIDENCE_ID_3", "EVIDENCE_ID_4"],
+  "evidence_ids": ["E-MDN-ACTIVATION-001", "E-MDN-LATERALITY-006"],
   "falsification_criterion": "The prediction fails if bilateral activation does not increase backward distance relative to the model-sham condition."
 }
 ```

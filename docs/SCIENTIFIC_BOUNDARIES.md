@@ -21,9 +21,9 @@ The runtime manifest is:
 
 ```text
 model       FlyLab reduced-order embodiment model
-version     0.1.2
-controller  mdn-inspired-retreat-adapter.v1
-environment open-field-5mm.v1
+version     0.1.3
+controller  mdn-inspired-retreat-adapter.v2
+environment open-field-model-scale.v2
 ```
 
 The model is a deterministic, reduced-order kinematic generator. It converts a bounded MDN control abstraction into virtual trajectories and behavior summaries. It uses a versioned controller adapter, seeded variation, a default five-second open-field trial, and explicit conditions.
@@ -78,21 +78,24 @@ The evidence chain used in the demonstration is:
 2. A separate measured record describes the broad Cande descending-neuron screen as expansion context, not MDN-specific causal evidence.
 3. A deterministic filter of the pinned BANC metadata derives a specimen-level inventory of four proofread MDN rows, two per side.
 4. A connectome-inferred record preserves four directed MDN→LBL40 rows totaling 153 putative anatomical contacts in the pinned BANC snapshot.
-5. The agent drafts an explicitly labeled hypothesis.
-6. The FlyLab model produces simulation-predicted trajectories.
-7. The analysis aggregates simulation-generated per-run summary records. The displayed condition-level replay trajectory is a separate illustrative path and is not the raw path underlying the metric cards.
-8. The comparison creates an agent-hypothesized follow-up.
+5. The selected circuit catalog artifact is labeled derived, and the agent drafts an explicitly labeled hypothesis and proposed protocol.
+6. The FlyLab model produces a simulation-predicted batch and trajectories.
+7. The analysis aggregates simulation-generated per-run summary records and is labeled both derived and simulation-predicted. The displayed condition-level replay trajectory is a separate illustrative path and is not the raw path underlying the metric cards.
+8. The comparison ranking remains derived plus simulation-predicted, while its proposed follow-up remains agent-hypothesized.
+9. The saved evidence-bundle metadata is derived and carries counts for each top-level scientific lineage artifact and evidence record. Nested copies of model and dataset manifests are not recursively counted.
 
 No later stage overwrites the provenance of an earlier one.
 
-The operational lineage is equally strict. Discovery records only evidence IDs returned by the active filter. A hypothesis may cite only the selected circuit and those discovered IDs. A trial's target and perturbation must match the saved hypothesis. A comparison accepts analyses from exactly one batch and requires its objective metric in each analysis. Saving requires the current hypothesis, experiment, sole batch, and comparison plus exactly the comparison's complete analysis-ID set. Only the hypothesis-supporting evidence/source closure and those exact analyses are serialized; unrelated catalog context is not relabeled as support.
+Every evidence record also declares a claim-support scope. A hypothesis must cite at least one `role=hypothesis_support`, `kind=perturbation_effect` record whose declared perturbation and behavior match the proposed claim. `structural_path`, `specimen_inventory`, and `motor_context` records may supplement that causal record but cannot replace it. `model_context` and `catalog_context` records are rejected as hypothesis evidence. Source-level mappings state exactly which source supports which portion of a record and give a figure, section, file, row, or release locator.
+
+The operational lineage is equally strict. Discovery records only evidence IDs returned by the active filter. A hypothesis may cite only the selected circuit and those discovered IDs. A trial's target and perturbation must match the saved hypothesis. A comparison accepts analyses from exactly one batch and requires its objective metric in each analysis. Saving requires the current hypothesis, experiment, sole batch, and comparison plus exactly the comparison's complete analysis-ID set. The exact selected circuit, the hypothesis-supporting evidence/source closure, separately scoped model-method evidence/source closure, and those exact analyses are serialized; unrelated catalog context is not relabeled as support. The local model card is related as `method_definition`; the FlyGym paper and pinned release are related only as `embodiment_reference` and do not define FlyLab's equations.
 
 ## Reproducibility contract
 
 An experiment records:
 
 - hypothesis and circuit IDs
-- perturbation, laterality, and unitless activation level
+- perturbation, laterality, and unitless nominal control level
 - onset, duration, and trial duration in milliseconds
 - replicate count and condition definitions
 - base random seed
@@ -107,32 +110,34 @@ replicate_seed = base_seed + c × 1009 + r × 37
 
 The same normalized experiment inputs produce the same experiment ID. Identity covers all design inputs and all three person-editable fields: activation level, duration, and replicate count. UI edits rebuild the full protocol through `designExperiment` instead of patching only the display. The same experiment and seed produce identical run IDs, trajectories, replicate summaries, batch ID, and run hash. Changing the seed changes the generated runs. This contract is covered by deterministic local tests.
 
-IDs and run hashes use a stable FNV-1a-derived identifier. Evidence payloads use SHA-256 when Web Crypto is available, with a labeled FNV-1a fallback otherwise. Saving prepares a downloadable `flylab.evidence-export` schema-version-`1` JSON envelope and attempts to store the same envelope in browser local storage on a best-effort basis. The envelope contains bundle metadata, the complete payload, and the existing payload manifest hash; it does not introduce a second hash.
+IDs and run hashes use a stable FNV-1a-derived identifier. Evidence payloads use SHA-256 when Web Crypto is available, with a labeled FNV-1a fallback otherwise. Saving prepares a downloadable `flylab.evidence-export` schema-version-`2` JSON envelope and attempts to store the same envelope in browser local storage on a best-effort basis. The envelope contains bundle metadata, the complete payload, and the existing payload manifest hash; it does not introduce a second hash. Caller-supplied bundle titles and notes are serialized as `untrusted_annotation` administrative metadata, remain outside the five scientific provenance labels, and are excluded from scientific provenance counts.
 
-The saved payload includes the hypothesis's exact supporting source/evidence closure, hypothesis, experiment, simulation batch, exactly the analyses referenced by the comparison, the comparison, dataset manifest, model manifest, seeds, and assumptions. A timestamp records when the bundle was saved; it is not part of the scientific result. The manifest hash covers `JSON.stringify(payload)` in its saved property order. It is useful for detecting payload changes, but it is not a digital signature, proof of authorship, or guarantee of immutability.
+The saved payload includes the exact selected circuit record, the hypothesis's exact supporting source/evidence closure, hypothesis, experiment, simulation batch, exactly the analyses referenced by the comparison, the comparison, dataset manifest, model manifest, seeds, and assumptions. A timestamp records when the bundle was saved; it is not part of the scientific result. The manifest hash covers `JSON.stringify(payload)` in its saved property order. It is useful for detecting payload changes, but it is not a digital signature, proof of authorship, or guarantee of immutability.
 
 ## Controls and metrics
 
 Every accepted protocol contains mandatory baseline and model-sham controls. A bilateral protocol contains:
 
-- baseline: no model drive
-- sham: a zero-drive model control, not an optical or genetic control
+- activation baseline: no retreat drive
+- activation sham: the nominal control setting is recorded separately from its zero effective retreat drive
+- silencing baseline: a hand-authored reference retreat drive with no suppression
+- silencing sham: the nominal suppression setting is recorded while the reference retreat drive is retained
 - bilateral MDN perturbation
 - left-only MDN perturbation
 - right-only MDN perturbation
 
-These are model conditions, not a substitute for a biological control design. In particular, the sham label describes an internal zero-drive adapter condition; FlyLab does not model optics, heat, genotype, expression, handling, sex-specific effects, or experimental batch effects.
+These are model conditions, not a substitute for a biological control design. FlyLab does not model optics, heat, genotype, expression, handling, sex-specific effects, experimental batch effects, or endogenous MDN activity. The complete activation and suppression equations, every numeric constant, the synthetic stance-index definition, and the model-scale unit boundary are published in [the model card](MODEL_CARD.md).
 
 The behavior analysis exposes:
 
 - reverse-initiation probability across seeded runs
-- backward distance in millimeters
-- signed speed in millimeters per second, where negative denotes backward movement
+- backward distance in uncalibrated model-scale millimeters
+- signed speed in uncalibrated model-scale millimeters per second, where negative denotes backward movement
 - response latency in milliseconds for responsive runs
 - absolute heading change in degrees for comparison
 - stance-stability index
 
-The analysis method version is `flylab.behavior-metrics.v2`. The tool requires the complete five-metric panel; reverse-initiation probability is also reported as an always-present response summary. These cards average the simulation-generated `replicates` records. The condition-level Three.js replay trajectory is independently generated for illustration and must not be presented as the raw replicate path used to calculate the cards. Response latency is a simulated delay from the protocol's nominal onset, averaged over responsive seeded runs only; the available reverse-travel time is `trial duration − onset − latency`, bounded at zero. For baseline and model-sham arms, the same nominal onset is a comparison reference rather than a delivered perturbation. When no seeded run responds, raw and aggregate latency are JSON `null`, the UI shows `n/a`, and the responsive denominator shows `0/n`; trial duration is never substituted as a fake latency. These estimates summarize seeded simulator variation. They are not biological confidence intervals, effect sizes from animals, or statistical evidence for a biological hypothesis.
+The analysis method version is `flylab.behavior-metrics.v2`. The tool requires the complete predefined five-metric panel and returns machine-readable `metric_definitions` plus a `unit_boundary`; FlyLab does not claim a formal preregistration artifact. Reverse-initiation probability is also reported as an always-present response summary. These cards average the simulation-generated `replicates` records. The condition-level Three.js replay trajectory is independently generated for illustration and must not be presented as the raw replicate path used to calculate the cards. Response latency is a simulated delay from the protocol's nominal onset, averaged over responsive seeded runs only; the available reverse-travel time is `trial duration − onset − latency`, bounded at zero. For baseline and model-sham arms, the same nominal onset is a comparison reference rather than a delivered perturbation. When no seeded run responds, raw and aggregate latency are JSON `null`, the UI shows `n/a`, and the responsive denominator shows `0/n`; trial duration is never substituted as a fake latency. Distance and speed use uncalibrated model-scale millimeter units; the stance-stability value is a synthetic unitless index. These estimates summarize seeded simulator variation. They are not biological confidence intervals, effect sizes from animals, or statistical evidence for a biological hypothesis.
 
 ## Operational shared-state boundary
 

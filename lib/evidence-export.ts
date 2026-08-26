@@ -1,8 +1,18 @@
 import type { ProvenanceLabel } from './flylab.js';
 
 export const EVIDENCE_EXPORT_SCHEMA = 'flylab.evidence-export';
-export const EVIDENCE_EXPORT_SCHEMA_VERSION = 1 as const;
+export const EVIDENCE_EXPORT_SCHEMA_VERSION = 2 as const;
 export const EVIDENCE_EXPORT_MEDIA_TYPE = 'application/vnd.flylab.evidence+json';
+
+export interface EvidenceBundleAnnotation {
+  id: string;
+  title: string;
+  note: string;
+  author: 'webmcp_agent' | 'human_ui' | 'guided_example';
+  trust: 'untrusted_annotation';
+  purpose: 'administrative_annotation_not_evidence';
+  boundary: string;
+}
 
 export interface EvidenceBundleMetadata {
   id: string;
@@ -12,8 +22,12 @@ export interface EvidenceBundleMetadata {
   includedIds: string[];
   supportingEvidenceIds: string[];
   supportingSourceIds: string[];
+  methodEvidenceIds: string[];
+  methodSourceIds: string[];
   provenanceCounts: Record<ProvenanceLabel, number>;
   boundary: string;
+  provenance: ['derived'];
+  annotation: EvidenceBundleAnnotation;
 }
 
 export interface EvidenceExportEnvelope<TPayload extends Record<string, unknown> = Record<string, unknown>> {

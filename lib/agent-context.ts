@@ -14,6 +14,11 @@ export interface FlyLabAgentSnapshot {
   evidenceSaveRunning: boolean;
   selectedCircuitId: string | null;
   discoveredEvidenceIds: string[];
+  hypothesisEligibleEvidenceIds: string[];
+  causalEvidenceIdsByPerturbation: {
+    activate: string[];
+    silence: string[];
+  };
   hypothesisId: string | null;
   hypothesisEvidenceIds: string[];
   hypothesisPredictedBehavior: string | null;
@@ -90,7 +95,7 @@ export function buildFlyLabAgentContext(snapshot: FlyLabAgentSnapshot) {
     },
     {
       name: 'human_approval',
-      title: 'Person reviews exact protocol',
+      title: 'Supervisor reviews exact protocol',
       kind: 'human_gate',
       status: snapshot.experimentApproved ? 'complete' : hasExperiment ? 'human_required' : 'blocked',
       boundary: 'Intentionally not a WebMCP tool. Any protocol edit revokes approval and clears downstream work.',
@@ -146,11 +151,11 @@ export function buildFlyLabAgentContext(snapshot: FlyLabAgentSnapshot) {
     : !hasCircuit
       ? { kind: 'tool' as const, name: 'find_fly_circuits', callable: true, blocked_by: null, reason: 'Begin with the bounded source-backed circuit search.', input_refs: {} }
       : !hasHypothesis
-        ? { kind: 'tool' as const, name: 'draft_fly_hypothesis', callable: true, blocked_by: null, reason: 'Create a falsifiable claim linked to the discovered evidence IDs.', input_refs: { circuit_id: snapshot.selectedCircuitId, evidence_ids: snapshot.discoveredEvidenceIds } }
+        ? { kind: 'tool' as const, name: 'draft_fly_hypothesis', callable: true, blocked_by: null, reason: 'Create a falsifiable claim using only discovered records marked hypothesis_support.', input_refs: { circuit_id: snapshot.selectedCircuitId, evidence_ids: snapshot.hypothesisEligibleEvidenceIds } }
         : !hasExperiment
           ? { kind: 'tool' as const, name: 'design_stimulation_trial', callable: true, blocked_by: null, reason: 'Create visible controls and a reproducible seed manifest.', input_refs: { hypothesis_id: snapshot.hypothesisId, target_circuit_id: snapshot.selectedCircuitId, perturbation: snapshot.hypothesisPerturbation } }
           : !snapshot.experimentApproved
-            ? { kind: 'human_gate' as const, name: null, callable: false, blocked_by: 'human_approval', reason: 'A person must review and approve the exact visible protocol.', input_refs: { experiment_id: snapshot.experimentId } }
+            ? { kind: 'human_gate' as const, name: null, callable: false, blocked_by: 'human_approval', reason: 'A supervisor must review and approve the exact visible protocol.', input_refs: { experiment_id: snapshot.experimentId } }
             : !hasBatch
               ? { kind: 'tool' as const, name: 'run_fly_simulation', callable: true, blocked_by: null, reason: 'The exact current experiment is approved for virtual execution.', input_refs: { experiment_id: snapshot.experimentId } }
               : !hasAnalysis
@@ -179,6 +184,8 @@ export function buildFlyLabAgentContext(snapshot: FlyLabAgentSnapshot) {
     artifacts: {
       selected_circuit_id: snapshot.selectedCircuitId,
       discovered_evidence_ids: snapshot.discoveredEvidenceIds,
+      hypothesis_eligible_evidence_ids: snapshot.hypothesisEligibleEvidenceIds,
+      causal_evidence_ids_by_perturbation: snapshot.causalEvidenceIdsByPerturbation,
       hypothesis_id: snapshot.hypothesisId,
       hypothesis_evidence_ids: snapshot.hypothesisEvidenceIds,
       hypothesis_predicted_behavior: snapshot.hypothesisPredictedBehavior,
@@ -204,6 +211,9 @@ export function buildFlyLabAgentContext(snapshot: FlyLabAgentSnapshot) {
       subject_experiment_id: snapshot.experimentId,
       blocks_tool: 'run_fly_simulation',
       agent_can_satisfy: false,
+      webmcp_tool_can_satisfy: false,
+      scope: 'webmcp_site_tools',
+      authorization_boundary: 'Approval is absent from the WebMCP tool surface and requires visible UI interaction. It is not identity-authenticated against general browser automation.',
       human_control_label: snapshot.experimentApproved ? 'Approved' : 'Approve experiment',
       follow_up_execution: 'not_authorized',
     },

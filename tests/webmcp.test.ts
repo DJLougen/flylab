@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, test } from 'node:test';
 
 import {
@@ -86,6 +87,36 @@ describe('FlyLab WebMCP contracts', () => {
     }
   });
 
+  test('publishes a machine-readable manifest synchronized with the live WebMCP tool surface', () => {
+    const manifest = JSON.parse(readFileSync('public/flylab-agent-manifest.json', 'utf8')) as {
+      schema_version?: string;
+      transport?: { required_first_call?: string; state_contract?: string };
+      tools?: Array<{ name?: string }>;
+      supervisor_gate?: { webmcp_tool?: boolean; blocks?: string };
+      hypothesis_evidence_gate?: {
+        required_role?: string;
+        required_support_kind?: string;
+        must_match?: string[];
+        supplemental_only?: string[];
+        excluded?: string[];
+      };
+    };
+
+    assert.equal(manifest.schema_version, 'flylab.agent-manifest.v1');
+    assert.equal(manifest.transport?.required_first_call, 'inspect_flylab_state');
+    assert.equal(manifest.transport?.state_contract, 'flylab.agent-context.v1');
+    assert.deepEqual(manifest.tools?.map((tool) => tool.name).sort(), expectedNames);
+    assert.equal(manifest.supervisor_gate?.webmcp_tool, false);
+    assert.equal(manifest.supervisor_gate?.blocks, 'run_fly_simulation');
+    assert.deepEqual(manifest.hypothesis_evidence_gate, {
+      required_role: 'hypothesis_support',
+      required_support_kind: 'perturbation_effect',
+      must_match: ['perturbation', 'predicted_behavior'],
+      supplemental_only: ['structural_path', 'specimen_inventory', 'motor_context'],
+      excluded: ['model_context', 'catalog_context'],
+    });
+  });
+
   test('requires baseline and model-sham controls in every trial design', () => {
     const input = {
       hypothesis_id: 'hyp_1',
@@ -114,7 +145,7 @@ describe('FlyLab WebMCP contracts', () => {
     );
   });
 
-  test('requires the full analysis panel and accepts the complete discovered evidence set', () => {
+  test('requires the full analysis panel and accepts bounded hypothesis evidence arrays', () => {
     assert.throws(
       () => validateToolInput('analyze_fly_behavior', {
         batch_id: 'batch_1',

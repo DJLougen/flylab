@@ -5,7 +5,7 @@ FlyLab is public, requires no account, and exposes exactly eight imperative WebM
 - Live application: <https://flylab-neuroethology.d-lougen.chatgpt.site/>
 - Public source: <https://github.com/DJLougen/flylab>
 
-The complete path takes about three minutes. It intentionally pauses once for a person-only approval click.
+The complete path takes about three minutes. It intentionally pauses once at a visible approval control that is absent from the WebMCP tool surface.
 
 ## Compatible browser
 
@@ -86,7 +86,7 @@ This proves that visible human edits are authoritative and that the agent recove
 
 Repeating the exact workflow preserves canonical experiment and analysis identity. Repeating completed state-changing calls reuses the saved bundle ID, manifest hash, and saved timestamp. Changing the seed changes the generated runs.
 
-FlyLab runs its deterministic reduced-order model `0.1.2`; it does not run FlyGym, infer biological neural activity, simulate the full BANC connectome, or report a wet-lab result. The five evidence labels are `measured`, `derived`, `connectome_inferred`, `simulation_predicted`, and `agent_hypothesized`.
+FlyLab runs its deterministic, hand-authored reduced-order model `0.1.3`; it does not run FlyGym, infer biological neural activity, simulate the full BANC connectome, or report a wet-lab result. Model distances and speeds are uncalibrated model-scale units. The five evidence labels are `measured`, `derived`, `connectome_inferred`, `simulation_predicted`, and `agent_hypothesized`.
 
 For automated verification, run:
 
@@ -98,4 +98,4 @@ npm run build
 FLYLAB_VERIFY_WORKFLOW=1 npm run verify:webmcp
 ```
 
-The automated workflow exercises all eight real browser registrations, the person-only gate, two simulation-cancellation paths, evidence-save cancellation, exact-lineage saving, completed-call idempotency, and protocol-edit invalidation. See [WebMCP verification](WEBMCP_VERIFICATION.md) for the full evidence boundary.
+The automated workflow exercises all eight real browser registrations, the non-WebMCP review gate, two simulation-cancellation paths, evidence-save cancellation, exact-lineage saving, completed-call idempotency, and protocol-edit invalidation. See [WebMCP verification](WEBMCP_VERIFICATION.md) for the full evidence boundary.

@@ -15,6 +15,8 @@ const baseSnapshot: FlyLabAgentSnapshot = {
   evidenceSaveRunning: false,
   selectedCircuitId: null,
   discoveredEvidenceIds: [],
+  hypothesisEligibleEvidenceIds: [],
+  causalEvidenceIdsByPerturbation: { activate: [], silence: [] },
   hypothesisId: null,
   hypothesisEvidenceIds: [],
   hypothesisPredictedBehavior: null,
@@ -49,6 +51,8 @@ describe('FlyLab agent context', () => {
     assert.equal(result.next_action.callable, true);
     assert.equal(result.artifacts.selected_circuit_id, null);
     assert.deepEqual(result.artifacts.discovered_evidence_ids, []);
+    assert.deepEqual(result.artifacts.hypothesis_eligible_evidence_ids, []);
+    assert.deepEqual(result.artifacts.causal_evidence_ids_by_perturbation, { activate: [], silence: [] });
     assert.deepEqual(result.artifacts.hypothesis_evidence_ids, []);
     assert.equal(result.artifacts.experiment_id, null);
     assert.deepEqual(result.artifacts.condition_ids, []);
@@ -70,7 +74,16 @@ describe('FlyLab agent context', () => {
       expected: string;
     }> = [
       {
-        overrides: { selectedCircuitId: 'circuit_mdn_adult', discoveredEvidenceIds: ['E-MDN-ACTIVATION-001'], stage: 'hypothesize' },
+        overrides: {
+          selectedCircuitId: 'circuit_mdn_adult',
+          discoveredEvidenceIds: ['E-MDN-ACTIVATION-001', 'E-DN-SCREEN-002'],
+          hypothesisEligibleEvidenceIds: ['E-MDN-ACTIVATION-001'],
+          causalEvidenceIdsByPerturbation: {
+            activate: ['E-MDN-ACTIVATION-001'],
+            silence: [],
+          },
+          stage: 'hypothesize',
+        },
         expected: 'draft_fly_hypothesis',
       },
       {
@@ -146,6 +159,10 @@ describe('FlyLab agent context', () => {
           circuit_id: 'circuit_mdn_adult',
           evidence_ids: ['E-MDN-ACTIVATION-001'],
         });
+        assert.deepEqual(result.artifacts.causal_evidence_ids_by_perturbation, {
+          activate: ['E-MDN-ACTIVATION-001'],
+          silence: [],
+        });
       }
       if (item.expected === 'design_stimulation_trial') {
         assert.deepEqual(result.next_action.input_refs, {
@@ -166,7 +183,7 @@ describe('FlyLab agent context', () => {
     }
   });
 
-  test('stops at the person-only gate for every unapproved experiment', () => {
+  test('stops at the visible non-WebMCP review gate for every unapproved experiment', () => {
     const result = context({
       selectedCircuitId: 'circuit_mdn_adult',
       hypothesisId: 'hyp_1',

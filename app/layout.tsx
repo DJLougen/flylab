@@ -51,17 +51,17 @@ export function generateMetadata(): Metadata {
       default: 'FlyLab — Virtual Neuroethology',
       template: '%s · FlyLab',
     },
-    description: 'A scientifically transparent virtual Drosophila lab where people and agents can investigate circuits, design controlled perturbations, and test reproducible behavioral predictions.',
+    description: 'An agent-first WebMCP virtual Drosophila lab with typed site tools, reproducible experiments, source-backed circuits, and a visible supervisor audit surface.',
     openGraph: {
       type: 'website',
       title: 'FlyLab',
-      description: 'Virtual neuroethology for people + agents',
+      description: 'Agent-first WebMCP virtual neuroethology',
       images: [{ url: '/og.png', width: 1200, height: 630, alt: 'FlyLab virtual neuroethology laboratory' }],
     },
     twitter: {
       card: 'summary_large_image',
       title: 'FlyLab',
-      description: 'Virtual neuroethology for people + agents',
+      description: 'Agent-first WebMCP virtual neuroethology',
       images: ['/og.png'],
     },
     robots: { index: true, follow: true },
@@ -71,6 +71,9 @@ export function generateMetadata(): Metadata {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
+      <head>
+        <link rel="alternate" type="application/json" href="/flylab-agent-manifest.json" title="FlyLab agent manifest" />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable}`}>{children}</body>
     </html>
   );

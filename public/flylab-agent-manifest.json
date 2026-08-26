@@ -1,0 +1,67 @@
+{
+  "schema_version": "flylab.agent-manifest.v1",
+  "name": "FlyLab",
+  "description": "Agent-first WebMCP virtual Drosophila neuroethology lab with a visible supervisor audit surface.",
+  "site": "https://flylab-neuroethology.d-lougen.chatgpt.site/",
+  "source": "https://github.com/DJLougen/flylab",
+  "transport": {
+    "api": "WebMCP document.modelContext.registerTool",
+    "scope": "current_open_page",
+    "state_contract": "flylab.agent-context.v1",
+    "result_contract": "flylab.tool-result.v1",
+    "required_first_call": "inspect_flylab_state"
+  },
+  "workflow": [
+    "inspect_flylab_state",
+    "find_fly_circuits",
+    "draft_fly_hypothesis",
+    "design_stimulation_trial",
+    "visible_supervisor_approval",
+    "run_fly_simulation",
+    "analyze_fly_behavior",
+    "compare_fly_trials",
+    "save_fly_evidence"
+  ],
+  "tools": [
+    { "name": "inspect_flylab_state", "effect": "read_only", "purpose": "Recover the exact shared revision, artifact IDs, blocker, and next valid action." },
+    { "name": "find_fly_circuits", "effect": "writes_shared_selection", "purpose": "Search the bounded source-backed adult circuit catalog." },
+    { "name": "draft_fly_hypothesis", "effect": "writes_hypothesis", "purpose": "Create a falsifiable agent_hypothesized claim from eligible evidence." },
+    { "name": "design_stimulation_trial", "effect": "writes_protocol", "purpose": "Create controlled conditions, timing, seeds, and model assumptions." },
+    { "name": "run_fly_simulation", "effect": "writes_simulation_batch", "purpose": "Run the exact approved deterministic virtual experiment." },
+    { "name": "analyze_fly_behavior", "effect": "writes_analysis", "purpose": "Compute the complete predefined five-metric behavior panel." },
+    { "name": "compare_fly_trials", "effect": "writes_comparison_and_proposal", "purpose": "Rank conditions and propose, but never execute, one bounded follow-up." },
+    { "name": "save_fly_evidence", "effect": "writes_evidence_bundle", "purpose": "Commit the exact source-to-result lineage and portable JSON envelope." }
+  ],
+  "supervisor_gate": {
+    "name": "visible_supervisor_approval",
+    "webmcp_tool": false,
+    "blocks": "run_fly_simulation",
+    "scope": "webmcp_site_tools",
+    "boundary": "Approval is absent from the WebMCP tool surface and requires visible UI interaction. It is not identity-authenticated against general browser automation."
+  },
+  "recovery": {
+    "rule": "Call inspect_flylab_state after interruption, edit, cancellation, stale-state failure, or navigation.",
+    "mutation_guard": "Every successful tool call returns a shared state revision; prepared long-running work cannot commit against a changed revision."
+  },
+  "hypothesis_evidence_gate": {
+    "required_role": "hypothesis_support",
+    "required_support_kind": "perturbation_effect",
+    "must_match": ["perturbation", "predicted_behavior"],
+    "supplemental_only": ["structural_path", "specimen_inventory", "motor_context"],
+    "excluded": ["model_context", "catalog_context"]
+  },
+  "provenance_labels": [
+    "measured",
+    "derived",
+    "connectome_inferred",
+    "simulation_predicted",
+    "agent_hypothesized"
+  ],
+  "scientific_scope": {
+    "release_slice": "adult MDN backward-walking circuit",
+    "model_version": "0.1.3",
+    "controller": "mdn-inspired-retreat-adapter.v2",
+    "boundary": "Hand-authored, uncalibrated reduced-order simulation; not neural dynamics, FlyGym execution, a wet-lab experiment, or biological validation."
+  },
+  "license": "Apache-2.0"
+}

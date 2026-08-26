@@ -6,7 +6,7 @@ The v6 challenge demo is a generated, narrated sequence of 12 FlyLab interface c
 
 The prior local package remains technically verified at **2:15.821**, below the challenge's three-minute limit. Do not upload it. Public YouTube upload and Devpost submission remain pending until the corrected interface has a regenerated, verified video.
 
-The replacement capture must begin with `00-eight-tools-live.png`, show the new agent control plane, and describe the current surface as **one read-only state inspector plus seven scientific workflow actions**. It must visibly show real browser WebMCP discovery/invocation—not the guided example—with `inspect_flylab_state` returning the page revision, artifact IDs, person-only blocker, and exactly one next action before discovery, after approval, and after a protocol edit. Activity must visibly distinguish `webmcp agent · r#` from `human ui · r#`. The seven-tool wording below is archived historical narration and must not be reused.
+The replacement capture must begin with `00-eight-tools-live.png`, show the new agent control plane, and describe the current surface as **one read-only state inspector plus seven scientific workflow actions**. It must visibly show real browser WebMCP discovery/invocation—not the guided example—with `inspect_flylab_state` returning the page revision, artifact IDs, non-WebMCP review blocker, and exactly one next action before discovery, after approval, and after a protocol edit. Activity must visibly distinguish `webmcp agent · r#` from visible `human ui · r#` actions. The seven-tool wording below is archived historical narration and must not be reused.
 
 The replacement package also requires two tightly cropped, unbranded WebMCP debugging proof frames: `proof-webmcp-tools.png`, showing the live eight-tool inventory, and `proof-webmcp-invocations.png`, showing the real invocation history with structured statuses. The invocation proof must be a three-panel composite of the initial, post-approval, and post-edit `inspect_flylab_state` calls so all three recovery checkpoints are legible at once. The headless deterministic verifier supplies `00-eight-tools-live.png` through `12-protocol-edit-invalidates-results.png`, then exits and removes its isolated browser profile. It cannot capture browser chrome or the debugging panel. Capture the proof material in a separate headed Chrome 149+ session with both WebMCP flags enabled, following the same canonical `0.65` workflow and opening **Application → WebMCP**. Crop out browser logos and unrelated interface branding. Prefer a 1440 × 900 final proof frame; the builder safely scales and pads other dimensions. The video builder fails closed if any frame is missing.
 
@@ -17,7 +17,7 @@ live Chrome WebMCP inventory
 → initial inspector and one next action
 → discovery
 → falsifiable hypothesis
-→ controlled protocol and person-only block
+→ controlled protocol and non-WebMCP review block
 → visible human approval and re-inspection
 → seeded reduced-order replay
 → bilateral and left-only BANC reconstruction views
@@ -114,7 +114,7 @@ Show baseline, model-sham, bilateral, left-only, and right-only arms together wi
 
 **Frame:** `04-human-approved.png`
 
-Move from the blocked run state to the visibly human-approved protocol. Approval is a person-only interface action, not one of the seven agent tools.
+Move from the blocked run state to the visibly approved protocol. Approval is a visible interface action, not one of the seven WebMCP workflow tools; it is not identity-authenticated against general browser automation.
 
 > Execution remains blocked until a person reviews the exact protocol and uses the visible approval control. Approval is deliberately not available as an agent tool.
 
@@ -146,9 +146,9 @@ Show only the two metadata-left MDNs and their connectome-inferred right LBL40 t
 
 **Frame:** `08-behavior-analysis.png`
 
-Show the preregistered behavior metrics and the paired `derived` and `simulation_predicted` provenance labels.
+Show the predefined required behavior metrics and the paired `derived` and `simulation_predicted` provenance labels.
 
-> The agent calculates the preregistered behavior metrics from the completed batch. Results carry both derived and simulation-predicted labels, preserving the difference between arithmetic on a model and measurements from flies.
+> The agent calculates the predefined required behavior metrics from the completed batch. Results carry both derived and simulation-predicted labels, preserving the difference between arithmetic on a model and measurements from flies.
 
 ### 10. Bounded follow-up — 1:41.542–1:51.255
 

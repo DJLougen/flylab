@@ -26,7 +26,7 @@ FlyLab is an agent-native virtual neuroethology lab built around a scientificall
 
 The person and agent share the same open-page state. `inspect_flylab_state` lets an agent recover the current monotonic revision, artifact IDs, discovered evidence, hypothesis perturbation, analysis metric sets, exact comparison lineage, person-selected limits, blocker, and one valid next action after a person edit or interruption—without scraping the interface. The agent can gather cited evidence and prepare a protocol with mandatory baseline/model-sham controls, but simulation is locked until the person reviews and approves the exact visible identifiers and parameters. While blocked, the inspector returns `waiting_for_human` and no callable next tool. If the person edits the protocol, approval and downstream results are cleared. Long preparations compare their captured revision with live state; `STALE_STATE` publishes nothing and directs the agent back to the inspector. After execution, the illustrative condition replay remains a simulation prediction while behavior cards are labeled as derived aggregates of separate simulation-generated per-run summaries. The agent can propose a bounded follow-up, but it cannot execute that proposal automatically.
 
-FlyLab's current embodiment is a deterministic reduced-order model, version `0.1.2`, with the MDN-inspired `mdn-inspired-retreat-adapter.v1`. It is not FlyGym, a complete fly brain, or a wet-lab experiment. Sources, assumptions, dataset and model versions, seeds, run IDs, analyses, limitations, and a manifest hash are saved together so a compelling result never loses its boundary. The WebMCP surface follows OpenAI's [Site tools documentation](https://learn.chatgpt.com/docs/webmcp).
+FlyLab's current embodiment is a deterministic reduced-order model, version `0.1.3`, with the MDN-inspired `mdn-inspired-retreat-adapter.v2`. Its numeric parameters are hand-authored and uncalibrated; the public [model card](MODEL_CARD.md) gives every equation and constant. It is not FlyGym, a complete fly brain, or a wet-lab experiment. Sources, assumptions, dataset and model versions, seeds, run IDs, analyses, limitations, and a manifest hash are saved together so a compelling result never loses its boundary. The WebMCP surface follows OpenAI's [Site tools documentation](https://learn.chatgpt.com/docs/webmcp).
 
 The circuit view is an orbitable Three.js rendering of six real, pinned BANC v888 L2 skeleton reconstructions—four MDNs and two LBL40 cells—with camera presets and accessible cell inspection. Purple replay illumination marks the MDNs receiving the selected unitless model drive; cyan marks bundled connectome-inferred structural LBL40 paths. These encodings are not measured neural activity or biological signal propagation. The surrounding CNS shell is explicitly schematic.
 
@@ -50,7 +50,7 @@ This is not a generic CRUD wrapper: one browser session combines an interactive 
 
 - The agent handles evidence retrieval, protocol structure, repetitive seeded trials, metric calculation, and comparison.
 - The person sees every intermediate artifact and can inspect sources, edit parameters, reject the design, or approve the exact protocol.
-- Approval cannot be called by the agent.
+- No WebMCP site tool can approve a protocol. Approval requires visible UI interaction and is intentionally not presented as identity-authenticated protection against general browser automation.
 - Editing invalidates approval and downstream artifacts.
 - The agent proposes one follow-up within a person-selected budget and stops.
 - The final bundle preserves sources and scientific limitations, not just a polished answer.
@@ -98,8 +98,8 @@ inspect shared page state
 - Five-class provenance model
 - Visible human-approval boundary
 - Bounded next-experiment proposal
-- Exact-lineage evidence bundle with hypothesis-supporting source closure, model manifests, and hash
-- 45 automated tests for the model, recovery state machine, evidence export, and WebMCP contracts
+- Exact-lineage evidence bundle with separately scoped hypothesis-support and model-method source closures, model manifests, and hash
+- 50 automated tests for the model, model-card parity, recovery state machine, claim-compatible evidence gating, evidence export, synchronized public agent manifest, and WebMCP contracts
 
 **Not claimed**
 
@@ -116,13 +116,14 @@ FlyGym is a future adapter path, not a hidden dependency or current runtime clai
 The same protocol and seed reproduce the same experiment, runs, trajectories, and run hash. Changing the seed changes the generated runs. Saving requires the current hypothesis, experiment, sole batch, comparison, and exactly the comparison's complete analysis set. Every saved bundle includes:
 
 - the hypothesis's exact supporting source/evidence closure
+- a separately scoped model-method evidence/source closure in which the local model card defines the method and FlyGym remains an embodiment reference
 - provenance labels
 - hypothesis and falsification criterion
 - exact controlled protocol
 - model/controller/environment versions and assumptions
 - base and derived seeds
 - run IDs and run hash
-- analysis method version and complete preregistered metric panel
+- analysis method version and complete predefined required metric panel
 - comparison and non-authorized follow-up proposal
 - evidence-bundle manifest hash
 
@@ -165,7 +166,7 @@ Judge-ready prerequisites, prompts, expected state transitions, and recovery che
 - [x] Confirm Chrome with the official WebMCP testing feature accepts all eight registrations.
 - [ ] Confirm ChatGPT's in-app browser discovers exactly eight tools.
 - [x] Run `npm test`, `npm run lint`, and `npm run build` against the release candidate.
-- [x] Confirm the deployed workflow stops at human approval before the visible person-only approval click.
+- [x] Confirm the deployed workflow stops at the non-WebMCP review gate before the visible approval click.
 - [x] Confirm on the final deployment that editing a protocol clears approval, playback, analyses, and the follow-up proposal.
 - [x] Confirm on the final deployment that cancellation does not create a completed batch through both WebMCP protocol cancellation and the visible human cancel control.
 - [x] Confirm on the final deployment that canceling evidence preparation creates no bundle, local-storage entry, or ledger entry and preserves the callable save recovery state.

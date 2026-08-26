@@ -31,6 +31,22 @@ export type ProvenanceLabel =
   | 'simulation_predicted'
   | 'agent_hypothesized';
 
+export type EvidenceRole = 'hypothesis_support' | 'model_context' | 'catalog_context';
+export type EvidenceSupportKind =
+  | 'perturbation_effect'
+  | 'structural_path'
+  | 'specimen_inventory'
+  | 'motor_context'
+  | 'model_method'
+  | 'catalog_context';
+
+export interface EvidenceSourceSupport {
+  sourceId: string;
+  relation: 'claim_support' | 'dataset_basis' | 'method_definition' | 'embodiment_reference' | 'catalog_context';
+  locator: string;
+  supports: string;
+}
+
 export const PROVENANCE_DEFINITIONS: Record<ProvenanceLabel, string> = {
   measured: 'An empirical result reported under the cited study conditions; it is not automatically universal or reproduced by FlyLab.',
   derived: 'A deterministic filter, aggregation, or calculation from pinned source records; it is not a new wet-lab measurement.',
@@ -72,6 +88,13 @@ export interface EvidenceRecord {
   sourceIds: string[];
   context: string;
   caution: string;
+  role: EvidenceRole;
+  support: {
+    kind: EvidenceSupportKind;
+    perturbations?: Array<'activate' | 'silence'>;
+    behaviors?: string[];
+  };
+  sourceSupport: EvidenceSourceSupport[];
 }
 
 export interface CircuitRecord {
@@ -79,11 +102,13 @@ export interface CircuitRecord {
   name: string;
   abbreviation: string;
   stage: 'adult';
-  sex: 'any';
+  sex: 'source_specific';
+  sexBoundary: string;
   laterality: 'bilateral_pair';
   behaviors: string[];
   evidenceIds: string[];
   summary: string;
+  provenance: ['derived'];
 }
 
 export interface Hypothesis {
@@ -93,6 +118,7 @@ export interface Hypothesis {
   predictedBehavior: string;
   perturbation: 'activate' | 'silence';
   evidenceIds: string[];
+  causalEvidenceIds: string[];
   falsificationCriterion: string;
   provenance: 'agent_hypothesized';
 }
@@ -102,7 +128,14 @@ export interface TrialCondition {
   label: string;
   kind: 'baseline' | 'sham' | 'perturbation';
   laterality: Laterality;
-  activationLevel: number;
+  nominalControlLevel: number;
+  expectedModelEffect:
+    | 'no_retreat_drive'
+    | 'zero_effect_sham'
+    | 'reference_retreat_drive'
+    | 'reference_drive_sham'
+    | 'activation_increases_retreat_drive'
+    | 'suppression_reduces_reference_drive';
 }
 
 export interface Experiment {
@@ -121,6 +154,7 @@ export interface Experiment {
   approved: boolean;
   model: typeof MODEL_MANIFEST;
   assumptions: string[];
+  provenance: ['agent_hypothesized'];
 }
 
 export interface TrajectoryPoint {
@@ -208,13 +242,43 @@ export interface Comparison {
     provenance: 'agent_hypothesized';
   };
   limitations: string[];
+  provenance: ['derived', 'simulation_predicted'];
 }
+
+export const MODEL_PARAMETERS = {
+  name: 'flylab.reduced-order-parameters.v1',
+  provenance: 'agent_hypothesized',
+  calibration: 'Hand-authored for deterministic challenge demonstration; not fitted to the cited fly assays, BANC contact counts, neural recordings, or FlyGym output.',
+  unitBoundary: 'Distances and speeds use declared model-scale millimeter units. They are internally consistent but are not biologically calibrated effect sizes.',
+  durationReferenceMs: 1800,
+  durationGainBounds: [0.35, 1.2],
+  unilateralGain: 0.72,
+  maximumRetreatDrive: 1.1,
+  silencingReferenceDrive: 0.72,
+  maximumSuppressionFraction: 0.92,
+  reverseProbability: { baseline: 0.08, driveGain: 0.79, minimum: 0.02, maximum: 0.97 },
+  signedSpeed: { forwardBaselineMmS: 0.92, forwardDrivePenaltyMmS: 0.25, reverseInterceptMmS: 0.62, reverseDriveGainMmS: 2.25, jitterScaleMmS: 0.36, forwardJitterScaleMmS: 0.28 },
+  responseLatency: { interceptMs: 540, inverseDriveGainMs: 1320, jitterScaleMs: 260, minimumClampMs: 180 },
+  backwardDistanceScale: { minimum: 0.72, maximum: 0.92 },
+  heading: { baseDeg: 11, driveGainDeg: 34, bilateralJitterScaleDeg: 7, unilateralJitterScaleDeg: 12 },
+  stanceStability: { baseline: 0.91, drivePenalty: 0.08, jitterScale: 0.06, minimum: 0.62, maximum: 0.98 },
+  trajectory: {
+    steps: 80,
+    reverseDriveThreshold: 0.12,
+    baseStepModelMm: 0.018,
+    driveStepGainModelMm: 0.036,
+    positionJitterScaleModelMm: 0.006,
+    headingJitterScaleDeg: 0.08,
+    activeTurnBaseDegPerStep: 0.32,
+    activeTurnGainDegPerStep: 0.34,
+  },
+} as const;
 
 export const MODEL_MANIFEST = {
   name: 'FlyLab reduced-order embodiment model',
-  version: '0.1.2',
-  controller: 'mdn-inspired-retreat-adapter.v1',
-  environment: 'open-field-5mm.v1',
+  version: '0.1.3',
+  controller: 'mdn-inspired-retreat-adapter.v2',
+  environment: 'open-field-model-scale.v2',
   controllerMapping: {
     provenance: 'agent_hypothesized',
     statement: 'The mapping from a unitless MDN-inspired drive to this controller is hand-authored and versioned; it is not an inferred firing rate or optogenetic dose.',
@@ -227,7 +291,8 @@ export const MODEL_MANIFEST = {
     license: 'Apache-2.0',
     browserStack: { mujocoWasm: '3.9.0', threeJs: '0.169.0' },
   },
-  boundary: 'Reduced-order kinematic prediction only. It does not execute BANC neurons, model neural dynamics, reproduce a wet-lab perturbation, or constitute an independent biological validation.',
+  parameterization: MODEL_PARAMETERS,
+  boundary: 'Hand-authored, uncalibrated reduced-order kinematic prediction only. It does not execute BANC neurons, model neural dynamics, reproduce a wet-lab perturbation, or constitute an independent biological validation.',
 } as const;
 
 export const DATASET_MANIFEST = {
@@ -365,6 +430,19 @@ export const SOURCES: SourceRecord[] = [
     notes: MANC_V121_REFERENCE.matchSemantics,
   },
   {
+    id: 'SRC-FLYLAB-MODEL-CARD',
+    kind: 'software',
+    title: 'FlyLab reduced-order model card',
+    url: 'https://github.com/DJLougen/flylab/blob/main/docs/MODEL_CARD.md',
+    citation: 'FlyLab contributors. FlyLab reduced-order model card, version 0.1.3 (2026).',
+    version: '0.1.3 / mdn-inspired-retreat-adapter.v2',
+    access: 'Open source model definition and equations.',
+    license: 'Apache-2.0',
+    specimen: 'No biological specimen; local deterministic software method.',
+    redistribution: 'Reuse under Apache-2.0 with required notices.',
+    notes: 'This is the authoritative source for FlyLab equations. FlyGym is a separate embodiment reference and does not define the local controller.',
+  },
+  {
     id: 'SRC-FLYGYM-NM-2024',
     kind: 'article',
     title: 'NeuroMechFly v2: simulating embodied sensorimotor control in adult Drosophila',
@@ -401,6 +479,12 @@ export const EVIDENCE: EvidenceRecord[] = [
     sourceIds: ['SRC-BIDAYE-SCIENCE-2014', 'SRC-SEN-CURRENT-BIOLOGY-2017'],
     context: 'Adult Drosophila under two MDN-specific perturbation protocols.',
     caution: 'These are assay- and protocol-specific sufficiency results, not a guarantee for every fly or a quantitative dose-response law for this simulator.',
+    role: 'hypothesis_support',
+    support: { kind: 'perturbation_effect', perturbations: ['activate'], behaviors: ['backward_walking', 'retreat'] },
+    sourceSupport: [
+      { sourceId: 'SRC-BIDAYE-SCIENCE-2014', relation: 'claim_support', locator: 'Abstract (PMID 24700860); Science 344:97–101', supports: 'MDN activity was reported sufficient to trigger backward walking under the cited activation conditions.' },
+      { sourceId: 'SRC-SEN-CURRENT-BIOLOGY-2017', relation: 'claim_support', locator: 'Fig. 1 and Movie S1; Current Biology 27:766–771', supports: 'Acute bilateral MDN activation elicited backward locomotion under the cited adult assay.' },
+    ],
   },
   {
     id: 'E-DN-SCREEN-002',
@@ -410,6 +494,12 @@ export const EVIDENCE: EvidenceRecord[] = [
     sourceIds: ['SRC-CANDE-ELIFE-2018', 'SRC-CANDE-DRYAD-V1'],
     context: 'Broad screen context for future descending-neuron expansion, not an MDN-specific result.',
     caution: 'Do not cite this screen as validating MDN causality or automatically assign a driver-line phenotype to one BANC neuron.',
+    role: 'catalog_context',
+    support: { kind: 'catalog_context' },
+    sourceSupport: [
+      { sourceId: 'SRC-CANDE-ELIFE-2018', relation: 'catalog_context', locator: 'Introduction screen-design paragraph for 130 lines/~160 neurons/58 types; Discussion limitations paragraph for male-only, solitary-fly scope; Methods—Fly stocks and fly handling for assay details', supports: 'Reports the line, neuron, and anatomical-type counts plus the sex and social-context limits used for broad catalog context.' },
+      { sourceId: 'SRC-CANDE-DRYAD-V1', relation: 'catalog_context', locator: 'Dryad dataset version 1 metadata', supports: 'Identifies the associated released screen dataset and version.' },
+    ],
   },
   {
     id: 'E-BANC-PATH-003',
@@ -419,15 +509,28 @@ export const EVIDENCE: EvidenceRecord[] = [
     sourceIds: ['SRC-BANC-NATURE-2026', 'SRC-BANC-DATAVERSE-V3'],
     context: 'Four selected edge rows from the v3-derived directed edge list in one adult female BANC specimen.',
     caution: 'Putative anatomical contacts are not physiological weights, connection probabilities, activity measurements, or causal efficacy. FlyLab preserves norm without assigning it a biological interpretation.',
+    role: 'hypothesis_support',
+    support: { kind: 'structural_path', behaviors: ['backward_walking', 'retreat'] },
+    sourceSupport: [
+      { sourceId: 'SRC-BANC-NATURE-2026', relation: 'dataset_basis', locator: 'Data availability; final-print materialization v888 and static edge-list resources', supports: 'Identifies the adult female BANC specimen, v888 materialization, and released connectivity resources.' },
+      { sourceId: 'SRC-BANC-DATAVERSE-V3', relation: 'dataset_basis', locator: 'banc_888_edgelist_simple_v3.feather; Dataverse file 13918810; SHA-256 8c296e946f3c69a8c7222f30ad75fa8a98eeb189124fec6df829c9125f4be64b; rows 720575941491012809→720575941669069043 count 52, 720575941491065653→720575941669069043 count 51, 720575941499708745→720575941669107187 count 26, 720575941614906387→720575941669107187 count 24', supports: 'Provides the exact pinned rows and contact-count field used for the four-edge, 153-contact derived record.' },
+    ],
   },
   {
     id: 'E-FLYLAB-MODEL-004',
-    label: 'FlyLab reduced-order model prediction',
+    label: 'FlyLab reduced-order model method',
     claim: 'FlyLab converts a hand-authored, unitless MDN-inspired controller drive into a seeded reduced-order trajectory and behavioral metrics.',
-    provenance: 'simulation_predicted',
-    sourceIds: ['SRC-FLYGYM-NM-2024', 'SRC-FLYGYM-CODE-V210'],
+    provenance: 'derived',
+    sourceIds: ['SRC-FLYLAB-MODEL-CARD', 'SRC-FLYGYM-NM-2024', 'SRC-FLYGYM-CODE-V210'],
     context: 'FlyGym v2.1.0 is the pinned embodied simulation reference; the current FlyLab browser model is not a FlyGym execution or a neural simulation.',
-    caution: MODEL_MANIFEST.boundary,
+    caution: `${MODEL_MANIFEST.boundary} This record describes the method; only a generated batch is labeled simulation_predicted.`,
+    role: 'model_context',
+    support: { kind: 'model_method' },
+    sourceSupport: [
+      { sourceId: 'SRC-FLYLAB-MODEL-CARD', relation: 'method_definition', locator: 'Retreat-drive adapter; seeded replicate summaries; illustrative condition trajectory', supports: 'Defines the local equations, constants, seed derivation, units, and interpretation boundary.' },
+      { sourceId: 'SRC-FLYGYM-NM-2024', relation: 'embodiment_reference', locator: 'Article abstract and methods overview', supports: 'Provides scientific context for an adult-fly embodied simulation framework; it does not define FlyLab equations.' },
+      { sourceId: 'SRC-FLYGYM-CODE-V210', relation: 'embodiment_reference', locator: 'Release v2.1.0 at pinned commit ca65a510…', supports: 'Pins the separate embodiment software reference and license; FlyLab does not execute it.' },
+    ],
   },
   {
     id: 'E-MDN-SILENCING-005',
@@ -437,6 +540,11 @@ export const EVIDENCE: EvidenceRecord[] = [
     sourceIds: ['SRC-BIDAYE-SCIENCE-2014'],
     context: 'Adult Drosophila under the reported targeted-silencing and barrier assay conditions.',
     caution: 'This is an assay-specific impairment result, not a claim that MDNs are the only route to every form of backward locomotion.',
+    role: 'hypothesis_support',
+    support: { kind: 'perturbation_effect', perturbations: ['silence'], behaviors: ['backward_walking', 'retreat'] },
+    sourceSupport: [
+      { sourceId: 'SRC-BIDAYE-SCIENCE-2014', relation: 'claim_support', locator: 'Abstract (PMID 24700860); Science 344:97–101', supports: 'MDN activity was reported required for barrier-evoked backward walking under the cited silencing assay.' },
+    ],
   },
   {
     id: 'E-MDN-LATERALITY-006',
@@ -446,6 +554,11 @@ export const EVIDENCE: EvidenceRecord[] = [
     sourceIds: ['SRC-SEN-CURRENT-BIOLOGY-2017'],
     context: 'Stochastic activation in adult Drosophila; asymmetric activation favored contralateral backward turning in the reported assay.',
     caution: 'Do not restate this as a universal rule that symmetric recruitment always yields straight retreat or that one simulator control unit equals one recruited neuron.',
+    role: 'hypothesis_support',
+    support: { kind: 'perturbation_effect', perturbations: ['activate'], behaviors: ['backward_walking', 'retreat', 'turning'] },
+    sourceSupport: [
+      { sourceId: 'SRC-SEN-CURRENT-BIOLOGY-2017', relation: 'claim_support', locator: 'Fig. 4A–C and Movie S4; Current Biology 27:766–771', supports: 'Supports activation-linked retreat and asymmetric left/right MDN recruitment as a turning mechanism in the reported assay.' },
+    ],
   },
   {
     id: 'E-BANC-MDN-INVENTORY-007',
@@ -455,6 +568,11 @@ export const EVIDENCE: EvidenceRecord[] = [
     sourceIds: ['SRC-BANC-DATAVERSE-V3'],
     context: 'A deterministic filter of banc_888_meta.feather in one adult female specimen.',
     caution: 'This is a specimen-level inventory, not a universal MDN count across flies. Use banc_888_id as the pinned join key; live root IDs can change.',
+    role: 'hypothesis_support',
+    support: { kind: 'specimen_inventory' },
+    sourceSupport: [
+      { sourceId: 'SRC-BANC-DATAVERSE-V3', relation: 'dataset_basis', locator: 'banc_888_meta.feather; Dataverse file 14033740; SHA-256 819bbcff476e52702d6f8d8604ce1f12d1d7b11942281df2f49df2a73a6f15a5; rows cell_type == MDN: 720575941491012809 left, 720575941491065653 left, 720575941499708745 right, 720575941614906387 right; all proofread == true', supports: 'Provides the exact four specimen rows, stable banc_888_id keys, and left/right metadata used by FlyLab.' },
+    ],
   },
   {
     id: 'E-FENG-LBL40-008',
@@ -464,6 +582,11 @@ export const EVIDENCE: EvidenceRecord[] = [
     sourceIds: ['SRC-FENG-NCOMMS-2020'],
     context: 'Adult Drosophila motor-circuit experiments reported by Feng et al.',
     caution: 'The BANC MDN→LBL40 rows are separate anatomical evidence and do not quantify this physiological contribution.',
+    role: 'hypothesis_support',
+    support: { kind: 'motor_context', behaviors: ['backward_walking'] },
+    sourceSupport: [
+      { sourceId: 'SRC-FENG-NCOMMS-2020', relation: 'claim_support', locator: 'Results, LBL40 functional analysis; Figs. 5 and 7', supports: 'Reports LBL40 contribution to the hindleg power stroke during MDN-induced backward walking.' },
+    ],
   },
   {
     id: 'E-FENG-LUL130-009',
@@ -473,6 +596,11 @@ export const EVIDENCE: EvidenceRecord[] = [
     sourceIds: ['SRC-FENG-NCOMMS-2020'],
     context: LUL130_BUNDLE_STATUS.statement,
     caution: 'No LUL130 annotation was found in the pinned BANC v888 metadata, so FlyLab must not invent or assign a BANC node ID for it.',
+    role: 'hypothesis_support',
+    support: { kind: 'motor_context', behaviors: ['backward_walking'] },
+    sourceSupport: [
+      { sourceId: 'SRC-FENG-NCOMMS-2020', relation: 'claim_support', locator: 'Results, LUL130 functional analysis; Figs. 6 and 7', supports: 'Reports LUL130 contribution to leg lifting at the end of stance during MDN-induced backward walking.' },
+    ],
   },
 ];
 
@@ -482,7 +610,8 @@ export const CIRCUITS: CircuitRecord[] = [
     name: 'Moonwalker descending neurons',
     abbreviation: 'MDN',
     stage: 'adult',
-    sex: 'any',
+    sex: 'source_specific',
+    sexBoundary: 'Evidence spans source-specific adult assay populations and one adult-female BANC specimen; this catalog record does not establish sex generality.',
     laterality: 'bilateral_pair',
     behaviors: ['backward_walking', 'retreat'],
     evidenceIds: [
@@ -496,7 +625,8 @@ export const CIRCUITS: CircuitRecord[] = [
       'E-FENG-LBL40-008',
       'E-FENG-LUL130-009',
     ],
-    summary: 'An adult descending-neuron target with assay-specific activation and silencing evidence. The pinned BANC v888 specimen contributes four proofread MDN rows—two on each side—and predicted MDN→LBL40 anatomy.',
+    summary: 'A derived adult MDN catalog entry linking assay-scoped literature records to a pinned BANC specimen inventory and separate MDN→LBL40 structural records.',
+    provenance: ['derived'],
   },
 ];
 
@@ -514,8 +644,8 @@ export function evidenceBundleTitle(
 export const DEFAULT_GOAL = 'Explore whether a unitless MDN-inspired model drive predicts adult-fly retreat.';
 
 export const METRIC_LABELS: Record<MetricName, { label: string; unit: string }> = {
-  backward_distance_mm: { label: 'Backward distance', unit: 'mm' },
-  signed_speed_mm_s: { label: 'Signed speed', unit: 'mm/s' },
+  backward_distance_mm: { label: 'Backward distance', unit: 'model mm' },
+  signed_speed_mm_s: { label: 'Signed speed', unit: 'model mm/s' },
   response_latency_ms: { label: 'Response latency', unit: 'ms' },
   heading_change_deg: { label: 'Heading change', unit: '°' },
   stance_stability: { label: 'Stance stability', unit: 'index' },
@@ -550,13 +680,23 @@ function jitter(random: () => number, scale = 1) {
   return ((random() + random() + random() + random()) / 4 - 0.5) * scale;
 }
 
-export function makeHypothesis(input: Omit<Hypothesis, 'id' | 'provenance'>): Hypothesis {
+export function makeHypothesis(input: Omit<Hypothesis, 'id' | 'provenance' | 'causalEvidenceIds'>): Hypothesis {
   const canonicalInput = {
     ...input,
     evidenceIds: [...input.evidenceIds].sort(),
   };
+  const causalEvidenceIds = canonicalInput.evidenceIds.filter((id) => {
+    const evidence = EVIDENCE.find((record) => record.id === id);
+    return evidence?.support.kind === 'perturbation_effect'
+      && evidence.support.perturbations?.includes(input.perturbation)
+      && evidence.support.behaviors?.includes(input.predictedBehavior);
+  });
+  if (!causalEvidenceIds.length) {
+    throw new RangeError(`Hypothesis evidence must include a perturbation_effect record matching ${input.perturbation} and ${input.predictedBehavior}.`);
+  }
   return {
     ...canonicalInput,
+    causalEvidenceIds,
     id: `hyp_${stableHash(canonicalInput)}`,
     provenance: 'agent_hypothesized',
   };
@@ -596,23 +736,76 @@ export function designExperiment(input: {
   }
   const conditions: TrialCondition[] = [];
   if (input.includeBaseline) {
-    conditions.push({ id: 'condition_baseline', label: 'Baseline · no model drive', kind: 'baseline', laterality: 'none', activationLevel: 0 });
+    conditions.push(input.perturbation === 'silence'
+      ? {
+          id: 'condition_baseline',
+          label: 'Reference retreat · no model suppression',
+          kind: 'baseline',
+          laterality: 'none',
+          nominalControlLevel: 0,
+          expectedModelEffect: 'reference_retreat_drive',
+        }
+      : {
+          id: 'condition_baseline',
+          label: 'Baseline · no model drive',
+          kind: 'baseline',
+          laterality: 'none',
+          nominalControlLevel: 0,
+          expectedModelEffect: 'no_retreat_drive',
+        });
   }
   if (input.includeShamControl) {
-    conditions.push({ id: 'condition_sham', label: 'Model sham control', kind: 'sham', laterality: 'none', activationLevel: input.activationLevel });
+    conditions.push(input.perturbation === 'silence'
+      ? {
+          id: 'condition_sham',
+          label: 'Suppression sham · reference drive retained',
+          kind: 'sham',
+          laterality: 'none',
+          nominalControlLevel: input.activationLevel,
+          expectedModelEffect: 'reference_drive_sham',
+        }
+      : {
+          id: 'condition_sham',
+          label: 'Model sham · nominal control, zero effect',
+          kind: 'sham',
+          laterality: 'none',
+          nominalControlLevel: input.activationLevel,
+          expectedModelEffect: 'zero_effect_sham',
+        });
   }
   conditions.push({
     id: `condition_${input.laterality}`,
     label: `${input.laterality[0].toUpperCase()}${input.laterality.slice(1)} MDN-inspired ${input.perturbation === 'activate' ? 'drive' : 'suppression'}`,
     kind: 'perturbation',
     laterality: input.laterality,
-    activationLevel: input.activationLevel,
+    nominalControlLevel: input.activationLevel,
+    expectedModelEffect: input.perturbation === 'activate'
+      ? 'activation_increases_retreat_drive'
+      : 'suppression_reduces_reference_drive',
   });
   if (input.laterality === 'bilateral') {
     const modeLabel = input.perturbation === 'activate' ? 'drive' : 'suppression';
     conditions.push(
-      { id: 'condition_left', label: `Left-only MDN-inspired model ${modeLabel}`, kind: 'perturbation', laterality: 'left', activationLevel: input.activationLevel },
-      { id: 'condition_right', label: `Right-only MDN-inspired model ${modeLabel}`, kind: 'perturbation', laterality: 'right', activationLevel: input.activationLevel },
+      {
+        id: 'condition_left',
+        label: `Left-only MDN-inspired model ${modeLabel}`,
+        kind: 'perturbation',
+        laterality: 'left',
+        nominalControlLevel: input.activationLevel,
+        expectedModelEffect: input.perturbation === 'activate'
+          ? 'activation_increases_retreat_drive'
+          : 'suppression_reduces_reference_drive',
+      },
+      {
+        id: 'condition_right',
+        label: `Right-only MDN-inspired model ${modeLabel}`,
+        kind: 'perturbation',
+        laterality: 'right',
+        nominalControlLevel: input.activationLevel,
+        expectedModelEffect: input.perturbation === 'activate'
+          ? 'activation_increases_retreat_drive'
+          : 'suppression_reduces_reference_drive',
+      },
     );
   }
 
@@ -643,36 +836,59 @@ export function designExperiment(input: {
       'BANC snapshot IDs and anatomical contacts are provenance records, not executable neurons or physiological weights.',
       'FlyGym v2.1.0 is an embodied simulation reference; this reduced-order browser model does not execute FlyGym.',
       'Simulator intervals describe seeded model variation, not biological population inference.',
+      ...(input.perturbation === 'silence'
+        ? ['Silencing trials apply a hand-authored reference retreat drive to baseline and sham conditions, then reduce it in suppression arms; this is not a measurement of endogenous MDN activity.']
+        : []),
     ],
+    provenance: ['agent_hypothesized'],
   };
 }
 
-function conditionEffect(condition: TrialCondition, experiment: Experiment) {
-  if (condition.kind === 'baseline') return 0;
-  if (condition.kind === 'sham') return 0;
-  const durationGain = clamp(experiment.durationMs / 1800, 0.35, 1.2);
-  const lateralityGain = condition.laterality === 'bilateral' ? 1 : 0.72;
-  const perturbationDirection = experiment.perturbation === 'activate' ? 1 : -0.55;
-  return clamp(condition.activationLevel * durationGain * lateralityGain * perturbationDirection, -0.6, 1.1);
+function conditionRetreatDrive(condition: TrialCondition, experiment: Experiment) {
+  if (condition.kind !== 'perturbation') {
+    return experiment.perturbation === 'silence' ? MODEL_PARAMETERS.silencingReferenceDrive : 0;
+  }
+  const durationGain = clamp(
+    experiment.durationMs / MODEL_PARAMETERS.durationReferenceMs,
+    MODEL_PARAMETERS.durationGainBounds[0],
+    MODEL_PARAMETERS.durationGainBounds[1],
+  );
+  const lateralityGain = condition.laterality === 'bilateral' ? 1 : MODEL_PARAMETERS.unilateralGain;
+  const adapterAmount = condition.nominalControlLevel * durationGain * lateralityGain;
+  if (experiment.perturbation === 'activate') {
+    return clamp(adapterAmount, 0, MODEL_PARAMETERS.maximumRetreatDrive);
+  }
+  const suppressionFraction = clamp(adapterAmount, 0, MODEL_PARAMETERS.maximumSuppressionFraction);
+  return MODEL_PARAMETERS.silencingReferenceDrive * (1 - suppressionFraction);
 }
 
-function simulateTrajectory(condition: TrialCondition, experiment: Experiment, effect: number, seed: number): TrajectoryPoint[] {
+function simulateTrajectory(condition: TrialCondition, experiment: Experiment, retreatDrive: number, seed: number): TrajectoryPoint[] {
   const random = mulberry32(seed);
   const points: TrajectoryPoint[] = [];
   let x = 0;
   let y = 0;
   let heading = 0;
-  const steps = 80;
+  const steps = MODEL_PARAMETERS.trajectory.steps;
   for (let step = 0; step <= steps; step += 1) {
     const t = (experiment.trialDurationMs * step) / steps;
-    const active = condition.kind === 'perturbation' && t >= experiment.onsetMs && t <= experiment.onsetMs + experiment.durationMs;
-    const drive = active ? effect : 0;
-    const direction = drive > 0.12 ? -1 : 1;
+    const inProtocolWindow = t >= experiment.onsetMs && t <= experiment.onsetMs + experiment.durationMs;
+    const active = condition.kind === 'perturbation' && inProtocolWindow;
+    const drive = inProtocolWindow ? retreatDrive : 0;
+    const direction = drive > MODEL_PARAMETERS.trajectory.reverseDriveThreshold ? -1 : 1;
     const lateralSign = condition.laterality === 'left' ? -1 : condition.laterality === 'right' ? 1 : 0;
-    heading += active ? lateralSign * (0.32 + drive * 0.34) : jitter(random, 0.08);
-    const speed = 0.018 + Math.abs(drive) * 0.036;
-    x += Math.sin((heading * Math.PI) / 180) * speed + jitter(random, 0.006);
-    y += direction * Math.cos((heading * Math.PI) / 180) * speed + jitter(random, 0.006);
+    const lateralModeSign = experiment.perturbation === 'silence' ? -1 : 1;
+    const lateralEffect = experiment.perturbation === 'silence'
+      ? MODEL_PARAMETERS.silencingReferenceDrive - drive
+      : drive;
+    heading += active
+      ? lateralSign * lateralModeSign * (
+          MODEL_PARAMETERS.trajectory.activeTurnBaseDegPerStep
+          + lateralEffect * MODEL_PARAMETERS.trajectory.activeTurnGainDegPerStep
+        )
+      : jitter(random, MODEL_PARAMETERS.trajectory.headingJitterScaleDeg);
+    const speed = MODEL_PARAMETERS.trajectory.baseStepModelMm + drive * MODEL_PARAMETERS.trajectory.driveStepGainModelMm;
+    x += Math.sin((heading * Math.PI) / 180) * speed + jitter(random, MODEL_PARAMETERS.trajectory.positionJitterScaleModelMm);
+    y += direction * Math.cos((heading * Math.PI) / 180) * speed + jitter(random, MODEL_PARAMETERS.trajectory.positionJitterScaleModelMm);
     points.push({ t: Math.round(t), x, y, heading, active });
   }
   return points;
@@ -680,30 +896,64 @@ function simulateTrajectory(condition: TrialCondition, experiment: Experiment, e
 
 export function simulateExperiment(experiment: Experiment): SimulationBatch {
   const conditionRuns = experiment.conditions.map((condition, conditionIndex): ConditionRun => {
-    const effect = conditionEffect(condition, experiment);
+    const retreatDrive = conditionRetreatDrive(condition, experiment);
     const replicates = Array.from({ length: experiment.replicates }, (_, replicateIndex): ReplicateResult => {
       const seed = experiment.seed + conditionIndex * 1009 + replicateIndex * 37;
       const random = mulberry32(seed);
-      const reverseProbability = clamp(0.08 + Math.max(0, effect) * 0.79, 0.02, 0.97);
+      const reverseProbability = clamp(
+        MODEL_PARAMETERS.reverseProbability.baseline + retreatDrive * MODEL_PARAMETERS.reverseProbability.driveGain,
+        MODEL_PARAMETERS.reverseProbability.minimum,
+        MODEL_PARAMETERS.reverseProbability.maximum,
+      );
       const reverseInitiated = random() < reverseProbability;
       const signedSpeedMmS = reverseInitiated
-        ? -(0.62 + Math.max(0, effect) * 2.25 + jitter(random, 0.36))
-        : 0.92 - Math.max(0, effect) * 0.25 + jitter(random, 0.28);
+        ? -(
+            MODEL_PARAMETERS.signedSpeed.reverseInterceptMmS
+            + retreatDrive * MODEL_PARAMETERS.signedSpeed.reverseDriveGainMmS
+            + jitter(random, MODEL_PARAMETERS.signedSpeed.jitterScaleMmS)
+          )
+        : MODEL_PARAMETERS.signedSpeed.forwardBaselineMmS
+          - retreatDrive * MODEL_PARAMETERS.signedSpeed.forwardDrivePenaltyMmS
+          + jitter(random, MODEL_PARAMETERS.signedSpeed.forwardJitterScaleMmS);
       const responseWindowMs = Math.max(0, experiment.trialDurationMs - experiment.onsetMs);
       const responseLatencyMs = reverseInitiated
         ? clamp(
-            540 + (1 - Math.max(0, effect)) * 1320 + jitter(random, 260),
-            Math.min(180, responseWindowMs),
+            MODEL_PARAMETERS.responseLatency.interceptMs
+              + (1 - retreatDrive) * MODEL_PARAMETERS.responseLatency.inverseDriveGainMs
+              + jitter(random, MODEL_PARAMETERS.responseLatency.jitterScaleMs),
+            Math.min(MODEL_PARAMETERS.responseLatency.minimumClampMs, responseWindowMs),
             responseWindowMs,
           )
         : null;
       const reverseSeconds = responseLatencyMs === null
         ? 0
         : Math.max(0, responseWindowMs - responseLatencyMs) / 1000;
-      const backwardDistanceMm = reverseInitiated ? Math.abs(signedSpeedMmS) * reverseSeconds * (0.72 + random() * 0.2) : 0;
+      const backwardDistanceMm = reverseInitiated
+        ? Math.abs(signedSpeedMmS) * reverseSeconds * (
+            MODEL_PARAMETERS.backwardDistanceScale.minimum
+            + random() * (MODEL_PARAMETERS.backwardDistanceScale.maximum - MODEL_PARAMETERS.backwardDistanceScale.minimum)
+          )
+        : 0;
       const lateralSign = condition.laterality === 'left' ? -1 : condition.laterality === 'right' ? 1 : 0;
-      const headingChangeDeg = lateralSign * (11 + Math.max(0, effect) * 34) + jitter(random, condition.laterality === 'bilateral' ? 7 : 12);
-      const stanceStability = clamp(0.91 - Math.max(0, effect) * 0.08 + jitter(random, 0.06), 0.62, 0.98);
+      const lateralModeSign = experiment.perturbation === 'silence' ? -1 : 1;
+      const lateralEffect = experiment.perturbation === 'silence'
+        ? MODEL_PARAMETERS.silencingReferenceDrive - retreatDrive
+        : retreatDrive;
+      const headingChangeDeg = lateralSign * lateralModeSign * (
+        MODEL_PARAMETERS.heading.baseDeg + lateralEffect * MODEL_PARAMETERS.heading.driveGainDeg
+      ) + jitter(
+        random,
+        condition.laterality === 'bilateral'
+          ? MODEL_PARAMETERS.heading.bilateralJitterScaleDeg
+          : MODEL_PARAMETERS.heading.unilateralJitterScaleDeg,
+      );
+      const stanceStability = clamp(
+        MODEL_PARAMETERS.stanceStability.baseline
+          - retreatDrive * MODEL_PARAMETERS.stanceStability.drivePenalty
+          + jitter(random, MODEL_PARAMETERS.stanceStability.jitterScale),
+        MODEL_PARAMETERS.stanceStability.minimum,
+        MODEL_PARAMETERS.stanceStability.maximum,
+      );
       return {
         id: `run_${stableHash({ experiment: experiment.id, condition: condition.id, replicateIndex, seed })}`,
         conditionId: condition.id,
@@ -723,7 +973,7 @@ export function simulateExperiment(experiment: Experiment): SimulationBatch {
       laterality: condition.laterality,
       runIds: replicates.map((replicate) => replicate.id),
       replicates,
-      trajectory: simulateTrajectory(condition, experiment, effect, experiment.seed + conditionIndex * 1009),
+      trajectory: simulateTrajectory(condition, experiment, retreatDrive, experiment.seed + conditionIndex * 1009),
     };
   });
 
@@ -857,6 +1107,7 @@ export function compareAnalyses(
       'Ranking is conditional on the selected FlyLab model and objective metric.',
       'The proposed follow-up is an information-seeking simulation, not a biological protocol recommendation.',
     ],
+    provenance: ['derived', 'simulation_predicted'],
   };
 }
 

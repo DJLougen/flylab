@@ -145,8 +145,28 @@ async function readRuntimeStatus() {
   return JSON.parse(value);
 }
 
-async function captureStage(label) {
+async function captureStage(label, options = {}) {
   if (!captureDirectory) return;
+  if (options.selector) {
+    const focus = await sendCommand('Runtime.evaluate', {
+      expression: `(() => {
+        const element = document.querySelector(${JSON.stringify(options.selector)});
+        element?.scrollIntoView({ behavior: 'instant', block: ${JSON.stringify(options.block ?? 'center')}, inline: 'nearest' });
+        if (element) {
+          const stickyOffset = (document.querySelector('.topbar')?.getBoundingClientRect().height ?? 0)
+            + (document.querySelector('.agent-bridge')?.getBoundingClientRect().height ?? 0)
+            + 12;
+          window.scrollBy({ top: -stickyOffset, behavior: 'instant' });
+        }
+        return Boolean(element);
+      })()`,
+      returnByValue: true,
+    });
+    if (focus?.result?.value !== true) {
+      throw new Error(`Capture target was unavailable: ${JSON.stringify({ label, selector: options.selector })}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 120));
+  }
   await mkdir(captureDirectory, { recursive: true });
   const screenshot = await sendCommand('Page.captureScreenshot', {
     format: 'png',
@@ -159,6 +179,18 @@ async function captureStage(label) {
   captureIndex += 1;
   await writeFile(filepath, Buffer.from(screenshot.data, 'base64'));
   capturedFrames.push(filepath);
+}
+
+async function captureCircuitEvidence() {
+  if (!captureDirectory) return;
+  await clickButton({ text: 'Evidence ledger' });
+  await new Promise((resolve) => setTimeout(resolve, 160));
+  await prepareEvidenceModalCapture({
+    expectedSelection: 'MDN activation and backward locomotion',
+    navPosition: 'start',
+  });
+  await captureStage('circuit-found');
+  await clickButton({ ariaLabel: 'Close evidence ledger' });
 }
 
 async function clickButton({ text, ariaLabel, exact = false }) {
@@ -183,6 +215,74 @@ async function clickButton({ text, ariaLabel, exact = false }) {
   return response.result.value;
 }
 
+async function prepareEvidenceModalCapture({ expectedSelection, navPosition = 'start' } = {}) {
+  const resetAndInspect = () => sendCommand('Runtime.evaluate', {
+    expression: `(() => {
+      const modal = document.querySelector('.evidence-modal');
+      const nav = modal?.querySelector('nav');
+      const detail = modal?.querySelector('.evidence-detail');
+      const grid = modal?.querySelector('.evidence-modal-grid');
+      const backdrop = modal?.closest('.modal-backdrop');
+      if (!(modal instanceof HTMLElement) || !(nav instanceof HTMLElement) || !(detail instanceof HTMLElement)) {
+        return { ready: false, reason: 'modal, navigation, or detail pane missing' };
+      }
+      modal.style.overflowAnchor = 'none';
+      nav.style.overflowAnchor = 'none';
+      detail.style.overflowAnchor = 'none';
+      if (backdrop instanceof HTMLElement) backdrop.scrollTop = 0;
+      modal.scrollTop = 0;
+      if (grid instanceof HTMLElement) grid.scrollTop = 0;
+      nav.scrollTop = ${JSON.stringify(navPosition)} === 'end'
+        ? Math.max(0, nav.scrollHeight - nav.clientHeight)
+        : 0;
+      detail.scrollTop = 0;
+      const rect = modal.getBoundingClientRect();
+      const header = modal.querySelector(':scope > header');
+      const headerRect = header?.getBoundingClientRect();
+      const headingRect = header?.querySelector('h2')?.getBoundingClientRect();
+      const closeRect = header?.querySelector('button')?.getBoundingClientRect();
+      return {
+        ready: true,
+        fullyVisible: rect.top >= 0 && rect.left >= 0 && rect.bottom <= window.innerHeight && rect.right <= window.innerWidth,
+        headerFullyVisible: Boolean(headerRect && headerRect.top >= rect.top && headerRect.bottom <= rect.bottom),
+        headerContentFullyVisible: Boolean(
+          headerRect
+          && headingRect
+          && closeRect
+          && headingRect.top >= headerRect.top
+          && headingRect.bottom <= headerRect.bottom
+          && closeRect.top >= headerRect.top
+          && closeRect.bottom <= headerRect.bottom
+        ),
+        header: header?.querySelector('h2')?.textContent?.trim() ?? null,
+        selection: nav.querySelector('button[aria-current="true"] strong')?.textContent?.trim() ?? null,
+        modalScrollTop: modal.scrollTop,
+        gridScrollTop: grid instanceof HTMLElement ? grid.scrollTop : null,
+        navScrollTop: nav.scrollTop,
+        detailScrollTop: detail.scrollTop,
+      };
+    })()`,
+    returnByValue: true,
+  });
+  await resetAndInspect();
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  const response = await resetAndInspect();
+  const state = response?.result?.value;
+  if (state?.ready !== true
+    || state?.fullyVisible !== true
+    || state?.headerFullyVisible !== true
+    || state?.headerContentFullyVisible !== true
+    || state?.header !== 'Every claim keeps its boundary'
+    || state?.modalScrollTop !== 0
+    || (state?.gridScrollTop !== null && state?.gridScrollTop !== 0)
+    || state?.detailScrollTop !== 0
+    || (expectedSelection && !state?.selection?.includes(expectedSelection))) {
+    throw new Error(`Evidence modal was not capture-ready: ${JSON.stringify({ expectedSelection, navPosition, state })}`);
+  }
+  await new Promise((resolve) => setTimeout(resolve, 40));
+  return state;
+}
+
 async function waitForViewer() {
   for (let attempt = 0; attempt < 40; attempt += 1) {
     const response = await sendCommand('Runtime.evaluate', {
@@ -204,7 +304,7 @@ async function captureCircuitPlayback() {
   await new Promise((resolve) => setTimeout(resolve, 100));
   await clickButton({ ariaLabel: 'Play replay' });
   await new Promise((resolve) => setTimeout(resolve, 1_250));
-  await captureStage('circuit-bilateral-active');
+  await captureStage('circuit-bilateral-active', { selector: '.main-stage', block: 'start' });
   await clickButton({ ariaLabel: 'Pause replay' });
 
   await clickButton({ text: 'Left-only MDN-inspired model drive' });
@@ -212,7 +312,7 @@ async function captureCircuitPlayback() {
   await new Promise((resolve) => setTimeout(resolve, 100));
   await clickButton({ ariaLabel: 'Play replay' });
   await new Promise((resolve) => setTimeout(resolve, 1_250));
-  await captureStage('circuit-left-active');
+  await captureStage('circuit-left-active', { selector: '.main-stage', block: 'start' });
   await clickButton({ ariaLabel: 'Pause replay' });
   await clickButton({ text: 'Bilateral MDN-inspired drive' });
   await clickButton({ text: '3D fly', exact: true });
@@ -383,6 +483,8 @@ async function verifyVisibleBundle(bundle) {
   if (!metadata
     || !bundle.supportingEvidenceIds.every((id) => metadata['Supporting evidence']?.includes(id))
     || !bundle.supportingSourceIds.every((id) => metadata['Supporting sources']?.includes(id))
+    || !bundle.methodEvidenceIds.every((id) => metadata['Model-method evidence']?.includes(id))
+    || !bundle.methodSourceIds.every((id) => metadata['Model-method sources']?.includes(id))
     || !expectedCounts.every((value) => metadata['Provenance counts']?.includes(value))) {
     throw new Error(`Visible evidence lineage did not match the saved bundle: ${JSON.stringify({ metadata, bundle })}`);
   }
@@ -412,7 +514,7 @@ async function verifyProtocolEditInvalidation(tools, previousExperimentId) {
   const state = await sendCommand('Runtime.evaluate', {
     expression: `JSON.stringify({
       approval: document.querySelector('.approval-chip')?.textContent?.trim() ?? null,
-      primaryAction: document.querySelector('.primary-action')?.textContent?.trim() ?? null,
+      manualAction: document.querySelector('.manual-action')?.textContent?.trim() ?? null,
       protocolApproval: document.querySelector('.protocol-approval-action')?.textContent?.replace(/\\s+/g, ' ').trim() ?? null,
       resultPanelPresent: Boolean(document.querySelector('.results-panel')),
       proposalPresent: Boolean(document.querySelector('.proposal')),
@@ -424,7 +526,7 @@ async function verifyProtocolEditInvalidation(tools, previousExperimentId) {
   });
   const value = typeof state?.result?.value === 'string' ? JSON.parse(state.result.value) : null;
   const verified = value?.approval === 'Draft'
-    && value?.primaryAction?.includes('Review exact protocol')
+    && value?.manualAction?.includes('Review exact protocol')
     && value?.protocolApproval?.includes('Approve this exact experiment')
     && value?.resultPanelPresent === false
     && value?.proposalPresent === false
@@ -449,7 +551,7 @@ async function verifyProtocolEditInvalidation(tools, previousExperimentId) {
   if (!inspectorVerified) {
     throw new Error(`Inspector did not recover the edited protocol boundary: ${JSON.stringify(context)}`);
   }
-  await captureStage('protocol-edit-invalidates-results');
+  await captureStage('protocol-edit-invalidates-results', { selector: '.protocol-controls', block: 'start' });
   return {
     ui_cleared: true,
     inspector_status: context.agent_status,
@@ -481,7 +583,7 @@ async function readSimulationCancellationState() {
   const response = await sendCommand('Runtime.evaluate', {
     expression: `JSON.stringify({
       activity: document.querySelector('.activity-row strong')?.textContent?.trim() ?? null,
-      primaryAction: document.querySelector('.primary-action')?.textContent?.trim() ?? null,
+      manualAction: document.querySelector('.manual-action')?.textContent?.trim() ?? null,
       resultPanelPresent: Boolean(document.querySelector('.results-panel')),
       playbackDisabled: document.querySelector('button.play-button')?.disabled ?? null,
       conditionStates: [...document.querySelectorAll('.condition-tabs small')].map((node) => node.textContent?.trim() ?? null),
@@ -516,7 +618,7 @@ async function waitForSimulationCancellationToSettle() {
 
 function hasNoCompletedSimulationBatch(state) {
   return state?.activity === 'Simulation cancelled'
-    && state?.primaryAction?.includes('Run MDN-inspired drive')
+    && state?.manualAction?.includes('Run MDN-inspired drive')
     && state?.resultPanelPresent === false
     && state?.playbackDisabled === true
     && state?.conditionStates?.length === 5
@@ -572,7 +674,7 @@ async function verifyRunningSimulationCancellation(tools, experimentId) {
     invocation_status: response.status,
     cancellation_phase: 'after_tool_invoked_and_running_before_commit',
     completed_batch_committed: false,
-    primary_action_after_cancel: state.primaryAction,
+    manual_action_after_cancel: state.manualAction,
     condition_states_after_cancel: state.conditionStates,
   };
 }
@@ -703,8 +805,23 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
   const cleanCapture = options.cleanDemoCapture === true;
   const discovery = successfulEnvelope(discoveryResponse, 'find_fly_circuits');
   const circuit = discovery.data.circuits[0];
+  const contextOnlyEvidence = discovery.data.evidence.find((record) => record.role !== 'hypothesis_support');
+  const structuralOnlyEvidence = discovery.data.evidence.find((record) => (
+    record.role === 'hypothesis_support' && record.support?.kind === 'structural_path'
+  ));
+  const wrongPerturbationEvidence = discovery.data.evidence.find((record) => (
+    record.role === 'hypothesis_support'
+    && record.support?.kind === 'perturbation_effect'
+    && record.support?.perturbations?.includes('silence')
+  ));
+  if (!contextOnlyEvidence
+    || !structuralOnlyEvidence
+    || !wrongPerturbationEvidence
+    || discovery.data.hypothesis_eligible_evidence_ids?.includes(contextOnlyEvidence.id)) {
+    throw new Error(`Discovery did not separate contextual records from hypothesis support: ${JSON.stringify(discovery.data)}`);
+  }
   const evidenceIds = discovery.data.evidence
-    .filter((record) => record.provenance === 'measured')
+    .filter((record) => record.provenance === 'measured' && record.role === 'hypothesis_support')
     .slice(0, 4)
     .map((record) => record.id);
 
@@ -716,6 +833,33 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
     evidence_ids: evidenceIds,
     falsification_criterion: 'The prediction fails if bilateral activation does not increase backward distance relative to the model-sham condition.',
   };
+  const contextPromotionResponse = await invokeRegisteredTool(tools, 'draft_fly_hypothesis', {
+    ...hypothesisInput,
+    evidence_ids: [contextOnlyEvidence.id],
+  });
+  const contextPromotionEnvelope = decodedOutput(contextPromotionResponse)?.structuredContent;
+  if (contextPromotionEnvelope?.error?.code !== 'EVIDENCE_MISMATCH'
+    || !contextPromotionEnvelope.error.details?.rejected_evidence?.some((record) => record.id === contextOnlyEvidence.id)) {
+    throw new Error(`Context-only evidence was promoted into hypothesis support: ${JSON.stringify(contextPromotionResponse)}`);
+  }
+  const structuralPromotionResponse = await invokeRegisteredTool(tools, 'draft_fly_hypothesis', {
+    ...hypothesisInput,
+    evidence_ids: [structuralOnlyEvidence.id],
+  });
+  const structuralPromotionEnvelope = decodedOutput(structuralPromotionResponse)?.structuredContent;
+  if (structuralPromotionEnvelope?.error?.code !== 'EVIDENCE_MISMATCH'
+    || structuralPromotionEnvelope.error.details?.required_support?.kind !== 'perturbation_effect') {
+    throw new Error(`Structural evidence carried a causal hypothesis by itself: ${JSON.stringify(structuralPromotionResponse)}`);
+  }
+  const wrongPerturbationResponse = await invokeRegisteredTool(tools, 'draft_fly_hypothesis', {
+    ...hypothesisInput,
+    evidence_ids: [wrongPerturbationEvidence.id],
+  });
+  const wrongPerturbationEnvelope = decodedOutput(wrongPerturbationResponse)?.structuredContent;
+  if (wrongPerturbationEnvelope?.error?.code !== 'EVIDENCE_MISMATCH'
+    || wrongPerturbationEnvelope.error.details?.required_support?.perturbation !== 'activate') {
+    throw new Error(`Silencing evidence carried an activation hypothesis: ${JSON.stringify(wrongPerturbationResponse)}`);
+  }
   const draftedResponse = await invokeRegisteredTool(tools, 'draft_fly_hypothesis', hypothesisInput);
   const drafted = successfulEnvelope(draftedResponse, 'draft_fly_hypothesis');
   await captureStage('hypothesis-drafted');
@@ -743,7 +887,7 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
     || lockedContext.next_tool !== null
     || lockedContext.next_action?.kind !== 'human_gate'
     || lockedContext.human_gate?.status !== 'required') {
-    throw new Error(`Inspector did not expose the person-only gate: ${JSON.stringify(lockedContext)}`);
+    throw new Error(`Inspector did not expose the non-WebMCP review gate: ${JSON.stringify(lockedContext)}`);
   }
 
   let preapprovalError = null;
@@ -757,7 +901,7 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
     }
     preapprovalError = lockEnvelope.error.code;
   }
-  await captureStage('protocol-locked');
+  await captureStage('protocol-locked', { selector: '.protocol-controls', block: 'start' });
 
   const approval = await sendCommand('Runtime.evaluate', {
     expression: `(() => {
@@ -769,14 +913,14 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
     returnByValue: true,
   });
   if (approval?.result?.value?.clicked !== true) {
-    throw new Error(`The human-only approval control was not available: ${JSON.stringify(approval)}`);
+    throw new Error(`The visible approval control was not available: ${JSON.stringify(approval)}`);
   }
   const approvedContext = await inspectAgentContext(tools);
   if (approvedContext.next_tool !== 'run_fly_simulation'
     || approvedContext.human_gate?.status !== 'satisfied') {
     throw new Error(`Inspector did not expose the approved run transition: ${JSON.stringify(approvedContext)}`);
   }
-  await captureStage('human-approved');
+  await captureStage('human-approved', { selector: '.protocol-controls', block: 'start' });
 
   const webmcpCancellation = cleanCapture
     ? { skipped_for_clean_demo_capture: true }
@@ -790,7 +934,7 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
   });
   const run = successfulEnvelope(runResponse, 'run_fly_simulation');
   await new Promise((resolve) => setTimeout(resolve, 1_200));
-  await captureStage('simulation-replay');
+  await captureStage('simulation-replay', { selector: '.main-stage', block: 'start' });
   await captureCircuitPlayback();
 
   const analysisInput = {
@@ -808,7 +952,7 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
   const visibleAnalysis = await verifyVisibleAnalysis(analysis.data.analysis, `condition_${designed.data.experiment.primaryLaterality}`);
   const conditionTabParity = await verifyConditionTabAnalysisParity(analysis.data.analysis, `condition_${designed.data.experiment.primaryLaterality}`);
   const humanBudget = await setHumanProposalBudget(tools, 5);
-  await captureStage('behavior-analysis');
+  await captureStage('behavior-analysis', { selector: '.results-panel', block: 'center' });
 
   const comparisonInput = {
     analysis_ids: [analysis.data.analysis.id],
@@ -821,7 +965,7 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
     throw new Error(`Comparison did not honor the human-selected proposal budget: ${JSON.stringify(comparison.data.comparison)}`);
   }
   const visibleComparison = await verifyVisibleComparison(comparison.data.comparison);
-  await captureStage('bounded-follow-up');
+  await captureStage('bounded-follow-up', { selector: '.comparison-ranking', block: 'center' });
 
   const saveInput = {
     title: 'Adult MDN backward-walking verification run',
@@ -830,7 +974,7 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
     batch_ids: [run.data.id],
     analysis_ids: [analysis.data.analysis.id],
     comparison_id: comparison.data.comparison.id,
-    note: 'Automated live WebMCP verification with a DOM click at the human-only approval boundary.',
+    note: 'Automated live WebMCP verification with a DOM click at the visible non-WebMCP approval boundary.',
   };
   const evidenceCancellation = cleanCapture
     ? { skipped_for_clean_demo_capture: true }
@@ -854,8 +998,6 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
       comparison: comparisonInput,
       save: saveInput,
     }, saved.data.bundle);
-  await captureStage('evidence-saved');
-
   await sendCommand('Runtime.evaluate', {
     expression: `(() => {
       const button = [...document.querySelectorAll('button')]
@@ -867,6 +1009,17 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
   });
   await new Promise((resolve) => setTimeout(resolve, 200));
   const visibleBundle = await verifyVisibleBundle(saved.data.bundle);
+  await prepareEvidenceModalCapture({
+    expectedSelection: saved.data.bundle.title,
+    navPosition: 'end',
+  });
+  await captureStage('evidence-saved');
+  await clickButton({ text: 'Pinned MDN-to-LBL40 anatomical contacts' });
+  await new Promise((resolve) => setTimeout(resolve, 160));
+  await prepareEvidenceModalCapture({
+    expectedSelection: 'Pinned MDN-to-LBL40 anatomical contacts',
+    navPosition: 'start',
+  });
   await captureStage('evidence-ledger');
   const editInvalidationVerified = await verifyProtocolEditInvalidation(tools, experimentId);
 
@@ -884,6 +1037,9 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
     ],
     clean_demo_capture: cleanCapture,
     preapproval_error: preapprovalError,
+    context_only_support_error: contextPromotionEnvelope.error.code,
+    structural_only_support_error: structuralPromotionEnvelope.error.code,
+    wrong_perturbation_support_error: wrongPerturbationEnvelope.error.code,
     visible_protocol_verified: Boolean(visibleProtocol),
     visible_analysis_verified: Boolean(visibleAnalysis),
     condition_tab_analysis_parity: conditionTabParity,
@@ -966,7 +1122,7 @@ try {
     'find_fly_circuits',
     { query: 'MDN', behavior: 'backward_walking' },
   );
-  await captureStage('circuit-found');
+  await captureCircuitEvidence();
 
   const verified = status?.modelContextType === 'object'
     && status?.registerToolType === 'function'
