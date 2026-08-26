@@ -7,6 +7,7 @@ import { circuitActivityFor } from '../lib/fly-brain.js';
 import { BANC_V888_MORPHOLOGY_FILES } from '../lib/flylab.js';
 
 describe('FlyLab 3D circuit mapping', () => {
+  const viewerSource = readFileSync(join(process.cwd(), 'components/FlyBrain3D.tsx'), 'utf8');
   test('left-only model drive selects two left MDNs and their right LBL40 structural target', () => {
     const activity = circuitActivityFor('left', true);
 
@@ -60,5 +61,17 @@ describe('FlyLab 3D circuit mapping', () => {
       assert.equal(neuron.sourceSha256, pinnedChecksums.get(neuron.id));
       assert.equal(statSync(join(process.cwd(), 'public', neuron.asset)).size, neuron.vertexCount * 3 * Float32Array.BYTES_PER_ELEMENT);
     }
+  });
+
+  test('renders the giant-fiber branches as a labeled schematic rather than invented BANC neurons', () => {
+    assert.match(viewerSource, /addSchematicPath\('gf_left'/);
+    assert.match(viewerSource, /addSchematicPath\('gf_left_leg'/);
+    assert.match(viewerSource, /addSchematicPath\('gf_left_wing'/);
+    assert.match(viewerSource, /GF literature schematic · no bundled reconstruction/);
+    assert.match(viewerSource, /not a dataset ID/);
+    assert.match(viewerSource, /THORACIC VNC · SCHEMATIC SHELL/);
+    assert.match(viewerSource, /addShell\('leftT2'/);
+    assert.match(viewerSource, /render\.line\.visible = pathVisible/);
+    assert.match(viewerSource, /filter\(\(record\) => record\.line\.visible\)/);
   });
 });

@@ -9,6 +9,10 @@ FlyLab's scientific links and pinned data products were checked against publishe
 | Bidaye et al., *Science* (2014) | DOI, Crossref, and PubMed identify the cited article. The publisher blocks automated page reads; this is an access restriction, not a dead DOI. |
 | Sen et al., *Current Biology* (2017) | DOI, Elsevier landing metadata, and PubMed identify the cited article. Direct automated article reads may be blocked by the publisher. |
 | Feng et al., *Nature Communications* (2020) | DOI resolves to the intended article; license metadata records CC BY 4.0. |
+| von Reyn et al., *Nature Neuroscience* (2014) | DOI resolves to the intended primary article. The publisher record identifies targeted GF activation/silencing, recording, and the short-mode escape figures; publisher copyright applies. |
+| King & Wyman, *Journal of Neurocytology* (1980) | DOI and PubMed identify the primary anatomy paper describing the GF contacts to the jump-muscle motor axon and interneuron relay to flight-muscle motor neurons. |
+| Allen & Murphey, *European Journal of Neuroscience* (2007) | DOI and journal metadata identify the electrophysiology paper on the mixed GF–TTMn synapse. FlyLab uses it only for the electrical and cholinergic chemical components of that synapse, not for the PSI/DLM or neuromuscular branches. |
+| Azevedo et al., *Nature* (2024) | DOI and PubMed identify the adult-female FANC connectome paper and its leg/wing escape analysis. FlyLab bundles no FANC nodes, edges, figures, or article text. |
 | Cande et al., *eLife* (2018) | DOI resolves to the intended article; publisher rights metadata records CC BY. |
 | Cande Dryad dataset, version 1 | DOI and Dryad/DataCite metadata agree on the released dataset and CC0-1.0 terms. |
 | Bates et al., *Nature* / BANC (2026) | DOI resolves to the intended article; the article is CC BY 4.0. |
@@ -20,7 +24,7 @@ FlyLab's scientific links and pinned data products were checked against publishe
 
 Publisher access restrictions are kept distinct from scientific provenance. An automated `403` from a publisher is not treated as proof of a broken DOI when authoritative DOI and bibliographic metadata independently confirm the destination.
 
-This review verifies link identity, access description, and the pinned assets used by the MDN→LBL40 vertical slice. It is not a dependency-by-dependency software-license audit.
+This review verifies link identity, access description, the pinned assets used by the MDN→LBL40 slice, and the claim-level sources for the GF leg/wing path. It is not a dependency-by-dependency software-license audit.
 
 ## Claim-level support map
 
@@ -32,5 +36,8 @@ This review verifies link identity, access description, and the pinned assets us
 - `E-BANC-PATH-003`: Dataverse file 13918810 and its recorded SHA-256 identify four exact MDN→LBL40 rows totaling 153 v3-predicted synaptic links after the postsynapse-size ≥10-voxel filter; the BANC article supplies dataset/specimen context and distinguishes that future-work product from the paper's v2 ≥5 analysis product.
 - `E-BANC-MDN-INVENTORY-007`: Dataverse file 14033740 and its recorded SHA-256 identify the four exact proofread MDN rows and sides.
 - `E-FLYLAB-MODEL-004`: the local model card is the `method_definition`; the FlyGym paper and v2.1.0 release are `embodiment_reference` records only.
+- `E-GF-CAUSAL-010`: von Reyn Figures 2–4 and Supplementary Video 3 support assay-scoped GF necessity/sufficiency and spike-timing control for short-mode escape.
+- `E-GF-PATH-011`: King & Wyman's primary thoracic-pathway anatomy supports the GF→TTMn jump-muscle branch and GF→interneuron→DLM motor-neuron flight-muscle branch; Allen & Murphey's primary electrophysiology supports the electrical and cholinergic chemical components of the mixed GF–TTMn synapse.
+- `E-FANC-ESCAPE-012`: Azevedo et al., “Coordination of legs and wings during take-off” and Figure 6 support connectome-derived structural hypotheses for GF-coupled escape outputs. It remains `connectome_inferred`, is a separate specimen from BANC, and supplies no executable weight.
 
 The callable contract enforces this distinction. A draft hypothesis requires a discovered `perturbation_effect` record matching both the proposed perturbation and behavior. Structural, inventory, and motor-context records are supplemental; model/catalog context cannot be promoted into causal support. A saved schema-v2 bundle carries the supporting closure and model-method closure separately, and caller titles/notes remain `untrusted_annotation` administrative metadata.

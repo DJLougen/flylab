@@ -265,6 +265,10 @@ describe('FlyLab WebMCP contracts', () => {
       batch_id: 'batch_1',
       metrics: ['backward_distance_mm', 'signed_speed_mm_s', 'response_latency_ms', 'heading_change_deg', 'stance_stability'],
     }));
+    assert.doesNotThrow(() => validateToolInput('analyze_fly_behavior', {
+      batch_id: 'batch_gf',
+      metrics: ['short_mode_escape_probability', 'response_latency_ms', 'vertical_displacement_mm', 'wing_recruitment', 'leg_recruitment'],
+    }));
     assert.doesNotThrow(() => validateToolInput('draft_fly_hypothesis', {
       circuit_id: 'circuit_mdn_adult',
       claim: 'MDN activation will increase predicted backward walking.',
@@ -285,9 +289,16 @@ describe('FlyLab WebMCP contracts', () => {
     const searchContract = flyLabToolContracts.find((contract) => contract.name === 'find_fly_circuits');
     const hypothesisContract = flyLabToolContracts.find((contract) => contract.name === 'draft_fly_hypothesis');
     const searchBehavior = searchContract?.inputSchema.properties.behavior as { enum?: readonly string[] };
+    const searchBodyPart = searchContract?.inputSchema.properties.body_part as { enum?: readonly string[] };
     const predictedBehavior = hypothesisContract?.inputSchema.properties.predicted_behavior as { enum?: readonly string[] };
     assert.ok(searchBehavior.enum?.includes('retreat'));
     assert.ok(predictedBehavior.enum?.includes('retreat'));
+    assert.ok(searchBehavior.enum?.includes('short_mode_escape'));
+    assert.ok(predictedBehavior.enum?.includes('short_mode_escape'));
+    assert.equal(predictedBehavior.enum?.includes('escape'), false);
+    assert.equal(predictedBehavior.enum?.includes('wing_depression'), false);
+    assert.ok(searchBodyPart.enum?.includes('left_wing'));
+    assert.ok(searchBodyPart.enum?.includes('right_midleg'));
   });
 });
 

@@ -316,14 +316,14 @@ async function captureCircuitPlayback() {
   await captureStage('circuit-bilateral-active', { selector: '.main-stage', block: 'start' });
   await clickButton({ ariaLabel: 'Pause replay' });
 
-  await clickButton({ text: 'Left-only MDN-inspired model drive' });
+  await clickButton({ text: 'Left-only MDN model drive' });
   await clickButton({ ariaLabel: 'Restart replay' });
   await new Promise((resolve) => setTimeout(resolve, 100));
   await clickButton({ ariaLabel: 'Play replay' });
   await new Promise((resolve) => setTimeout(resolve, 1_250));
   await captureStage('circuit-left-active', { selector: '.main-stage', block: 'start' });
   await clickButton({ ariaLabel: 'Pause replay' });
-  await clickButton({ text: 'Bilateral MDN-inspired drive' });
+  await clickButton({ text: 'Bilateral MDN model drive' });
   await clickButton({ text: '3D fly', exact: true });
 }
 
@@ -394,13 +394,18 @@ async function verifyVisibleAnalysis(analysis, primaryConditionId) {
   });
   const visible = response?.result?.value;
   const primary = analysis.conditions.find((condition) => condition.conditionId === primaryConditionId);
-  const expectedLabels = ['Reverse initiation', 'Backward distance', 'Signed speed', 'Response latency', 'Heading change', 'Stance stability'];
+  const expectedLabels = ['Response initiation', 'Backward distance', 'Signed speed', 'Response latency', 'Heading change', 'Stance stability'];
+  const initiationCard = visible?.cards?.find((card) => card.label === 'Response initiation');
   const responseCard = visible?.cards?.find((card) => card.label === 'Response latency');
+  const headingCard = visible?.cards?.find((card) => card.label === 'Heading change');
+  const roundedHeading = Math.round(primary?.headingChangeDeg * 100) / 100;
   if (!primary
     || visible?.title !== primary.label
     || visible?.cards?.length !== expectedLabels.length
     || !expectedLabels.every((label) => visible.cards.some((card) => card.label === label))
-    || !responseCard?.detail?.includes(`${primary.responsiveN}/${primary.n}`)
+    || initiationCard?.value !== `${Math.round(primary.responseInitiationProbability * 100)}%`
+    || !initiationCard?.detail?.includes(`${primary.responsiveN}/${primary.n}`)
+    || headingCard?.value !== `${roundedHeading} °`
     || (primary.responseLatencyMs === null && responseCard.value !== 'n/a')) {
     throw new Error(`Visible analysis did not match the returned primary condition: ${JSON.stringify({ visible, primary })}`);
   }
@@ -627,7 +632,7 @@ async function waitForSimulationCancellationToSettle() {
 
 function hasNoCompletedSimulationBatch(state) {
   return state?.activity === 'Simulation cancelled'
-    && state?.manualAction?.includes('Run MDN-inspired drive')
+    && state?.manualAction?.includes('Run MDN drive')
     && state?.resultPanelPresent === false
     && state?.playbackDisabled === true
     && state?.conditionStates?.length === 5
@@ -778,6 +783,22 @@ function sha256Json(value) {
   return `sha256:${createHash('sha256').update(JSON.stringify(value)).digest('hex')}`;
 }
 
+function resolveJsonPointer(root, pointer) {
+  if (pointer === '') return { found: true, value: root };
+  if (typeof pointer !== 'string' || !pointer.startsWith('/')) return { found: false, value: undefined };
+  let current = root;
+  for (const encodedToken of pointer.slice(1).split('/')) {
+    const token = encodedToken.replaceAll('~1', '/').replaceAll('~0', '~');
+    if ((typeof current !== 'object' && typeof current !== 'function')
+      || current === null
+      || !Object.prototype.hasOwnProperty.call(current, token)) {
+      return { found: false, value: undefined };
+    }
+    current = current[token];
+  }
+  return { found: true, value: current };
+}
+
 function assertProvenanceManifest(envelope, toolName) {
   const manifest = envelope?.provenance_manifest;
   const entries = manifest?.entries;
@@ -809,9 +830,26 @@ function assertProvenanceManifest(envelope, toolName) {
       || !entry.boundary) {
       throw new Error(`${toolName} returned an invalid provenance entry at index ${index}: ${JSON.stringify(entry)}`);
     }
+    const resolved = resolveJsonPointer(envelope.data, entry.path);
+    if (!resolved.found) {
+      throw new Error(`${toolName} returned an unresolved provenance JSON Pointer at index ${index}: ${entry.path}`);
+    }
+    if (entry.scope === 'container'
+      && (resolved.value === null || typeof resolved.value !== 'object')) {
+      throw new Error(`${toolName} labeled a non-container value as a provenance container at ${entry.path}`);
+    }
   }
-  if (manifest.operational_paths.some((path) => typeof path !== 'string' || (path !== '' && !path.startsWith('/')))) {
+  if (manifest.operational_paths.some((path) => (
+    typeof path !== 'string'
+    || (path !== '' && !path.startsWith('/'))
+    || !resolveJsonPointer(envelope.data, path).found
+  ))) {
     throw new Error(`${toolName} returned an invalid operational JSON Pointer: ${JSON.stringify(manifest.operational_paths)}`);
+  }
+  const scientificPaths = new Set(entries.map((entry) => entry.path));
+  const exactOverlap = manifest.operational_paths.find((path) => scientificPaths.has(path));
+  if (exactOverlap) {
+    throw new Error(`${toolName} labeled ${exactOverlap} as both scientific provenance and operational metadata.`);
   }
   assertSameStringSet(
     entries.flatMap((entry) => entry.labels),
@@ -1417,6 +1455,237 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
   };
 }
 
+function assertGfMotorMapClosure(discovery) {
+  const circuit = discovery.data?.circuits?.[0];
+  const motorMap = circuit?.motor_map;
+  const evidenceById = new Map((discovery.data?.evidence ?? []).map((record) => [record.id, record]));
+  const sourceIds = new Set((discovery.data?.evidence ?? []).flatMap((record) => (
+    (record.sources ?? []).map((source) => source.id)
+  )));
+  if (circuit?.id !== 'circuit_gf_adult' || motorMap?.motorProgram !== 'short_mode_escape') {
+    throw new Error(`GF discovery did not return the short-mode motor map: ${JSON.stringify(discovery.data)}`);
+  }
+  for (const item of [...motorMap.nodes, ...motorMap.edges]) {
+    for (const evidenceId of item.evidenceIds ?? []) {
+      if (!evidenceById.has(evidenceId)) {
+        throw new Error(`GF motor-map item ${item.id} has unresolved evidence ${evidenceId}.`);
+      }
+    }
+    for (const sourceId of item.sourceIds ?? []) {
+      if (!sourceIds.has(sourceId)) {
+        throw new Error(`GF motor-map item ${item.id} has unresolved source ${sourceId}.`);
+      }
+    }
+  }
+  const gfTtmn = motorMap.edges.find((edge) => edge.id === 'edge_gf_ttmn');
+  const gfPsi = motorMap.edges.find((edge) => edge.id === 'edge_gf_psi');
+  if (!gfTtmn?.sourceIds?.includes('SRC-ALLEN-EJN-2007')
+    || gfPsi?.sourceIds?.includes('SRC-ALLEN-EJN-2007')) {
+    throw new Error(`GF edge-level source attribution is overbroad: ${JSON.stringify({ gfTtmn, gfPsi })}`);
+  }
+  return motorMap;
+}
+
+async function verifyGfShortModeWorkflow(tools) {
+  const ambiguousResponse = await invokeRegisteredTool(tools, 'find_fly_circuits', {
+    query: 'middle leg',
+    limit: 1,
+  });
+  const ambiguous = successfulEnvelope(ambiguousResponse, 'find_fly_circuits');
+  if (ambiguous.data.selection_status !== 'ambiguous'
+    || ambiguous.data.selected_circuit_id !== null
+    || ambiguous.data.candidate_match_count !== 2
+    || ambiguous.data.circuits.length !== 0
+    || ambiguous.data.next_action?.name !== 'find_fly_circuits') {
+    throw new Error(`Broad midleg discovery did not remain explicitly ambiguous: ${JSON.stringify(ambiguous.data)}`);
+  }
+
+  const discoveryInput = {
+    query: 'middle leg jump',
+    behavior: 'short_mode_escape',
+    evidence_labels: ['measured'],
+  };
+  const discoveryResponse = await invokeRegisteredTool(tools, 'find_fly_circuits', discoveryInput);
+  const discovery = successfulEnvelope(discoveryResponse, 'find_fly_circuits');
+  if (discovery.data.selection_status !== 'selected'
+    || discovery.data.selected_circuit_id !== 'circuit_gf_adult'
+    || discovery.data.candidate_circuits[0]?.id !== 'circuit_gf_adult') {
+    throw new Error(`Specific jump-leg discovery did not select GF: ${JSON.stringify(discovery.data)}`);
+  }
+  const motorMap = assertGfMotorMapClosure(discovery);
+  if (!discovery.data.evidence.some((record) => (
+    record.id === 'E-FLYLAB-MODEL-004' && record.matches_requested_evidence_labels === false
+  ))) {
+    throw new Error(`Measured GF discovery did not retain its separately marked model-method closure: ${JSON.stringify(discovery.data.evidence)}`);
+  }
+  const filteredContext = await inspectAgentContext(tools);
+  assertSameStringSet(
+    filteredContext.artifacts.hypothesis_eligible_evidence_ids,
+    discovery.data.hypothesis_eligible_evidence_ids,
+    'GF filtered discovery-to-inspector eligible evidence parity',
+  );
+
+  const causalEvidenceId = discovery.data.causal_evidence_ids_by_perturbation?.silence?.[0];
+  const pathEvidenceId = discovery.data.hypothesis_eligible_evidence_ids.find((id) => id === 'E-GF-PATH-011');
+  if (!causalEvidenceId || !pathEvidenceId) {
+    throw new Error(`GF measured discovery did not expose causal and pathway evidence: ${JSON.stringify(discovery.data)}`);
+  }
+  const hypothesisInput = {
+    circuit_id: 'circuit_gf_adult',
+    claim: 'Silencing the mapped adult giant-fiber pathway will reduce the simulated short-mode escape response relative to reference-drive baseline and sham controls.',
+    predicted_behavior: 'short_mode_escape',
+    perturbation: 'silence',
+    evidence_ids: [causalEvidenceId, pathEvidenceId],
+    falsification_criterion: 'The prediction fails if the bilateral suppression arm does not reduce short-mode escape probability relative to both reference-drive controls.',
+  };
+  const drafted = successfulEnvelope(
+    await invokeRegisteredTool(tools, 'draft_fly_hypothesis', hypothesisInput),
+    'draft_fly_hypothesis',
+  );
+  const baseDesignInput = {
+    hypothesis_id: drafted.data.hypothesis.id,
+    target_circuit_id: 'circuit_gf_adult',
+    perturbation: 'silence',
+    activation_level: 0.9,
+    onset_ms: 500,
+    duration_ms: 900,
+    trial_duration_ms: 3000,
+    replicates: 12,
+    include_baseline: true,
+    include_sham_control: true,
+    seed: 91827,
+  };
+  const unsupportedLateralityResponse = await invokeRegisteredTool(tools, 'design_stimulation_trial', {
+    ...baseDesignInput,
+    laterality: 'left',
+  });
+  const unsupportedLaterality = decodedOutput(unsupportedLateralityResponse)?.structuredContent;
+  if (unsupportedLaterality?.error?.code !== 'UNSUPPORTED_TARGET'
+    || unsupportedLaterality.error.details?.supported_lateralities?.join(',') !== 'bilateral') {
+    throw new Error(`GF unilateral design was not rejected with a machine-readable recovery boundary: ${JSON.stringify(unsupportedLateralityResponse)}`);
+  }
+
+  const designInput = { ...baseDesignInput, laterality: 'bilateral' };
+  const designed = successfulEnvelope(
+    await invokeRegisteredTool(tools, 'design_stimulation_trial', designInput),
+    'design_stimulation_trial',
+  );
+  const experiment = designed.data.experiment;
+  if (experiment.conditions.length !== 3
+    || experiment.conditions.some((condition) => condition.laterality === 'left' || condition.laterality === 'right')) {
+    throw new Error(`GF bilateral-only design emitted unsupported unilateral arms: ${JSON.stringify(experiment.conditions)}`);
+  }
+  const preapproval = decodedOutput(await invokeRegisteredTool(tools, 'run_fly_simulation', {
+    experiment_id: experiment.id,
+  }))?.structuredContent;
+  if (preapproval?.error?.code !== 'APPROVAL_REQUIRED') {
+    throw new Error(`GF run bypassed visible approval: ${JSON.stringify(preapproval)}`);
+  }
+  const approval = await sendCommand('Runtime.evaluate', {
+    expression: `(() => {
+      const button = document.querySelector('.protocol-controls .protocol-approval-action');
+      button?.click();
+      return { clicked: Boolean(button), label: button?.textContent?.trim() ?? null };
+    })()`,
+    returnByValue: true,
+  });
+  if (approval?.result?.value?.clicked !== true) {
+    throw new Error(`GF approval control was not visible: ${JSON.stringify(approval)}`);
+  }
+
+  const run = successfulEnvelope(
+    await invokeRegisteredTool(tools, 'run_fly_simulation', { experiment_id: experiment.id }),
+    'run_fly_simulation',
+  );
+  const protocol = run.data.protocol;
+  if (protocol.experimentId !== experiment.id
+    || protocol.hypothesisId !== experiment.hypothesisId
+    || protocol.targetCircuitId !== experiment.targetCircuitId
+    || protocol.behavior !== experiment.behavior
+    || protocol.motorMapId !== experiment.motorMap.id
+    || protocol.perturbation !== experiment.perturbation
+    || protocol.activationLevel !== experiment.activationLevel
+    || protocol.primaryLaterality !== experiment.primaryLaterality
+    || JSON.stringify(protocol.conditions) !== JSON.stringify(experiment.conditions)
+    || JSON.stringify(protocol.assumptions) !== JSON.stringify(experiment.assumptions)) {
+    throw new Error(`GF batch did not carry the exact approved protocol snapshot: ${JSON.stringify({ protocol, experiment })}`);
+  }
+  const baseline = run.data.conditionRuns.find((condition) => condition.conditionId === 'condition_baseline');
+  const sham = run.data.conditionRuns.find((condition) => condition.conditionId === 'condition_sham');
+  const primary = run.data.conditionRuns.find((condition) => condition.conditionId === 'condition_bilateral');
+  if (!baseline?.trajectory.some((point) => point.motorOutputActive && !point.active)
+    || !sham?.trajectory.some((point) => point.motorOutputActive && !point.active)
+    || !primary?.trajectory.some((point) => point.active)
+    || baseline.trajectory.at(-1)?.z <= 0
+    || primary.replicates.reduce((sum, replicate) => sum + replicate.wingRecruitment, 0)
+      >= baseline.replicates.reduce((sum, replicate) => sum + replicate.wingRecruitment, 0)) {
+    throw new Error(`GF silencing replay confused reference motion with perturbation targeting: ${JSON.stringify({ baseline, sham, primary })}`);
+  }
+
+  const analysisInput = {
+    batch_id: run.data.id,
+    metrics: [...motorMap.recommendedMetrics],
+  };
+  const analysis = successfulEnvelope(
+    await invokeRegisteredTool(tools, 'analyze_fly_behavior', analysisInput),
+    'analyze_fly_behavior',
+  );
+  assertSameStringSet(
+    analysis.data.analysis.metrics,
+    ['short_mode_escape_probability', 'response_latency_ms', 'vertical_displacement_mm', 'wing_recruitment', 'leg_recruitment'],
+    'GF short-mode metric panel',
+  );
+  const comparisonInput = {
+    analysis_ids: [analysis.data.analysis.id],
+    objective_metric: 'short_mode_escape_probability',
+    objective: 'maximize',
+  };
+  const comparison = successfulEnvelope(
+    await invokeRegisteredTool(tools, 'compare_fly_trials', comparisonInput),
+    'compare_fly_trials',
+  );
+  const saveInput = {
+    title: 'Adult giant-fiber short-mode escape verification run',
+    hypothesis_id: drafted.data.hypothesis.id,
+    experiment_id: experiment.id,
+    batch_ids: [run.data.id],
+    analysis_ids: [analysis.data.analysis.id],
+    comparison_id: comparison.data.comparison.id,
+    note: 'Automated GF WebMCP verification with the visible non-WebMCP approval boundary.',
+  };
+  const saved = successfulEnvelope(
+    await invokeRegisteredTool(tools, 'save_fly_evidence', saveInput),
+    'save_fly_evidence',
+  );
+  const completed = await inspectAgentContext(tools);
+  if (completed.agent_status !== 'complete'
+    || completed.artifacts.selected_circuit_id !== 'circuit_gf_adult'
+    || completed.artifacts.evidence_bundle_id !== saved.data.bundle.id) {
+    throw new Error(`GF workflow did not complete its exact lineage: ${JSON.stringify(completed)}`);
+  }
+  return {
+    sequence: [
+      'ambiguous_find',
+      'ranked_gf_find',
+      'draft_silencing_hypothesis',
+      'reject_unilateral_design',
+      'design_bilateral_protocol',
+      'human_approval_dom_click',
+      'run_exact_protocol',
+      'analyze_short_mode_escape',
+      'compare',
+      'save',
+    ],
+    experiment_id: experiment.id,
+    batch_id: run.data.id,
+    analysis_id: analysis.data.analysis.id,
+    evidence_bundle_id: saved.data.bundle.id,
+    filter_to_inspector_parity: true,
+    motor_map_source_closure: true,
+    reference_motion_without_target_glow: true,
+  };
+}
+
 try {
   chrome = spawn(chromePath, [
     '--headless=new',
@@ -1488,6 +1757,9 @@ try {
   const workflow = process.env.FLYLAB_VERIFY_WORKFLOW === '1'
     ? await runFullWorkflow(registeredTools.tools, response, initialContext, { cleanDemoCapture })
     : undefined;
+  if (workflow && !cleanDemoCapture) {
+    workflow.gf_short_mode_escape = await verifyGfShortModeWorkflow(registeredTools.tools);
+  }
 
   const report = {
     ok: true,

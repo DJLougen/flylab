@@ -38,4 +38,20 @@ describe('FlyLab Three.js arena fly', () => {
     assert.match(componentSource, /model-drive-selection-halo/);
     assert.match(componentSource, /External morphology is schematic/);
   });
+
+  test('routes the short-mode escape program into middle-leg extension, wing motion, and lift', () => {
+    assert.match(componentSource, /motorProgram === 'short_mode_escape'/);
+    assert.match(componentSource, /const midleg = index === 1 \|\| index === 4/);
+    assert.match(componentSource, /wings\.children\.forEach/);
+    assert.match(componentSource, /current\.point\?\.z/);
+    assert.match(pageSource, /targetBodyParts=\{lab\.experiment\?\.motorMap\.targetBodyParts\}/);
+  });
+
+  test('lights and moves only body parts declared by the selected motor map', () => {
+    assert.match(componentSource, /new Map<BodyPartId, THREE\.MeshStandardMaterial>/);
+    assert.match(componentSource, /targetedBodyParts\.has\(WING_BODY_PARTS\[index\]\)/);
+    assert.match(componentSource, /targetedBodyParts\.has\(LEG_BODY_PARTS\[index\]\)/);
+    assert.match(componentSource, /bodyPartMaterials\.forEach/);
+    assert.doesNotMatch(componentSource, /appendageMaterial\.emissive/);
+  });
 });

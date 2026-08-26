@@ -1,4 +1,4 @@
-import { ANALYSIS_METRICS, type ProvenanceLabel } from './flylab.js';
+import { ANALYSIS_METRICS, BODY_PART_IDS, type ProvenanceLabel } from './flylab.js';
 
 export const FLYLAB_ERROR_CODES = [
   'INVALID_INPUT',
@@ -127,7 +127,7 @@ const behaviorEnum = [
   'retreat',
   'forward_walking',
   'turning',
-  'escape',
+  'short_mode_escape',
   'grooming',
 ];
 
@@ -149,11 +149,12 @@ export const flyLabToolContracts = [
   {
     name: 'find_fly_circuits',
     title: 'Find fly circuits',
-    description: "Search FlyLab's curated adult Drosophila evidence index by behavior, circuit, or neuron name. Use before drafting a hypothesis. Returns stable circuit IDs, citations, and explicit evidence labels; it does not run a simulation.",
+    description: "Search FlyLab's curated adult Drosophila evidence and embodied motor-map index by behavior, body part, circuit, or neuron name. Use before drafting a hypothesis. Returns stable circuit IDs, typed brain-to-body paths, citations, model-readiness boundaries, and explicit evidence labels; it does not run a simulation.",
     annotations: { readOnlyHint: false, untrustedContentHint: true },
     inputSchema: objectSchema({
       query: { type: 'string', minLength: 1, maxLength: 240, description: 'Behavior, circuit, neuron type, or scientific question to search.' },
       behavior: { type: 'string', enum: [...behaviorEnum, 'any'], default: 'any' },
+      body_part: { type: 'string', enum: [...BODY_PART_IDS, 'any'], default: 'any' },
       evidence_labels: { type: 'array', items: { type: 'string', enum: provenanceEnum }, minItems: 1, maxItems: 5, uniqueItems: true },
       limit: { type: 'integer', minimum: 1, maximum: 20, default: 8 },
     }, ['query']),
@@ -204,11 +205,11 @@ export const flyLabToolContracts = [
   {
     name: 'analyze_fly_behavior',
     title: 'Analyze fly behavior',
-    description: 'Compute and save FlyLab\'s predefined, required five-metric panel by aggregating simulation-generated per-run summaries. Also returns reverse-initiation frequency. The displayed condition replay is illustrative and separate; outputs are not wet-lab evidence.',
+    description: 'Compute and save the selected motor map\'s complete five-metric panel by aggregating simulation-generated per-run summaries. The required metric IDs are returned on the circuit motor map and simulation batch. The displayed condition replay is illustrative and separate; outputs are not wet-lab evidence.',
     annotations: { readOnlyHint: false, untrustedContentHint: false },
     inputSchema: objectSchema({
       batch_id: { type: 'string', minLength: 1, maxLength: 100 },
-      metrics: { type: 'array', items: { type: 'string', enum: metricEnum }, minItems: 5, maxItems: 5, uniqueItems: true, description: 'The complete predefined metric set; partial panels are not supported in this release.' },
+      metrics: { type: 'array', items: { type: 'string', enum: metricEnum }, minItems: 5, maxItems: 5, uniqueItems: true, description: 'The complete five-metric panel declared by the selected circuit motor map; partial or mixed panels are rejected.' },
     }, ['batch_id', 'metrics']),
   },
   {
@@ -252,10 +253,10 @@ export const flyLabToolOutputContracts = {
     operational_paths: ['/agent_context/state', '/agent_context/next_action', '/agent_context/human_gate', '/agent_context/pipeline'],
   },
   find_fly_circuits: {
-    required_data_fields: ['circuits', 'evidence', 'connectome_records', 'dataset_versions', 'hypothesis_eligible_evidence_ids', 'causal_evidence_ids_by_perturbation', 'evidence_role_policy', 'coverage_warning', 'next_action'],
-    produced_artifacts: ['circuit_selection', 'evidence_record', 'connectome_record'],
-    scientific_paths: ['/circuits', '/evidence', '/connectome_records', '/dataset_versions'],
-    operational_paths: ['/hypothesis_eligible_evidence_ids', '/causal_evidence_ids_by_perturbation', '/evidence_role_policy', '/coverage_warning', '/next_action'],
+    required_data_fields: ['candidate_circuits', 'selection_status', 'disambiguation', 'circuits', 'evidence', 'connectome_records', 'dataset_versions', 'embodiment_coverage', 'selected_circuit_id', 'candidate_match_count', 'hypothesis_eligible_evidence_ids', 'causal_evidence_ids_by_perturbation', 'evidence_role_policy', 'coverage_warning', 'next_action'],
+    produced_artifacts: ['circuit_selection', 'evidence_record', 'connectome_record', 'embodied_motor_map'],
+    scientific_paths: ['/circuits', '/evidence', '/connectome_records', '/dataset_versions', '/embodiment_coverage'],
+    operational_paths: ['/candidate_circuits', '/selection_status', '/disambiguation', '/selected_circuit_id', '/candidate_match_count', '/hypothesis_eligible_evidence_ids', '/causal_evidence_ids_by_perturbation', '/evidence_role_policy', '/coverage_warning', '/next_action'],
   },
   draft_fly_hypothesis: {
     required_data_fields: ['hypothesis', 'next_action'],
@@ -265,15 +266,15 @@ export const flyLabToolOutputContracts = {
   },
   design_stimulation_trial: {
     required_data_fields: ['experiment', 'approval_required', 'agent_status', 'blocked_by', 'agent_actionable', 'human_gate', 'next_action'],
-    produced_artifacts: ['experiment', 'trial_condition'],
-    scientific_paths: ['/experiment', '/experiment/model', '/experiment/model/controllerMapping'],
+    produced_artifacts: ['experiment', 'trial_condition', 'embodied_motor_map'],
+    scientific_paths: ['/experiment', '/experiment/motorMap', '/experiment/model', '/experiment/model/controllerMapping'],
     operational_paths: ['/experiment/approved', '/approval_required', '/agent_status', '/blocked_by', '/agent_actionable', '/human_gate', '/next_action'],
   },
   run_fly_simulation: {
-    required_data_fields: ['id', 'experimentId', 'status', 'conditionRuns', 'runHash', 'protocol', 'model', 'provenance', 'boundary', 'next_action'],
-    produced_artifacts: ['simulation_batch', 'simulation_run', 'illustrative_trajectory'],
-    scientific_paths: ['', '/conditionRuns', '/protocol', '/model', '/model/controllerMapping', '/boundary'],
-    operational_paths: ['/next_action'],
+    required_data_fields: ['id', 'experimentId', 'targetCircuitId', 'behavior', 'motorMap', 'status', 'conditionRuns', 'runHash', 'protocol', 'model', 'provenance', 'boundary', 'next_action'],
+    produced_artifacts: ['simulation_batch', 'simulation_run', 'illustrative_trajectory', 'embodied_motor_map'],
+    scientific_paths: ['', '/motorMap', '/conditionRuns', '/protocol', '/model', '/model/controllerMapping', '/boundary'],
+    operational_paths: ['/status', '/next_action'],
   },
   analyze_fly_behavior: {
     required_data_fields: ['analysis', 'metric_definitions', 'unit_boundary', 'next_action'],
@@ -354,6 +355,7 @@ export function validateToolInput(toolName: string, rawInput: unknown): Record<s
     case 'find_fly_circuits':
       requireString(input, 'query', 1, 240);
       if (input.behavior !== undefined) requireEnum(input, 'behavior', [...behaviorEnum, 'any']);
+      if (input.body_part !== undefined) requireEnum(input, 'body_part', [...BODY_PART_IDS, 'any']);
       if (input.evidence_labels !== undefined) requireStringArray(input, 'evidence_labels', 1, 5, provenanceEnum);
       if (input.limit !== undefined) requireNumber(input, 'limit', 1, 20, true);
       break;
@@ -380,11 +382,6 @@ export function validateToolInput(toolName: string, rawInput: unknown): Record<s
       break;
     case 'analyze_fly_behavior':
       requireString(input, 'batch_id', 1, 100); requireStringArray(input, 'metrics', 5, 5, metricEnum);
-      if (!(metricEnum.every((metric) => (input.metrics as string[]).includes(metric)))) {
-        throw new FlyLabDomainError('METRIC_UNAVAILABLE', 'The challenge release requires the complete predefined five-metric panel.', false, {
-          required_metrics: metricEnum,
-        });
-      }
       break;
     case 'compare_fly_trials':
       requireStringArray(input, 'analysis_ids'); requireEnum(input, 'objective_metric', metricEnum); requireEnum(input, 'objective', ['maximize', 'minimize']);

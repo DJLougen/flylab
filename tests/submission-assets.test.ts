@@ -33,10 +33,11 @@ describe('FlyLab submission assets', () => {
   it('ships a standard social-preview image generated from the FlyLab interface', () => {
     const image = readFileSync('public/og.png');
     const notices = readFileSync('THIRD_PARTY_NOTICES.md', 'utf8');
+    const dimensions = new DataView(image.buffer, image.byteOffset, image.byteLength);
 
     assert.deepEqual([...image.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
-    assert.equal(image.readUInt32BE(16), 1200);
-    assert.equal(image.readUInt32BE(20), 630);
+    assert.equal(dimensions.getUint32(16), 1200);
+    assert.equal(dimensions.getUint32(20), 630);
     assert.match(notices, /social-preview image/i);
   });
 

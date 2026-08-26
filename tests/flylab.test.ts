@@ -3,16 +3,25 @@ import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 
 import {
+  ANALYSIS_METRICS,
   CIRCUITS,
+  EMBODIED_MOTOR_MAPS,
   EVIDENCE,
   MODEL_PARAMETERS,
+  SOURCES,
   analyzeBatch,
+  circuitMatchesSearch,
   circuitSupportsBehavior,
   compareAnalyses,
   designExperiment,
+  embodimentCoverageForCircuits,
   evidenceBundleTitle,
   makeHypothesis,
+  rankCircuitsForSearch,
+  reviseExperiment,
+  sharedAvailableObjectiveMetrics,
   simulateExperiment,
+  snapshotExperimentProtocol,
   type Experiment,
   type ProvenanceLabel,
 } from '../lib/flylab.js';
@@ -42,6 +51,9 @@ describe('FlyLab bounded circuit catalog', () => {
   test('accepts only behaviors declared by the selected circuit', () => {
     assert.equal(circuitSupportsBehavior('circuit_mdn_adult', 'backward_walking'), true);
     assert.equal(circuitSupportsBehavior('circuit_mdn_adult', 'retreat'), true);
+    assert.equal(circuitSupportsBehavior('circuit_gf_adult', 'short_mode_escape'), true);
+    assert.equal(circuitSupportsBehavior('circuit_gf_adult', 'escape'), false);
+    assert.equal(circuitSupportsBehavior('circuit_gf_adult', 'wing_depression'), false);
     assert.equal(circuitSupportsBehavior('circuit_mdn_adult', 'grooming'), false);
     assert.equal(circuitSupportsBehavior('missing_circuit', 'backward_walking'), false);
   });
@@ -49,12 +61,43 @@ describe('FlyLab bounded circuit catalog', () => {
   test('names evidence bundles from the actual perturbation and behavior', () => {
     assert.equal(
       evidenceBundleTitle('activate', 'backward_walking'),
-      'MDN-inspired drive and predicted backward walking',
+      'Mapped-circuit drive and predicted backward walking',
     );
     assert.equal(
       evidenceBundleTitle('silence', 'retreat'),
-      'MDN-inspired suppression and predicted retreat',
+      'Mapped-circuit suppression and predicted retreat',
     );
+  });
+
+  test('matches meaningful motor queries without letting stop words create false circuits', () => {
+    const mdn = CIRCUITS.find((circuit) => circuit.id === 'circuit_mdn_adult')!;
+    const gf = CIRCUITS.find((circuit) => circuit.id === 'circuit_gf_adult')!;
+
+    assert.equal(circuitMatchesSearch(gf, 'control the wings'), true);
+    assert.equal(circuitMatchesSearch(gf, 'giant fiber', 'short_mode_escape', 'left_wing'), true);
+    assert.equal(circuitMatchesSearch(mdn, 'use the brain to move the legs'), true);
+    assert.equal(circuitMatchesSearch(mdn, 'control a proboscis'), false);
+    assert.equal(circuitMatchesSearch(gf, 'control a proboscis'), false);
+    assert.equal(circuitMatchesSearch(mdn, 'a'), false);
+    assert.equal(circuitMatchesSearch(gf, 'in'), false);
+    assert.equal(circuitMatchesSearch(gf, 'of'), false);
+  });
+
+  test('ranks distinctive jump-leg and wing queries above generic leg matches', () => {
+    const jumpMatches = rankCircuitsForSearch('middle leg jump');
+    const wingMatches = rankCircuitsForSearch('wing escape');
+    const broadMatches = rankCircuitsForSearch('leg');
+    const midlegMatches = rankCircuitsForSearch('middle leg');
+
+    assert.equal(jumpMatches[0]?.circuit.id, 'circuit_gf_adult');
+    assert.ok((jumpMatches[0]?.score ?? 0) > (jumpMatches[1]?.score ?? 0));
+    assert.equal(wingMatches[0]?.circuit.id, 'circuit_gf_adult');
+    assert.equal(broadMatches.length, 2);
+    assert.equal(broadMatches[0]?.score, broadMatches[1]?.score);
+    assert.deepEqual(midlegMatches.map((match) => match.circuit.id).sort(), ['circuit_gf_adult', 'circuit_mdn_adult']);
+    assert.equal(midlegMatches[0]?.score, midlegMatches[1]?.score);
+    assert.equal(rankCircuitsForSearch('GF')[0]?.circuit.id, 'circuit_gf_adult');
+    assert.equal(rankCircuitsForSearch('MDN backward')[0]?.circuit.id, 'circuit_mdn_adult');
   });
 });
 
@@ -90,13 +133,10 @@ describe('FlyLab reduced-order simulation', () => {
     const batch = simulateExperiment(experiment);
     const byCondition = new Map(batch.conditionRuns.map((run) => [run.conditionId, run]));
 
-    assert.deepEqual(batch.protocol, {
-      onsetMs: experiment.onsetMs,
-      durationMs: experiment.durationMs,
-      trialDurationMs: experiment.trialDurationMs,
-      replicates: experiment.replicates,
-      seed: experiment.seed,
-    });
+    assert.deepEqual(batch.protocol, snapshotExperimentProtocol(experiment));
+    assert.notEqual(batch.protocol.conditions, experiment.conditions);
+    assert.notEqual(batch.protocol.conditions[0], experiment.conditions[0]);
+    assert.notEqual(batch.protocol.assumptions, experiment.assumptions);
     assert.ok(byCondition.get('condition_baseline')?.trajectory.every((point) => !point.active));
     assert.ok(byCondition.get('condition_sham')?.trajectory.every((point) => !point.active));
     assert.ok(byCondition.get('condition_bilateral')?.trajectory.some((point) => point.active));
@@ -143,7 +183,7 @@ describe('FlyLab reduced-order simulation', () => {
     );
     assert.deepEqual(conditions.get('condition_baseline'), {
       id: 'condition_baseline',
-      label: 'Baseline · no model drive',
+      label: 'Baseline · no mapped motor drive',
       kind: 'baseline',
       laterality: 'none',
       nominalControlLevel: 0,
@@ -231,6 +271,14 @@ describe('FlyLab reduced-order simulation', () => {
       .every((condition) => condition.nominalControlLevel === 0.77));
   });
 
+  test('canonicalizes an omitted behavior to the circuit default before hashing identity', () => {
+    const implicit = makeExperiment();
+    const explicit = makeExperiment({ behavior: 'backward_walking' });
+
+    assert.equal(implicit.id, explicit.id);
+    assert.deepEqual(implicit, explicit);
+  });
+
   test('the shared design constructor rejects impossible timing and missing controls', () => {
     assert.throws(
       () => makeExperiment({ onsetMs: 4000, durationMs: 1500, trialDurationMs: 5000 }),
@@ -294,6 +342,212 @@ describe('FlyLab reduced-order simulation', () => {
 
     assert.equal(result?.responsiveN, 0);
     assert.equal(result?.responseLatencyMs, null);
+  });
+});
+
+describe('FlyLab embodied leg-and-wing motor maps', () => {
+  const gfExperiment = (overrides: Partial<ExperimentInput> = {}) => designExperiment({
+    hypothesisId: 'hyp_gf_short_mode_escape',
+    targetCircuitId: 'circuit_gf_adult',
+    behavior: 'short_mode_escape',
+    perturbation: 'activate',
+    laterality: 'bilateral',
+    activationLevel: 0.8,
+    onsetMs: 500,
+    durationMs: 900,
+    trialDurationMs: 3000,
+    replicates: 12,
+    includeBaseline: true,
+    includeShamControl: true,
+    seed: 91827,
+    ...overrides,
+  });
+
+  test('catalogs separate source-backed paths into legs and wings', () => {
+    const mdnMap = EMBODIED_MOTOR_MAPS.find((item) => item.circuitId === 'circuit_mdn_adult');
+    const gfMap = EMBODIED_MOTOR_MAPS.find((item) => item.circuitId === 'circuit_gf_adult');
+
+    assert.ok(mdnMap?.targetBodyParts.includes('left_hindleg'));
+    assert.ok(mdnMap?.targetBodyParts.includes('right_foreleg'));
+    assert.deepEqual(gfMap?.targetBodyParts, ['left_midleg', 'right_midleg', 'left_wing', 'right_wing']);
+    assert.ok(gfMap?.edges.some((edge) => edge.from === 'gf_descending' && edge.to === 'ttmn' && edge.relation === 'mixed_electrochemical'));
+    assert.ok(gfMap?.edges.some((edge) => edge.from === 'psi' && edge.to === 'dlmn'));
+    assert.deepEqual(gfMap?.supportedLaterality, ['bilateral']);
+    assert.deepEqual(gfMap?.behaviors, ['short_mode_escape']);
+    assert.match(gfMap?.evidenceBoundary ?? '', /no GF reconstruction/i);
+  });
+
+  test('keeps every motor map internally closed and agent-queryable', () => {
+    const evidenceIds = new Set(EVIDENCE.map((record) => record.id));
+    for (const map of EMBODIED_MOTOR_MAPS) {
+      const circuit = CIRCUITS.find((record) => record.id === map.circuitId);
+      const nodeIds = map.nodes.map((node) => node.id);
+      const edgeIds = map.edges.map((edge) => edge.id);
+
+      assert.ok(circuit, `missing circuit ${map.circuitId}`);
+      assert.equal(circuit.motorMapId, map.id);
+      assert.equal(new Set(nodeIds).size, nodeIds.length, `${map.id} has duplicate node IDs`);
+      assert.equal(new Set(edgeIds).size, edgeIds.length, `${map.id} has duplicate edge IDs`);
+      assert.equal(new Set(map.recommendedMetrics).size, 5, `${map.id} must expose five unique metrics`);
+      assert.ok(map.recommendedMetrics.every((metric) => ANALYSIS_METRICS.includes(metric as (typeof ANALYSIS_METRICS)[number])));
+      for (const edge of map.edges) {
+        assert.ok(nodeIds.includes(edge.from), `${edge.id} has missing source ${edge.from}`);
+        assert.ok(nodeIds.includes(edge.to), `${edge.id} has missing target ${edge.to}`);
+      }
+      const rootIds = map.nodes.filter((node) => node.level === 'brain').map((node) => node.id);
+      const reachable = new Set(rootIds);
+      let changed = true;
+      while (changed) {
+        changed = false;
+        for (const edge of map.edges) {
+          if (reachable.has(edge.from) && !reachable.has(edge.to)) {
+            reachable.add(edge.to);
+            changed = true;
+          }
+        }
+      }
+      for (const node of map.nodes) {
+        if (node.pathStatus === 'mapped') assert.ok(reachable.has(node.id), `${map.id} has unreachable mapped node ${node.id}`);
+        if (!reachable.has(node.id)) assert.equal(node.pathStatus, 'context_only_unconnected');
+      }
+      for (const item of [...map.nodes, ...map.edges]) {
+        assert.ok(item.evidenceIds.length > 0, `${item.id} has no evidence boundary`);
+        assert.ok(item.evidenceIds.every((id) => evidenceIds.has(id)), `${item.id} references unresolved evidence`);
+        assert.ok(item.evidenceIds.every((id) => circuit.evidenceIds.includes(id)), `${item.id} is outside ${circuit.id}'s source-closed evidence set`);
+        const supportingSourceIds = item.evidenceIds.flatMap((id) => EVIDENCE.find((record) => record.id === id)?.sourceIds ?? []);
+        for (const sourceId of item.sourceIds ?? supportingSourceIds) {
+          assert.ok(SOURCES.some((source) => source.id === sourceId), `${item.id} references unresolved source ${sourceId}`);
+          assert.ok(supportingSourceIds.includes(sourceId), `${item.id} attributes a source outside its evidence records`);
+        }
+      }
+    }
+  });
+
+  test('keeps Allen GF-TTMn modality evidence off unrelated GF branches', () => {
+    const gfMap = EMBODIED_MOTOR_MAPS.find((item) => item.circuitId === 'circuit_gf_adult')!;
+    const edgeSources = new Map(gfMap.edges.map((edge) => [edge.id, edge.sourceIds ?? []]));
+
+    assert.deepEqual(edgeSources.get('edge_gf_ttmn'), ['SRC-KING-JNEUROCYTOL-1980', 'SRC-ALLEN-EJN-2007']);
+    assert.deepEqual(edgeSources.get('edge_gf_psi'), ['SRC-KING-JNEUROCYTOL-1980']);
+    assert.deepEqual(edgeSources.get('edge_psi_dlmn'), ['SRC-KING-JNEUROCYTOL-1980']);
+    assert.deepEqual(edgeSources.get('edge_dlmn_dlm'), ['SRC-KING-JNEUROCYTOL-1980']);
+  });
+
+  test('returns explicit mapped and not-modeled coverage for each selected circuit', () => {
+    const gfCoverage = embodimentCoverageForCircuits(['circuit_gf_adult']);
+    const mdnCoverage = embodimentCoverageForCircuits(['circuit_mdn_adult']);
+
+    assert.equal(gfCoverage.length, 8);
+    assert.equal(gfCoverage.find((entry) => entry.bodyPart === 'left_wing')?.status, 'mapped_reduced_order');
+    assert.equal(gfCoverage.find((entry) => entry.bodyPart === 'left_foreleg')?.status, 'not_modeled');
+    assert.equal(mdnCoverage.find((entry) => entry.bodyPart === 'right_hindleg')?.status, 'mapped_reduced_order');
+    assert.equal(mdnCoverage.find((entry) => entry.bodyPart === 'right_wing')?.status, 'not_modeled');
+  });
+
+  test('preserves GF behavior on human edits and rejects unsupported unilateral GF trials', () => {
+    const source = gfExperiment();
+    const revised = reviseExperiment(source, 'replicates', 7);
+
+    assert.equal(revised.behavior, 'short_mode_escape');
+    assert.equal(revised.targetCircuitId, source.targetCircuitId);
+    assert.equal(revised.replicates, 7);
+    assert.equal(revised.conditions.length, 3);
+    assert.notEqual(revised.id, source.id);
+    assert.throws(
+      () => designExperiment({
+        hypothesisId: source.hypothesisId,
+        targetCircuitId: source.targetCircuitId,
+        behavior: source.behavior,
+        perturbation: source.perturbation,
+        laterality: 'left',
+        activationLevel: source.activationLevel,
+        onsetMs: source.onsetMs,
+        durationMs: source.durationMs,
+        trialDurationMs: source.trialDurationMs,
+        replicates: source.replicates,
+        includeBaseline: true,
+        includeShamControl: true,
+        seed: source.seed,
+      }),
+      /laterality is not supported/,
+    );
+  });
+
+  test('requires causal GF evidence for a short-mode escape hypothesis', () => {
+    const hypothesis = makeHypothesis({
+      circuitId: 'circuit_gf_adult',
+      claim: 'Mapped bilateral giant-fiber drive will increase simulated short-mode escape takeoff.',
+      predictedBehavior: 'short_mode_escape',
+      perturbation: 'activate',
+      evidenceIds: ['E-GF-CAUSAL-010', 'E-GF-PATH-011', 'E-FANC-ESCAPE-012'],
+      falsificationCriterion: 'Takeoff probability does not exceed both baseline and model-sham controls.',
+    });
+
+    assert.deepEqual(hypothesis.causalEvidenceIds, ['E-GF-CAUSAL-010']);
+    assert.throws(() => makeHypothesis({
+      circuitId: 'circuit_gf_adult',
+      claim: 'Mapped bilateral giant-fiber drive will increase simulated short-mode escape takeoff.',
+      predictedBehavior: 'short_mode_escape',
+      perturbation: 'activate',
+      evidenceIds: ['E-GF-PATH-011', 'E-FANC-ESCAPE-012'],
+      falsificationCriterion: 'Takeoff probability does not exceed both baseline and model-sham controls.',
+    }), /perturbation_effect/);
+  });
+
+  test('routes GF drive into seeded jump-leg, wing, and lift outputs', () => {
+    const experiment = gfExperiment();
+    const batch = simulateExperiment(experiment);
+    const repeated = simulateExperiment(gfExperiment());
+    const analysis = analyzeBatch(batch, [
+      'short_mode_escape_probability',
+      'response_latency_ms',
+      'vertical_displacement_mm',
+      'wing_recruitment',
+      'leg_recruitment',
+    ]);
+    const baseline = analysis.conditions.find((item) => item.conditionId === 'condition_baseline');
+    const driven = analysis.conditions.find((item) => item.conditionId === 'condition_bilateral');
+    const trajectory = batch.conditionRuns.find((item) => item.conditionId === 'condition_bilateral')?.trajectory ?? [];
+
+    assert.deepEqual(repeated, batch);
+    assert.deepEqual(batch.protocol, snapshotExperimentProtocol(experiment));
+    assert.equal(batch.protocol.conditions.length, 3);
+    assert.equal(batch.motorMap.motorProgram, 'short_mode_escape');
+    assert.equal(batch.behavior, 'short_mode_escape');
+    assert.ok(baseline && driven);
+    assert.ok(driven.shortModeEscapeProbability > baseline.shortModeEscapeProbability);
+    assert.ok(driven.verticalDisplacementMm > baseline.verticalDisplacementMm);
+    assert.ok(driven.wingRecruitment > baseline.wingRecruitment);
+    assert.ok(driven.legRecruitment > baseline.legRecruitment);
+    assert.ok(trajectory.some((point) => point.active && point.z > 0));
+  });
+
+  test('replays reference motor output during silencing without mislabeling it as the selected target', () => {
+    const mdnBatch = simulateExperiment(makeExperiment({ perturbation: 'silence', activationLevel: 0.9 }));
+    const gfBatch = simulateExperiment(gfExperiment({ perturbation: 'silence', activationLevel: 0.9, replicates: 20 }));
+    const mdnBaseline = mdnBatch.conditionRuns.find((run) => run.conditionId === 'condition_baseline');
+    const gfBaseline = gfBatch.conditionRuns.find((run) => run.conditionId === 'condition_baseline');
+    const gfPrimary = gfBatch.conditionRuns.find((run) => run.conditionId === 'condition_bilateral');
+
+    assert.ok(mdnBaseline?.trajectory.some((point) => point.motorOutputActive && !point.active));
+    assert.ok(gfBaseline?.trajectory.some((point) => point.motorOutputActive && !point.active));
+    assert.ok((gfBaseline?.trajectory.at(-1)?.z ?? 0) > 0);
+    assert.ok(gfPrimary?.trajectory.some((point) => point.active));
+    assert.ok((gfPrimary?.replicates.reduce((sum, run) => sum + run.wingRecruitment, 0) ?? 0)
+      < (gfBaseline?.replicates.reduce((sum, run) => sum + run.wingRecruitment, 0) ?? 0));
+  });
+
+  test('offers only shared, populated metrics when an objective has no responsive values', () => {
+    const analysis = analyzeBatch(simulateExperiment(gfExperiment()), [
+      'response_latency_ms',
+      'wing_recruitment',
+    ]);
+    const latencyless = {
+      ...analysis,
+      conditions: analysis.conditions.map((condition) => ({ ...condition, responseLatencyMs: null })),
+    };
+
+    assert.deepEqual(sharedAvailableObjectiveMetrics([latencyless]), ['wing_recruitment']);
   });
 });
 

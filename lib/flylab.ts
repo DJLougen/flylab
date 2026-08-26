@@ -5,6 +5,25 @@ import {
   LUL130_BUNDLE_STATUS,
   MANC_V121_REFERENCE,
 } from './mdn-banc.js';
+import {
+  motorMapForCircuit,
+  type BodyPartId,
+  type EmbodiedMotorMap,
+} from './embodied-fly.js';
+
+export {
+  BODY_PART_IDS,
+  EMBODIED_MOTOR_MAPS,
+  EMBODIMENT_COVERAGE,
+  embodimentCoverageForCircuits,
+  motorMapForCircuit,
+  motorMapsForQuery,
+  type BodyPartId,
+  type EmbodiedMotorMap,
+  type MotorPathEdge,
+  type MotorPathNode,
+  type MotorProgramId,
+} from './embodied-fly.js';
 
 export {
   BANC_V888_BUNDLE,
@@ -62,6 +81,10 @@ export const ANALYSIS_METRICS = [
   'response_latency_ms',
   'heading_change_deg',
   'stance_stability',
+  'short_mode_escape_probability',
+  'vertical_displacement_mm',
+  'wing_recruitment',
+  'leg_recruitment',
 ] as const;
 export type MetricName = (typeof ANALYSIS_METRICS)[number];
 
@@ -114,7 +137,7 @@ export interface CircuitRecord {
   sex: 'source_specific';
   sexBoundary: string;
   laterality: 'bilateral_population';
-  specimenInventory: {
+  specimenInventory?: {
     dataset: 'BANC';
     snapshot: 'banc_888';
     specimen: string;
@@ -124,6 +147,9 @@ export interface CircuitRecord {
     provenance: 'derived';
     boundary: string;
   };
+  motorMapId: string;
+  targetBodyParts: BodyPartId[];
+  modelCoverage: 'mapped_reduced_order';
   behaviors: string[];
   evidenceIds: string[];
   summary: string;
@@ -154,13 +180,19 @@ export interface TrialCondition {
     | 'reference_retreat_drive'
     | 'reference_drive_sham'
     | 'activation_increases_retreat_drive'
-    | 'suppression_reduces_reference_drive';
+    | 'suppression_reduces_reference_drive'
+    | 'no_motor_drive'
+    | 'reference_motor_drive'
+    | 'activation_increases_motor_drive'
+    | 'suppression_reduces_reference_motor_drive';
 }
 
 export interface Experiment {
   id: string;
   hypothesisId: string;
   targetCircuitId: string;
+  behavior: string;
+  motorMap: EmbodiedMotorMap;
   perturbation: 'activate' | 'silence';
   primaryLaterality: Exclude<Laterality, 'none'>;
   activationLevel: number;
@@ -176,12 +208,32 @@ export interface Experiment {
   provenance: ['agent_hypothesized'];
 }
 
+export interface ExperimentProtocolSnapshot {
+  experimentId: string;
+  hypothesisId: string;
+  targetCircuitId: string;
+  behavior: string;
+  motorMapId: string;
+  perturbation: Experiment['perturbation'];
+  activationLevel: number;
+  primaryLaterality: Experiment['primaryLaterality'];
+  onsetMs: number;
+  durationMs: number;
+  trialDurationMs: number;
+  replicates: number;
+  seed: number;
+  conditions: TrialCondition[];
+  assumptions: string[];
+}
+
 export interface TrajectoryPoint {
   t: number;
   x: number;
   y: number;
+  z: number;
   heading: number;
   active: boolean;
+  motorOutputActive: boolean;
 }
 
 export interface ReplicateResult {
@@ -189,11 +241,16 @@ export interface ReplicateResult {
   conditionId: string;
   seed: number;
   reverseInitiated: boolean;
+  responseInitiated: boolean;
+  shortModeEscapeInitiated: boolean;
   backwardDistanceMm: number;
   signedSpeedMmS: number;
   responseLatencyMs: number | null;
   headingChangeDeg: number;
   stanceStability: number;
+  verticalDisplacementMm: number;
+  wingRecruitment: number;
+  legRecruitment: number;
 }
 
 export interface ConditionRun {
@@ -208,16 +265,13 @@ export interface ConditionRun {
 export interface SimulationBatch extends Record<string, unknown> {
   id: string;
   experimentId: string;
+  targetCircuitId: string;
+  behavior: string;
+  motorMap: EmbodiedMotorMap;
   status: 'complete';
   conditionRuns: ConditionRun[];
   runHash: string;
-  protocol: {
-    onsetMs: number;
-    durationMs: number;
-    trialDurationMs: number;
-    replicates: number;
-    seed: number;
-  };
+  protocol: ExperimentProtocolSnapshot;
   model: typeof MODEL_MANIFEST;
   provenance: ['simulation_predicted'];
 }
@@ -227,12 +281,17 @@ export interface ConditionAnalysis {
   label: string;
   n: number;
   reverseInitiationProbability: number;
+  responseInitiationProbability: number;
+  shortModeEscapeProbability: number;
   backwardDistanceMm: number;
   signedSpeedMmS: number;
   responseLatencyMs: number | null;
   responsiveN: number;
   headingChangeDeg: number;
   stanceStability: number;
+  verticalDisplacementMm: number;
+  wingRecruitment: number;
+  legRecruitment: number;
 }
 
 export interface Analysis {
@@ -241,7 +300,7 @@ export interface Analysis {
   metrics: MetricName[];
   conditions: ConditionAnalysis[];
   windowMs: { start: number; end: number };
-  methodVersion: 'flylab.behavior-metrics.v2';
+  methodVersion: 'flylab.behavior-metrics.v3';
   provenance: ['derived', 'simulation_predicted'];
   warning: string;
 }
@@ -265,15 +324,15 @@ export interface Comparison {
 }
 
 export const MODEL_PARAMETERS = {
-  name: 'flylab.reduced-order-parameters.v1',
+  name: 'flylab.mapped-motor-parameters.v2',
   provenance: 'agent_hypothesized',
   calibration: 'Hand-authored for deterministic challenge demonstration; not fitted to the cited fly assays, BANC contact counts, neural recordings, or FlyGym output.',
   unitBoundary: 'Distances and speeds use declared model-scale millimeter units. They are internally consistent but are not biologically calibrated effect sizes.',
   durationReferenceMs: 1800,
   durationGainBounds: [0.35, 1.2],
   unilateralGain: 0.72,
-  maximumRetreatDrive: 1.1,
-  silencingReferenceDrive: 0.72,
+  maximumMotorDrive: 1.1,
+  silencingReferenceMotorDrive: 0.72,
   maximumSuppressionFraction: 0.92,
   reverseProbability: { baseline: 0.08, driveGain: 0.79, minimum: 0.02, maximum: 0.97 },
   signedSpeed: { forwardBaselineMmS: 0.92, forwardDrivePenaltyMmS: 0.25, reverseInterceptMmS: 0.62, reverseDriveGainMmS: 2.25, jitterScaleMmS: 0.36, forwardJitterScaleMmS: 0.28 },
@@ -281,6 +340,19 @@ export const MODEL_PARAMETERS = {
   backwardDistanceScale: { minimum: 0.72, maximum: 0.92 },
   heading: { baseDeg: 11, driveGainDeg: 34, bilateralJitterScaleDeg: 7, unilateralJitterScaleDeg: 12 },
   stanceStability: { baseline: 0.91, drivePenalty: 0.08, jitterScale: 0.06, minimum: 0.62, maximum: 0.98 },
+  reverseWalk: {
+    legRecruitment: { baseline: 0.18, driveGain: 0.72, jitterScale: 0.06 },
+  },
+  escapeTakeoff: {
+    responseProbability: { baseline: 0.04, driveGain: 0.9, minimum: 0.01, maximum: 0.98 },
+    responseLatency: { interceptMs: 165, inverseDriveGainMs: 510, jitterScaleMs: 90, minimumClampMs: 55 },
+    verticalDisplacement: { interceptModelMm: 0.42, driveGainModelMm: 2.6, jitterScaleModelMm: 0.24 },
+    wingRecruitment: { baseline: 0.05, driveGain: 0.9, jitterScale: 0.08 },
+    legRecruitment: { baseline: 0.06, driveGain: 0.92, jitterScale: 0.08 },
+    forwardSpeedGainModelMmS: 0.7,
+    trajectoryLiftGainModelMm: 0.035,
+    trajectoryForwardGainModelMm: 0.018,
+  },
   trajectory: {
     steps: 80,
     reverseDriveThreshold: 0.12,
@@ -294,13 +366,13 @@ export const MODEL_PARAMETERS = {
 } as const;
 
 export const MODEL_MANIFEST = {
-  name: 'FlyLab reduced-order embodiment model',
-  version: '0.1.3',
-  controller: 'mdn-inspired-retreat-adapter.v2',
+  name: 'FlyLab mapped-motor embodiment model',
+  version: '0.2.0',
+  controller: 'mapped-circuit-to-body-adapter.v1',
   environment: 'open-field-model-scale.v2',
   controllerMapping: {
     provenance: 'agent_hypothesized',
-    statement: 'The mapping from a unitless MDN-inspired drive to this controller is hand-authored and versioned; it is not an inferred firing rate or optogenetic dose.',
+    statement: 'Each mapping from a source-backed circuit path to a body controller is hand-authored and versioned; it is not an inferred firing rate, synaptic simulation, muscle model, or optogenetic dose.',
   },
   embodimentReference: {
     name: 'FlyGym',
@@ -311,7 +383,7 @@ export const MODEL_MANIFEST = {
     browserStack: { mujocoWasm: '3.9.0', threeJs: '0.169.0' },
   },
   parameterization: MODEL_PARAMETERS,
-  boundary: 'Hand-authored, uncalibrated reduced-order kinematic prediction only. It does not execute BANC neurons, model neural dynamics, reproduce a wet-lab perturbation, or constitute an independent biological validation.',
+  boundary: 'Hand-authored, uncalibrated reduced-order body-controller prediction only. It does not execute connectome neurons, electrical or chemical synapses, neural dynamics, muscles, aerodynamics, FlyGym, or a wet-lab perturbation, and it is not independent biological validation.',
 } as const;
 
 export const VISUAL_REFERENCES: readonly VisualReferenceRecord[] = [
@@ -375,6 +447,15 @@ export const DATASET_MANIFEST = {
     license: 'CC0-1.0 (Dryad dataset)',
     scope: '130 sparse split-GAL4 lines targeting approximately 160 neurons across 58 anatomical types in solitary adult males.',
     boundary: 'Context for future descending-neuron expansion; it is not an MDN-specific causal source.',
+  },
+  fanc: {
+    name: 'Female Adult Nerve Cord connectome',
+    articleVersion: 'Azevedo et al. 2024',
+    articleDoi: 'https://doi.org/10.1038/s41586-024-07389-x',
+    specimen: 'One adult-female ventral nerve cord reconstructed by electron microscopy.',
+    scope: 'Claim-level structural context for the giant-fiber leg-and-wing escape branches.',
+    bundled: false,
+    boundary: 'No FANC cell or edge is bundled, executed, or represented as a BANC identity in FlyLab.',
   },
   flygym: MODEL_MANIFEST.embodimentReference,
   visualReferences: VISUAL_REFERENCES,
@@ -489,17 +570,73 @@ export const SOURCES: SourceRecord[] = [
     notes: MANC_V121_REFERENCE.matchSemantics,
   },
   {
+    id: 'SRC-VONREYN-NN-2014',
+    kind: 'article',
+    title: 'A spike-timing mechanism for action selection',
+    url: 'https://doi.org/10.1038/nn.3741',
+    doi: '10.1038/nn.3741',
+    citation: 'von Reyn CR et al. Nature Neuroscience 17, 962–970 (2014).',
+    version: 'Version of record (2014)',
+    access: 'Primary publication record; cite and paraphrase.',
+    license: 'Publisher copyright',
+    specimen: 'Adult Drosophila in looming-evoked escape, targeted GF activation and GF silencing assays, with intracellular recordings.',
+    redistribution: 'No article text, figures, or videos are bundled.',
+    notes: 'Supports assay-scoped necessity and sufficiency of giant fibers for short-mode escape; it does not define FlyLab controller parameters.',
+  },
+  {
+    id: 'SRC-KING-JNEUROCYTOL-1980',
+    kind: 'article',
+    title: 'Anatomy of the giant fibre pathway in Drosophila. I. Three thoracic components of the pathway',
+    url: 'https://doi.org/10.1007/BF01205017',
+    doi: '10.1007/BF01205017',
+    citation: 'King DG, Wyman RJ. Journal of Neurocytology 9, 753–770 (1980).',
+    version: 'Version of record (1980)',
+    access: 'Primary publication record; cite and paraphrase.',
+    license: 'Publisher copyright',
+    specimen: 'Adult Drosophila giant-fiber pathway anatomy and stimulated motor output.',
+    redistribution: 'No article text or figures are bundled.',
+    notes: 'Supports the GF→TTMn jump-muscle and GF→PSI→DLMn flight-muscle pathway at the level reported by the study.',
+  },
+  {
+    id: 'SRC-ALLEN-EJN-2007',
+    kind: 'article',
+    title: 'The chemical component of the mixed GF-TTMn synapse in Drosophila melanogaster uses acetylcholine as its neurotransmitter',
+    url: 'https://doi.org/10.1111/j.1460-9568.2007.05686.x',
+    doi: '10.1111/j.1460-9568.2007.05686.x',
+    citation: 'Allen MJ, Murphey RK. European Journal of Neuroscience 26, 439–445 (2007).',
+    version: 'Version of record (2007)',
+    access: 'Open primary article; cite and paraphrase.',
+    license: 'CC BY-NC 2.5 article terms; no source content is bundled.',
+    specimen: 'Adult Drosophila GF-to-TTMn electrophysiology and genetic perturbation preparations.',
+    redistribution: 'FlyLab stores citation and claim metadata only.',
+    notes: 'Supports the mixed electrical/chemical modality of the GF–TTMn synapse and the functional cholinergic chemical component; it does not calibrate FlyLab controller gains.',
+  },
+  {
+    id: 'SRC-AZEVEDO-NATURE-2024',
+    kind: 'article',
+    title: 'Connectomic reconstruction of a female Drosophila ventral nerve cord',
+    url: 'https://doi.org/10.1038/s41586-024-07389-x',
+    doi: '10.1038/s41586-024-07389-x',
+    citation: 'Azevedo A et al. Nature 631, 360–368 (2024).',
+    version: 'Version of record (2024)',
+    access: 'Open primary article and freely accessible FANC reconstruction resources.',
+    license: 'Article and dataset terms apply; no source content is bundled.',
+    specimen: 'One adult-female ventral nerve cord reconstructed by electron microscopy.',
+    redistribution: 'FlyLab stores claim-level citations only and does not redistribute FANC data.',
+    notes: 'Supports structural context for leg-and-wing coordination during escape. FlyLab does not import its FANC neurons as BANC records or treat electrical coupling as ordinary chemical synapse counts.',
+  },
+  {
     id: 'SRC-FLYLAB-MODEL-CARD',
     kind: 'software',
     title: 'FlyLab reduced-order model card',
-    url: 'https://github.com/DJLougen/flylab/blob/4f25bbfc307a0f351ac4389cf5e12060abedbeb3/docs/MODEL_CARD.md',
-    citation: 'FlyLab contributors. FlyLab reduced-order model card, version 0.1.3 (2026).',
-    version: '0.1.3 / mdn-inspired-retreat-adapter.v2 / commit 4f25bbfc307a0f351ac4389cf5e12060abedbeb3',
+    url: 'https://github.com/DJLougen/flylab/blob/main/docs/MODEL_CARD.md',
+    citation: 'FlyLab contributors. FlyLab mapped-motor model card, version 0.2.0 (2026).',
+    version: '0.2.0 / mapped-circuit-to-body-adapter.v1',
     access: 'Open source model definition and equations.',
     license: 'Apache-2.0',
     specimen: 'No biological specimen; local deterministic software method.',
     redistribution: 'Reuse under Apache-2.0 with required notices.',
-    notes: 'This pinned model card is the authoritative source for FlyLab equations (SHA-256 0ba75547efcfe1f6c045e32cdc3f56ad8aa3664eee8c0b87644fab9906e9229d). FlyGym is a separate embodiment reference and does not define the local controller.',
+    notes: 'The repository model card is the authoritative source for FlyLab equations. FlyGym is a separate embodiment reference and does not define the local controllers.',
   },
   {
     id: 'SRC-FLYGYM-NM-2024',
@@ -579,7 +716,7 @@ export const EVIDENCE: EvidenceRecord[] = [
   {
     id: 'E-FLYLAB-MODEL-004',
     label: 'FlyLab reduced-order model method',
-    claim: 'FlyLab converts a hand-authored, unitless MDN-inspired controller drive into a seeded reduced-order trajectory and behavioral metrics.',
+    claim: 'FlyLab converts a hand-authored, unitless mapped-circuit controller drive into seeded reduced-order body outputs, trajectories, and behavior-specific metrics.',
     provenance: 'derived',
     sourceIds: ['SRC-FLYLAB-MODEL-CARD', 'SRC-FLYGYM-NM-2024', 'SRC-FLYGYM-CODE-V210'],
     context: 'FlyGym v2.1.0 is the pinned embodied simulation reference; the current FlyLab browser model is not a FlyGym execution or a neural simulation.',
@@ -587,7 +724,7 @@ export const EVIDENCE: EvidenceRecord[] = [
     role: 'model_context',
     support: { kind: 'model_method' },
     sourceSupport: [
-      { sourceId: 'SRC-FLYLAB-MODEL-CARD', relation: 'method_definition', locator: 'Retreat-drive adapter; seeded replicate summaries; illustrative condition trajectory', supports: 'Defines the local equations, constants, seed derivation, units, and interpretation boundary.' },
+      { sourceId: 'SRC-FLYLAB-MODEL-CARD', relation: 'method_definition', locator: 'Mapped motor programs; seeded replicate summaries; illustrative condition trajectories', supports: 'Defines the local equations, constants, seed derivation, units, and interpretation boundary.' },
       { sourceId: 'SRC-FLYGYM-NM-2024', relation: 'embodiment_reference', locator: 'Article abstract and methods overview', supports: 'Provides scientific context for an adult-fly embodied simulation framework; it does not define FlyLab equations.' },
       { sourceId: 'SRC-FLYGYM-CODE-V210', relation: 'embodiment_reference', locator: 'Release v2.1.0 at pinned commit ca65a510…', supports: 'Pins the separate embodiment software reference and license; FlyLab does not execute it.' },
     ],
@@ -662,6 +799,49 @@ export const EVIDENCE: EvidenceRecord[] = [
       { sourceId: 'SRC-FENG-NCOMMS-2020', relation: 'claim_support', locator: 'Results, LUL130 functional analysis; Figs. 6 and 7', supports: 'Reports LUL130 contribution to leg lifting at the end of stance during MDN-induced backward walking.' },
     ],
   },
+  {
+    id: 'E-GF-CAUSAL-010',
+    label: 'Giant fibers causally bias short-mode escape',
+    claim: 'Under the cited adult assays, targeted giant-fiber activation elicited short-mode escape and giant-fiber silencing reduced the short-mode escape response; spike timing selected the fast takeoff pathway relative to parallel escape circuits.',
+    provenance: 'measured',
+    sourceIds: ['SRC-VONREYN-NN-2014'],
+    context: 'Adult Drosophila exposed to looming stimuli, with targeted GF activation/silencing and intracellular recording in source-specific preparations.',
+    caution: 'This does not imply every natural takeoff uses the GF pathway, does not calibrate a continuous activation dose, and does not support a whole-brain simulation.',
+    role: 'hypothesis_support',
+    support: { kind: 'perturbation_effect', perturbations: ['activate', 'silence'], behaviors: ['short_mode_escape'] },
+    sourceSupport: [
+      { sourceId: 'SRC-VONREYN-NN-2014', relation: 'claim_support', locator: 'Abstract; Figs. 2–4; Supplementary Video 3', supports: 'Reports GF necessity/sufficiency and spike-timing control for short-mode escape in the cited assays.' },
+    ],
+  },
+  {
+    id: 'E-GF-PATH-011',
+    label: 'Giant-fiber branches reach jump-leg and wing motor output',
+    claim: 'The adult giant fiber reaches the tergotrochanteral jump-muscle motor neuron through a mixed electrical/chemical synapse and also contacts an interneuron branch that relays to dorsal longitudinal flight-muscle motor neurons.',
+    provenance: 'measured',
+    sourceIds: ['SRC-KING-JNEUROCYTOL-1980', 'SRC-ALLEN-EJN-2007'],
+    context: 'Adult Drosophila thoracic components of the bilaterally organized giant-fiber pathway.',
+    caution: 'The cited anatomy and physiology do not provide a complete sensorimotor connectome, continuous weights, muscle mechanics, or aerodynamic parameters.',
+    role: 'hypothesis_support',
+    support: { kind: 'motor_context', behaviors: ['short_mode_escape'] },
+    sourceSupport: [
+      { sourceId: 'SRC-KING-JNEUROCYTOL-1980', relation: 'claim_support', locator: 'Abstract and thoracic-pathway reconstruction', supports: 'Identifies the GF contacts to the jump-muscle motor axon and the interneuron relay to flight-muscle motor neurons.' },
+      { sourceId: 'SRC-ALLEN-EJN-2007', relation: 'claim_support', locator: 'Abstract and GF–TTMn electrophysiology', supports: 'Reports functional electrical and cholinergic chemical components at the mixed GF–TTMn synapse.' },
+    ],
+  },
+  {
+    id: 'E-FANC-ESCAPE-012',
+    label: 'FANC structural context for coordinated leg and wing escape output',
+    claim: 'The adult-female FANC reconstruction supplies structural hypotheses for giant-fiber-coupled premotor pathways coordinating leg and wing motor neurons during escape takeoff.',
+    provenance: 'connectome_inferred',
+    sourceIds: ['SRC-AZEVEDO-NATURE-2024'],
+    context: 'One adult-female ventral nerve cord EM reconstruction; reconstruction and proofreading were incomplete at publication.',
+    caution: 'Structural connectivity is not activity or causal efficacy. FANC is a different specimen and dataset from BANC; FlyLab does not assign FANC identities to bundled BANC nodes.',
+    role: 'hypothesis_support',
+    support: { kind: 'structural_path', behaviors: ['short_mode_escape'] },
+    sourceSupport: [
+      { sourceId: 'SRC-AZEVEDO-NATURE-2024', relation: 'claim_support', locator: 'Results, Coordination of legs and wings during take-off; Fig. 6', supports: 'Reports connectome-derived hypotheses linking GF-coupled premotor neurons to leg and wing motor output.' },
+    ],
+  },
 ];
 
 export const CIRCUITS: CircuitRecord[] = [
@@ -673,6 +853,9 @@ export const CIRCUITS: CircuitRecord[] = [
     sex: 'source_specific',
     sexBoundary: 'Evidence spans source-specific adult assay populations and one adult-female BANC specimen; this catalog record does not establish sex generality.',
     laterality: 'bilateral_population',
+    motorMapId: 'motor_map_mdn_legs_v1',
+    targetBodyParts: ['left_foreleg', 'right_foreleg', 'left_midleg', 'right_midleg', 'left_hindleg', 'right_hindleg'],
+    modelCoverage: 'mapped_reduced_order',
     specimenInventory: {
       dataset: 'BANC',
       snapshot: 'banc_888',
@@ -698,20 +881,150 @@ export const CIRCUITS: CircuitRecord[] = [
     summary: 'A derived adult MDN catalog entry linking assay-scoped literature records to a pinned BANC specimen inventory and separate MDN→LBL40 structural records.',
     provenance: ['derived'],
   },
+  {
+    id: 'circuit_gf_adult',
+    name: 'Giant fiber escape pathway',
+    abbreviation: 'GF / DNp01',
+    stage: 'adult',
+    sex: 'source_specific',
+    sexBoundary: 'Evidence spans source-specific adult assays plus one adult-female FANC specimen; this catalog record does not establish sex generality or cross-specimen identity.',
+    laterality: 'bilateral_population',
+    motorMapId: 'motor_map_gf_escape_v1',
+    targetBodyParts: ['left_midleg', 'right_midleg', 'left_wing', 'right_wing'],
+    modelCoverage: 'mapped_reduced_order',
+    behaviors: ['short_mode_escape'],
+    evidenceIds: [
+      'E-GF-CAUSAL-010',
+      'E-GF-PATH-011',
+      'E-FANC-ESCAPE-012',
+      'E-FLYLAB-MODEL-004',
+    ],
+    summary: 'A derived adult giant-fiber catalog entry linking causal short-mode escape assays to established TTM jump-leg and PSI/DLM wing branches, with separately labeled FANC structural context and a schematic reduced-order body controller.',
+    provenance: ['derived'],
+  },
 ];
 
 export function circuitSupportsBehavior(circuitId: string, behavior: string) {
   return CIRCUITS.find((circuit) => circuit.id === circuitId)?.behaviors.includes(behavior) ?? false;
 }
 
+const CIRCUIT_QUERY_STOP_WORDS = new Set([
+  'a', 'an', 'and', 'adult', 'agent', 'brain', 'circuit', 'control', 'create', 'experiment',
+  'find', 'fly', 'for', 'fruit', 'in', 'make', 'map', 'model', 'of', 'on', 'research', 'show',
+  'simulate', 'simulation', 'the', 'to', 'use', 'with',
+]);
+
+function normalizedTerms(value: string) {
+  return value.toLowerCase().replaceAll('_', ' ').split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+function singularTerm(value: string) {
+  return value.length > 3 && value.endsWith('s') ? value.slice(0, -1) : value;
+}
+
+function normalizeCircuitSearchText(value: string) {
+  return value.toLowerCase()
+    .replaceAll('_', ' ')
+    .replace(/\b(?:middle|mid|t2|mesothoracic)[ -]?leg\b/g, 'midleg')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function circuitSearchText(circuit: CircuitRecord) {
+  const motorMap = motorMapForCircuit(circuit.id);
+  const searchable = [
+    circuit.name,
+    circuit.abbreviation,
+    circuit.summary,
+    ...circuit.behaviors,
+    ...circuit.targetBodyParts,
+    ...(motorMap?.nodes.flatMap((node) => [node.id, node.label, node.role]) ?? []),
+  ].join(' ');
+  return normalizeCircuitSearchText(searchable);
+}
+
+function meaningfulCircuitQueryTerms(query: string) {
+  return [...new Set(normalizedTerms(normalizeCircuitSearchText(query))
+    .map(singularTerm)
+    .filter((term) => (term.length >= 3 || term === 'gf') && !CIRCUIT_QUERY_STOP_WORDS.has(term)))];
+}
+
+function circuitTermMatches(queryTerm: string, searchTerms: string[]) {
+  return searchTerms.some((searchTerm) => (
+    searchTerm === queryTerm
+    || (queryTerm.length >= 3 && searchTerm.endsWith(queryTerm))
+    || (searchTerm.length >= 3 && queryTerm.endsWith(searchTerm))
+  ));
+}
+
+export interface CircuitSearchMatch {
+  circuit: CircuitRecord;
+  score: number;
+  matchedTerms: string[];
+  unmatchedTerms: string[];
+}
+
+export function rankCircuitsForSearch(
+  query: string,
+  behavior = 'any',
+  bodyPart = 'any',
+): CircuitSearchMatch[] {
+  const normalizedQuery = normalizeCircuitSearchText(query);
+  const queryTerms = meaningfulCircuitQueryTerms(normalizedQuery);
+  const eligible = CIRCUITS.filter((circuit) => (
+    (behavior === 'any' || circuit.behaviors.includes(behavior))
+    && (bodyPart === 'any' || circuit.targetBodyParts.includes(bodyPart as BodyPartId))
+  ));
+  const documents = new Map(eligible.map((circuit) => {
+    const text = circuitSearchText(circuit);
+    return [circuit.id, { text, terms: normalizedTerms(text).map(singularTerm) }];
+  }));
+
+  return eligible.flatMap((circuit): CircuitSearchMatch[] => {
+    const document = documents.get(circuit.id)!;
+    if (!normalizedQuery) return [{ circuit, score: 1, matchedTerms: [], unmatchedTerms: [] }];
+    if (!queryTerms.length) {
+      return behavior !== 'any' || bodyPart !== 'any'
+        ? [{ circuit, score: 1, matchedTerms: [], unmatchedTerms: [] }]
+        : [];
+    }
+    const matchedTerms = queryTerms.filter((term) => circuitTermMatches(term, document.terms));
+    if (!matchedTerms.length) return [];
+    const unmatchedTerms = queryTerms.filter((term) => !matchedTerms.includes(term));
+    const specificityScore = matchedTerms.reduce((score, term) => {
+      const documentFrequency = eligible.filter((candidate) => (
+        circuitTermMatches(term, documents.get(candidate.id)!.terms)
+      )).length;
+      return score + (documentFrequency === 1 ? 6 : 1);
+    }, 0);
+    const phraseBonus = document.text.includes(normalizedQuery) ? 20 : 0;
+    const filterBonus = (behavior !== 'any' ? 20 : 0) + (bodyPart !== 'any' ? 20 : 0);
+    return [{
+      circuit,
+      score: matchedTerms.length * 10 + specificityScore + phraseBonus + filterBonus,
+      matchedTerms,
+      unmatchedTerms,
+    }];
+  }).sort((left, right) => right.score - left.score || left.circuit.id.localeCompare(right.circuit.id));
+}
+
+export function circuitMatchesSearch(
+  circuit: CircuitRecord,
+  query: string,
+  behavior = 'any',
+  bodyPart = 'any',
+) {
+  return rankCircuitsForSearch(query, behavior, bodyPart).some((match) => match.circuit.id === circuit.id);
+}
+
 export function evidenceBundleTitle(
   perturbation: Experiment['perturbation'],
   predictedBehavior: string,
 ) {
-  return `MDN-inspired ${perturbation === 'silence' ? 'suppression' : 'drive'} and predicted ${predictedBehavior.replaceAll('_', ' ')}`;
+  return `Mapped-circuit ${perturbation === 'silence' ? 'suppression' : 'drive'} and predicted ${predictedBehavior.replaceAll('_', ' ')}`;
 }
 
-export const DEFAULT_GOAL = 'Explore whether a unitless MDN-inspired model drive predicts adult-fly retreat.';
+export const DEFAULT_GOAL = 'Reproduce an adult fly behavior by tracing a source-backed brain circuit into mapped leg or wing controllers.';
 
 export const METRIC_LABELS: Record<MetricName, { label: string; unit: string }> = {
   backward_distance_mm: { label: 'Backward distance', unit: 'model mm' },
@@ -719,7 +1032,17 @@ export const METRIC_LABELS: Record<MetricName, { label: string; unit: string }> 
   response_latency_ms: { label: 'Response latency', unit: 'ms' },
   heading_change_deg: { label: 'Heading change', unit: '°' },
   stance_stability: { label: 'Stance stability', unit: 'index' },
+  short_mode_escape_probability: { label: 'Short-mode escape probability', unit: 'fraction' },
+  vertical_displacement_mm: { label: 'Vertical displacement', unit: 'model mm' },
+  wing_recruitment: { label: 'Wing recruitment', unit: 'index' },
+  leg_recruitment: { label: 'Leg recruitment', unit: 'index' },
 };
+
+export function metricsForCircuit(circuitId: string): MetricName[] {
+  const map = motorMapForCircuit(circuitId);
+  if (!map) throw new RangeError(`No embodied motor map exists for circuit ${circuitId}.`);
+  return map.recommendedMetrics.filter((metric): metric is MetricName => ANALYSIS_METRICS.includes(metric as MetricName));
+}
 
 export function stableHash(value: unknown): string {
   const text = typeof value === 'string' ? value : JSON.stringify(value);
@@ -775,6 +1098,7 @@ export function makeHypothesis(input: Omit<Hypothesis, 'id' | 'provenance' | 'ca
 export function designExperiment(input: {
   hypothesisId: string;
   targetCircuitId: string;
+  behavior?: string;
   perturbation: 'activate' | 'silence';
   laterality: Exclude<Laterality, 'none'>;
   activationLevel: number;
@@ -786,6 +1110,18 @@ export function designExperiment(input: {
   includeShamControl: boolean;
   seed: number;
 }): Experiment {
+  const circuit = CIRCUITS.find((record) => record.id === input.targetCircuitId);
+  const motorMap = motorMapForCircuit(input.targetCircuitId);
+  if (!circuit || !motorMap) throw new RangeError(`The target circuit ${input.targetCircuitId} has no mapped motor program.`);
+  const behavior = input.behavior ?? circuit.behaviors[0];
+  if (!circuit.behaviors.includes(behavior) || !motorMap.behaviors.includes(behavior)) {
+    throw new RangeError(`Behavior ${behavior} is not supported by ${input.targetCircuitId}.`);
+  }
+  if (!motorMap.supportedLaterality.includes(input.laterality)) {
+    throw new RangeError(`${input.laterality} laterality is not supported by motor map ${motorMap.id}; supported laterality: ${motorMap.supportedLaterality.join(', ')}.`);
+  }
+  const targetLabel = circuit.abbreviation;
+  const programLabel = motorMap.motorProgram.replaceAll('_', ' ');
   if (!Number.isFinite(input.activationLevel) || input.activationLevel < 0 || input.activationLevel > 1) {
     throw new RangeError('activationLevel must be a finite unitless value from 0 to 1.');
   }
@@ -809,30 +1145,30 @@ export function designExperiment(input: {
     conditions.push(input.perturbation === 'silence'
       ? {
           id: 'condition_baseline',
-          label: 'Reference retreat · no model suppression',
+          label: `Reference ${programLabel} · no model suppression`,
           kind: 'baseline',
           laterality: 'none',
           nominalControlLevel: 0,
-          expectedModelEffect: 'reference_retreat_drive',
+          expectedModelEffect: motorMap.responseMode === 'reverse' ? 'reference_retreat_drive' : 'reference_motor_drive',
         }
       : {
           id: 'condition_baseline',
-          label: 'Baseline · no model drive',
+          label: 'Baseline · no mapped motor drive',
           kind: 'baseline',
           laterality: 'none',
           nominalControlLevel: 0,
-          expectedModelEffect: 'no_retreat_drive',
+          expectedModelEffect: motorMap.responseMode === 'reverse' ? 'no_retreat_drive' : 'no_motor_drive',
         });
   }
   if (input.includeShamControl) {
     conditions.push(input.perturbation === 'silence'
       ? {
           id: 'condition_sham',
-          label: 'Suppression sham · reference drive retained',
+          label: `Suppression sham · reference ${programLabel} retained`,
           kind: 'sham',
           laterality: 'none',
           nominalControlLevel: input.activationLevel,
-          expectedModelEffect: 'reference_drive_sham',
+          expectedModelEffect: motorMap.responseMode === 'reverse' ? 'reference_drive_sham' : 'reference_motor_drive',
         }
       : {
           id: 'condition_sham',
@@ -845,43 +1181,47 @@ export function designExperiment(input: {
   }
   conditions.push({
     id: `condition_${input.laterality}`,
-    label: `${input.laterality[0].toUpperCase()}${input.laterality.slice(1)} MDN-inspired ${input.perturbation === 'activate' ? 'drive' : 'suppression'}`,
+    label: `${input.laterality[0].toUpperCase()}${input.laterality.slice(1)} ${targetLabel} model ${input.perturbation === 'activate' ? 'drive' : 'suppression'}`,
     kind: 'perturbation',
     laterality: input.laterality,
     nominalControlLevel: input.activationLevel,
     expectedModelEffect: input.perturbation === 'activate'
-      ? 'activation_increases_retreat_drive'
-      : 'suppression_reduces_reference_drive',
+      ? motorMap.responseMode === 'reverse' ? 'activation_increases_retreat_drive' : 'activation_increases_motor_drive'
+      : motorMap.responseMode === 'reverse' ? 'suppression_reduces_reference_drive' : 'suppression_reduces_reference_motor_drive',
   });
-  if (input.laterality === 'bilateral') {
+  if (input.laterality === 'bilateral'
+    && motorMap.supportedLaterality.includes('left')
+    && motorMap.supportedLaterality.includes('right')) {
     const modeLabel = input.perturbation === 'activate' ? 'drive' : 'suppression';
     conditions.push(
       {
         id: 'condition_left',
-        label: `Left-only MDN-inspired model ${modeLabel}`,
+        label: `Left-only ${targetLabel} model ${modeLabel}`,
         kind: 'perturbation',
         laterality: 'left',
         nominalControlLevel: input.activationLevel,
         expectedModelEffect: input.perturbation === 'activate'
-          ? 'activation_increases_retreat_drive'
-          : 'suppression_reduces_reference_drive',
+          ? motorMap.responseMode === 'reverse' ? 'activation_increases_retreat_drive' : 'activation_increases_motor_drive'
+          : motorMap.responseMode === 'reverse' ? 'suppression_reduces_reference_drive' : 'suppression_reduces_reference_motor_drive',
       },
       {
         id: 'condition_right',
-        label: `Right-only MDN-inspired model ${modeLabel}`,
+        label: `Right-only ${targetLabel} model ${modeLabel}`,
         kind: 'perturbation',
         laterality: 'right',
         nominalControlLevel: input.activationLevel,
         expectedModelEffect: input.perturbation === 'activate'
-          ? 'activation_increases_retreat_drive'
-          : 'suppression_reduces_reference_drive',
+          ? motorMap.responseMode === 'reverse' ? 'activation_increases_retreat_drive' : 'activation_increases_motor_drive'
+          : motorMap.responseMode === 'reverse' ? 'suppression_reduces_reference_drive' : 'suppression_reduces_reference_motor_drive',
       },
     );
   }
 
   const identity = {
     ...input,
+    behavior,
     conditions: conditions.map((condition) => condition.id),
+    motorMapId: motorMap.id,
     modelVersion: MODEL_MANIFEST.version,
     controller: MODEL_MANIFEST.controller,
   };
@@ -889,6 +1229,8 @@ export function designExperiment(input: {
     id: `exp_${stableHash(identity)}`,
     hypothesisId: input.hypothesisId,
     targetCircuitId: input.targetCircuitId,
+    behavior,
+    motorMap,
     perturbation: input.perturbation,
     primaryLaterality: input.laterality,
     activationLevel: clamp(input.activationLevel, 0, 1),
@@ -902,21 +1244,63 @@ export function designExperiment(input: {
     model: MODEL_MANIFEST,
     assumptions: [
       'Activation level is a unitless model control, not optical power or firing rate.',
-      'The MDN-to-controller mapping is hand-authored and versioned; it is not fitted neural dynamics.',
-      'BANC snapshot IDs and v3-predicted synaptic-link counts are provenance records, not executable neurons, activity measurements, or physiological weights.',
+      `The ${targetLabel}-to-${motorMap.motorProgram} controller mapping is hand-authored and versioned; it is not fitted neural dynamics.`,
+      'Connectome identities, paths, and contact counts are provenance records, not executable neurons, activity measurements, or physiological weights.',
       'FlyGym v2.1.0 is an embodied simulation reference; this reduced-order browser model does not execute FlyGym.',
       'Simulator intervals describe seeded model variation, not biological population inference.',
       ...(input.perturbation === 'silence'
-        ? ['Silencing trials apply a hand-authored reference retreat drive to baseline and sham conditions, then reduce it in suppression arms; this is not a measurement of endogenous MDN activity.']
+        ? [`Silencing trials apply a hand-authored reference ${programLabel} drive to baseline and sham conditions, then reduce it in suppression arms; this is not a measurement of endogenous circuit activity.`]
         : []),
     ],
     provenance: ['agent_hypothesized'],
   };
 }
 
-function conditionRetreatDrive(condition: TrialCondition, experiment: Experiment) {
+export function reviseExperiment(
+  source: Experiment,
+  field: 'activationLevel' | 'durationMs' | 'replicates',
+  value: number,
+) {
+  return designExperiment({
+    hypothesisId: source.hypothesisId,
+    targetCircuitId: source.targetCircuitId,
+    behavior: source.behavior,
+    perturbation: source.perturbation,
+    laterality: source.primaryLaterality,
+    activationLevel: field === 'activationLevel' ? value : source.activationLevel,
+    onsetMs: source.onsetMs,
+    durationMs: field === 'durationMs' ? value : source.durationMs,
+    trialDurationMs: source.trialDurationMs,
+    replicates: field === 'replicates' ? value : source.replicates,
+    includeBaseline: source.conditions.some((condition) => condition.kind === 'baseline'),
+    includeShamControl: source.conditions.some((condition) => condition.kind === 'sham'),
+    seed: source.seed,
+  });
+}
+
+export function snapshotExperimentProtocol(experiment: Experiment): ExperimentProtocolSnapshot {
+  return {
+    experimentId: experiment.id,
+    hypothesisId: experiment.hypothesisId,
+    targetCircuitId: experiment.targetCircuitId,
+    behavior: experiment.behavior,
+    motorMapId: experiment.motorMap.id,
+    perturbation: experiment.perturbation,
+    activationLevel: experiment.activationLevel,
+    primaryLaterality: experiment.primaryLaterality,
+    onsetMs: experiment.onsetMs,
+    durationMs: experiment.durationMs,
+    trialDurationMs: experiment.trialDurationMs,
+    replicates: experiment.replicates,
+    seed: experiment.seed,
+    conditions: experiment.conditions.map((condition) => ({ ...condition })),
+    assumptions: [...experiment.assumptions],
+  };
+}
+
+function conditionMotorDrive(condition: TrialCondition, experiment: Experiment) {
   if (condition.kind !== 'perturbation') {
-    return experiment.perturbation === 'silence' ? MODEL_PARAMETERS.silencingReferenceDrive : 0;
+    return experiment.perturbation === 'silence' ? MODEL_PARAMETERS.silencingReferenceMotorDrive : 0;
   }
   const durationGain = clamp(
     experiment.durationMs / MODEL_PARAMETERS.durationReferenceMs,
@@ -926,29 +1310,32 @@ function conditionRetreatDrive(condition: TrialCondition, experiment: Experiment
   const lateralityGain = condition.laterality === 'bilateral' ? 1 : MODEL_PARAMETERS.unilateralGain;
   const adapterAmount = condition.nominalControlLevel * durationGain * lateralityGain;
   if (experiment.perturbation === 'activate') {
-    return clamp(adapterAmount, 0, MODEL_PARAMETERS.maximumRetreatDrive);
+    return clamp(adapterAmount, 0, MODEL_PARAMETERS.maximumMotorDrive);
   }
   const suppressionFraction = clamp(adapterAmount, 0, MODEL_PARAMETERS.maximumSuppressionFraction);
-  return MODEL_PARAMETERS.silencingReferenceDrive * (1 - suppressionFraction);
+  return MODEL_PARAMETERS.silencingReferenceMotorDrive * (1 - suppressionFraction);
 }
 
-function simulateTrajectory(condition: TrialCondition, experiment: Experiment, retreatDrive: number, seed: number): TrajectoryPoint[] {
+function simulateTrajectory(condition: TrialCondition, experiment: Experiment, motorDrive: number, seed: number): TrajectoryPoint[] {
   const random = mulberry32(seed);
   const points: TrajectoryPoint[] = [];
   let x = 0;
   let y = 0;
+  let z = 0;
   let heading = 0;
   const steps = MODEL_PARAMETERS.trajectory.steps;
   for (let step = 0; step <= steps; step += 1) {
     const t = (experiment.trialDurationMs * step) / steps;
     const inProtocolWindow = t >= experiment.onsetMs && t <= experiment.onsetMs + experiment.durationMs;
     const active = condition.kind === 'perturbation' && inProtocolWindow;
-    const drive = inProtocolWindow ? retreatDrive : 0;
-    const direction = drive > MODEL_PARAMETERS.trajectory.reverseDriveThreshold ? -1 : 1;
+    const drive = inProtocolWindow ? motorDrive : 0;
+    const takeoffMode = experiment.motorMap.responseMode === 'takeoff';
+    const motorOutputActive = inProtocolWindow && drive > MODEL_PARAMETERS.trajectory.reverseDriveThreshold;
+    const direction = !takeoffMode && drive > MODEL_PARAMETERS.trajectory.reverseDriveThreshold ? -1 : 1;
     const lateralSign = condition.laterality === 'left' ? -1 : condition.laterality === 'right' ? 1 : 0;
     const lateralModeSign = experiment.perturbation === 'silence' ? -1 : 1;
     const lateralEffect = experiment.perturbation === 'silence'
-      ? MODEL_PARAMETERS.silencingReferenceDrive - drive
+      ? MODEL_PARAMETERS.silencingReferenceMotorDrive - drive
       : drive;
     heading += active
       ? lateralSign * lateralModeSign * (
@@ -956,42 +1343,55 @@ function simulateTrajectory(condition: TrialCondition, experiment: Experiment, r
           + lateralEffect * MODEL_PARAMETERS.trajectory.activeTurnGainDegPerStep
         )
       : jitter(random, MODEL_PARAMETERS.trajectory.headingJitterScaleDeg);
-    const speed = MODEL_PARAMETERS.trajectory.baseStepModelMm + drive * MODEL_PARAMETERS.trajectory.driveStepGainModelMm;
+    const speed = takeoffMode
+      ? MODEL_PARAMETERS.trajectory.baseStepModelMm + drive * MODEL_PARAMETERS.escapeTakeoff.trajectoryForwardGainModelMm
+      : MODEL_PARAMETERS.trajectory.baseStepModelMm + drive * MODEL_PARAMETERS.trajectory.driveStepGainModelMm;
     x += Math.sin((heading * Math.PI) / 180) * speed + jitter(random, MODEL_PARAMETERS.trajectory.positionJitterScaleModelMm);
     y += direction * Math.cos((heading * Math.PI) / 180) * speed + jitter(random, MODEL_PARAMETERS.trajectory.positionJitterScaleModelMm);
-    points.push({ t: Math.round(t), x, y, heading, active });
+    if (takeoffMode && motorOutputActive) z += drive * MODEL_PARAMETERS.escapeTakeoff.trajectoryLiftGainModelMm;
+    points.push({ t: Math.round(t), x, y, z, heading, active, motorOutputActive });
   }
   return points;
 }
 
 export function simulateExperiment(experiment: Experiment): SimulationBatch {
   const conditionRuns = experiment.conditions.map((condition, conditionIndex): ConditionRun => {
-    const retreatDrive = conditionRetreatDrive(condition, experiment);
+    const motorDrive = conditionMotorDrive(condition, experiment);
+    const takeoffMode = experiment.motorMap.responseMode === 'takeoff';
     const replicates = Array.from({ length: experiment.replicates }, (_, replicateIndex): ReplicateResult => {
       const seed = experiment.seed + conditionIndex * 1009 + replicateIndex * 37;
       const random = mulberry32(seed);
-      const reverseProbability = clamp(
-        MODEL_PARAMETERS.reverseProbability.baseline + retreatDrive * MODEL_PARAMETERS.reverseProbability.driveGain,
-        MODEL_PARAMETERS.reverseProbability.minimum,
-        MODEL_PARAMETERS.reverseProbability.maximum,
-      );
-      const reverseInitiated = random() < reverseProbability;
+      const responseProbability = takeoffMode
+        ? clamp(
+            MODEL_PARAMETERS.escapeTakeoff.responseProbability.baseline + motorDrive * MODEL_PARAMETERS.escapeTakeoff.responseProbability.driveGain,
+            MODEL_PARAMETERS.escapeTakeoff.responseProbability.minimum,
+            MODEL_PARAMETERS.escapeTakeoff.responseProbability.maximum,
+          )
+        : clamp(
+            MODEL_PARAMETERS.reverseProbability.baseline + motorDrive * MODEL_PARAMETERS.reverseProbability.driveGain,
+            MODEL_PARAMETERS.reverseProbability.minimum,
+            MODEL_PARAMETERS.reverseProbability.maximum,
+          );
+      const responseInitiated = random() < responseProbability;
+      const reverseInitiated = !takeoffMode && responseInitiated;
+      const shortModeEscapeInitiated = takeoffMode && responseInitiated;
       const signedSpeedMmS = reverseInitiated
         ? -(
             MODEL_PARAMETERS.signedSpeed.reverseInterceptMmS
-            + retreatDrive * MODEL_PARAMETERS.signedSpeed.reverseDriveGainMmS
+            + motorDrive * MODEL_PARAMETERS.signedSpeed.reverseDriveGainMmS
             + jitter(random, MODEL_PARAMETERS.signedSpeed.jitterScaleMmS)
           )
         : MODEL_PARAMETERS.signedSpeed.forwardBaselineMmS
-          - retreatDrive * MODEL_PARAMETERS.signedSpeed.forwardDrivePenaltyMmS
+          + (takeoffMode ? motorDrive * MODEL_PARAMETERS.escapeTakeoff.forwardSpeedGainModelMmS : -motorDrive * MODEL_PARAMETERS.signedSpeed.forwardDrivePenaltyMmS)
           + jitter(random, MODEL_PARAMETERS.signedSpeed.forwardJitterScaleMmS);
       const responseWindowMs = Math.max(0, experiment.trialDurationMs - experiment.onsetMs);
-      const responseLatencyMs = reverseInitiated
+      const responseLatencyParameters = takeoffMode ? MODEL_PARAMETERS.escapeTakeoff.responseLatency : MODEL_PARAMETERS.responseLatency;
+      const responseLatencyMs = responseInitiated
         ? clamp(
-            MODEL_PARAMETERS.responseLatency.interceptMs
-              + (1 - retreatDrive) * MODEL_PARAMETERS.responseLatency.inverseDriveGainMs
-              + jitter(random, MODEL_PARAMETERS.responseLatency.jitterScaleMs),
-            Math.min(MODEL_PARAMETERS.responseLatency.minimumClampMs, responseWindowMs),
+            responseLatencyParameters.interceptMs
+              + (1 - motorDrive) * responseLatencyParameters.inverseDriveGainMs
+              + jitter(random, responseLatencyParameters.jitterScaleMs),
+            Math.min(responseLatencyParameters.minimumClampMs, responseWindowMs),
             responseWindowMs,
           )
         : null;
@@ -1004,11 +1404,28 @@ export function simulateExperiment(experiment: Experiment): SimulationBatch {
             + random() * (MODEL_PARAMETERS.backwardDistanceScale.maximum - MODEL_PARAMETERS.backwardDistanceScale.minimum)
           )
         : 0;
+      const verticalDisplacementMm = shortModeEscapeInitiated
+        ? Math.max(0, MODEL_PARAMETERS.escapeTakeoff.verticalDisplacement.interceptModelMm
+          + motorDrive * MODEL_PARAMETERS.escapeTakeoff.verticalDisplacement.driveGainModelMm
+          + jitter(random, MODEL_PARAMETERS.escapeTakeoff.verticalDisplacement.jitterScaleModelMm))
+        : 0;
+      const wingRecruitment = takeoffMode
+        ? clamp(MODEL_PARAMETERS.escapeTakeoff.wingRecruitment.baseline
+          + motorDrive * MODEL_PARAMETERS.escapeTakeoff.wingRecruitment.driveGain
+          + jitter(random, MODEL_PARAMETERS.escapeTakeoff.wingRecruitment.jitterScale), 0, 1)
+        : 0;
+      const legRecruitment = clamp(
+        (takeoffMode ? MODEL_PARAMETERS.escapeTakeoff.legRecruitment.baseline : MODEL_PARAMETERS.reverseWalk.legRecruitment.baseline)
+          + motorDrive * (takeoffMode ? MODEL_PARAMETERS.escapeTakeoff.legRecruitment.driveGain : MODEL_PARAMETERS.reverseWalk.legRecruitment.driveGain)
+          + jitter(random, takeoffMode ? MODEL_PARAMETERS.escapeTakeoff.legRecruitment.jitterScale : MODEL_PARAMETERS.reverseWalk.legRecruitment.jitterScale),
+        0,
+        1,
+      );
       const lateralSign = condition.laterality === 'left' ? -1 : condition.laterality === 'right' ? 1 : 0;
       const lateralModeSign = experiment.perturbation === 'silence' ? -1 : 1;
       const lateralEffect = experiment.perturbation === 'silence'
-        ? MODEL_PARAMETERS.silencingReferenceDrive - retreatDrive
-        : retreatDrive;
+        ? MODEL_PARAMETERS.silencingReferenceMotorDrive - motorDrive
+        : motorDrive;
       const headingChangeDeg = lateralSign * lateralModeSign * (
         MODEL_PARAMETERS.heading.baseDeg + lateralEffect * MODEL_PARAMETERS.heading.driveGainDeg
       ) + jitter(
@@ -1019,7 +1436,7 @@ export function simulateExperiment(experiment: Experiment): SimulationBatch {
       );
       const stanceStability = clamp(
         MODEL_PARAMETERS.stanceStability.baseline
-          - retreatDrive * MODEL_PARAMETERS.stanceStability.drivePenalty
+          - motorDrive * MODEL_PARAMETERS.stanceStability.drivePenalty
           + jitter(random, MODEL_PARAMETERS.stanceStability.jitterScale),
         MODEL_PARAMETERS.stanceStability.minimum,
         MODEL_PARAMETERS.stanceStability.maximum,
@@ -1029,11 +1446,16 @@ export function simulateExperiment(experiment: Experiment): SimulationBatch {
         conditionId: condition.id,
         seed,
         reverseInitiated,
+        responseInitiated,
+        shortModeEscapeInitiated,
         backwardDistanceMm,
         signedSpeedMmS,
         responseLatencyMs,
         headingChangeDeg,
         stanceStability,
+        verticalDisplacementMm,
+        wingRecruitment,
+        legRecruitment,
       };
     });
 
@@ -1043,7 +1465,7 @@ export function simulateExperiment(experiment: Experiment): SimulationBatch {
       laterality: condition.laterality,
       runIds: replicates.map((replicate) => replicate.id),
       replicates,
-      trajectory: simulateTrajectory(condition, experiment, retreatDrive, experiment.seed + conditionIndex * 1009),
+      trajectory: simulateTrajectory(condition, experiment, motorDrive, experiment.seed + conditionIndex * 1009),
     };
   });
 
@@ -1051,16 +1473,13 @@ export function simulateExperiment(experiment: Experiment): SimulationBatch {
   return {
     id: `batch_${stableHash({ experiment: experiment.id, identity })}`,
     experimentId: experiment.id,
+    targetCircuitId: experiment.targetCircuitId,
+    behavior: experiment.behavior,
+    motorMap: experiment.motorMap,
     status: 'complete',
     conditionRuns,
     runHash: `fnv1a:${stableHash(identity)}`,
-    protocol: {
-      onsetMs: experiment.onsetMs,
-      durationMs: experiment.durationMs,
-      trialDurationMs: experiment.trialDurationMs,
-      replicates: experiment.replicates,
-      seed: experiment.seed,
-    },
+    protocol: snapshotExperimentProtocol(experiment),
     model: MODEL_MANIFEST,
     provenance: ['simulation_predicted'],
   };
@@ -1080,7 +1499,8 @@ export function analyzeBatch(
   const conditions = batch.conditionRuns.map((run): ConditionAnalysis => {
     const responsive = run.replicates.filter(
       (replicate): replicate is ReplicateResult & { responseLatencyMs: number } => (
-        replicate.reverseInitiated && replicate.responseLatencyMs !== null
+        (batch.motorMap.responseMode === 'takeoff' ? replicate.shortModeEscapeInitiated : replicate.reverseInitiated)
+        && replicate.responseLatencyMs !== null
       ),
     );
     return {
@@ -1088,12 +1508,17 @@ export function analyzeBatch(
       label: run.label,
       n: run.replicates.length,
       reverseInitiationProbability: mean(run.replicates.map((replicate) => replicate.reverseInitiated ? 1 : 0)),
+      responseInitiationProbability: mean(run.replicates.map((replicate) => replicate.responseInitiated ? 1 : 0)),
+      shortModeEscapeProbability: mean(run.replicates.map((replicate) => replicate.shortModeEscapeInitiated ? 1 : 0)),
       backwardDistanceMm: mean(run.replicates.map((replicate) => replicate.backwardDistanceMm)),
       signedSpeedMmS: mean(run.replicates.map((replicate) => replicate.signedSpeedMmS)),
       responseLatencyMs: responsive.length ? mean(responsive.map((replicate) => replicate.responseLatencyMs)) : null,
       responsiveN: responsive.length,
-      headingChangeDeg: mean(run.replicates.map((replicate) => replicate.headingChangeDeg)),
+      headingChangeDeg: Math.abs(mean(run.replicates.map((replicate) => replicate.headingChangeDeg))),
       stanceStability: mean(run.replicates.map((replicate) => replicate.stanceStability)),
+      verticalDisplacementMm: mean(run.replicates.map((replicate) => replicate.verticalDisplacementMm)),
+      wingRecruitment: mean(run.replicates.map((replicate) => replicate.wingRecruitment)),
+      legRecruitment: mean(run.replicates.map((replicate) => replicate.legRecruitment)),
     };
   });
   return {
@@ -1102,7 +1527,7 @@ export function analyzeBatch(
     metrics: canonicalMetrics,
     conditions,
     windowMs: { start: analysisStartMs, end: analysisEndMs },
-    methodVersion: 'flylab.behavior-metrics.v2',
+    methodVersion: 'flylab.behavior-metrics.v3',
     provenance: ['derived', 'simulation_predicted'],
     warning: 'These estimates summarize seeded simulator variation. Response latency is a simulated delay from the nominal protocol onset and is null when no seeded run responds. Values are not biological confidence intervals or new experimental evidence.',
   };
@@ -1115,7 +1540,19 @@ export function conditionMetricValue(condition: ConditionAnalysis, metric: Metri
     case 'response_latency_ms': return condition.responseLatencyMs;
     case 'heading_change_deg': return Math.abs(condition.headingChangeDeg);
     case 'stance_stability': return condition.stanceStability;
+    case 'short_mode_escape_probability': return condition.shortModeEscapeProbability;
+    case 'vertical_displacement_mm': return condition.verticalDisplacementMm;
+    case 'wing_recruitment': return condition.wingRecruitment;
+    case 'leg_recruitment': return condition.legRecruitment;
   }
+}
+
+export function sharedAvailableObjectiveMetrics(analyses: Analysis[]): MetricName[] {
+  return ANALYSIS_METRICS.filter((metric) => (
+    analyses.length > 0
+    && analyses.every((analysis) => analysis.metrics.includes(metric))
+    && analyses.some((analysis) => analysis.conditions.some((condition) => conditionMetricValue(condition, metric) !== null))
+  ));
 }
 
 export function compareAnalyses(

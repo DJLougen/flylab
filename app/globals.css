@@ -1097,7 +1097,8 @@ dd {
 .brain-neuron-panel header > span { color: var(--muted); font-size: 0.56rem; }
 
 .brain-neuron-list { padding: 7px; display: grid; gap: 4px; }
-.brain-neuron-list button {
+.brain-neuron-list button,
+.brain-neuron-list > div {
   width: 100%;
   min-height: 42px;
   padding: 6px 7px;
@@ -1112,6 +1113,12 @@ dd {
   cursor: pointer;
   text-align: left;
 }
+.brain-neuron-list > div.path-active { border-color: rgba(110, 231, 210, 0.3); background: rgba(110, 231, 210, 0.055); }
+.brain-neuron-list > div > i { width: 6px; height: 6px; border-radius: 999px; background: var(--teal); box-shadow: 0 0 8px var(--teal); }
+.brain-neuron-list > div span { min-width: 0; display: grid; gap: 2px; }
+.brain-neuron-list > div strong { font-size: 0.62rem; font-weight: 680; }
+.brain-neuron-list > div small { overflow: hidden; color: var(--muted); font-size: 0.51rem; text-overflow: ellipsis; }
+.brain-neuron-list > div b { color: var(--teal); font-size: 0.48rem; font-weight: 720; letter-spacing: 0.05em; text-transform: uppercase; }
 
 .brain-neuron-list button:hover,
 .brain-neuron-list button.selected { border-color: var(--line-strong); background: rgba(255, 255, 255, 0.04); }

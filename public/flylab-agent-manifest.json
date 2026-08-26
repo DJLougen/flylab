@@ -38,11 +38,11 @@
   ],
   "tools": [
     { "name": "inspect_flylab_state", "effect": "read_only", "purpose": "Recover the exact shared revision, artifact IDs, blocker, and next valid action." },
-    { "name": "find_fly_circuits", "effect": "writes_shared_selection", "purpose": "Search the bounded source-backed adult circuit catalog." },
+    { "name": "find_fly_circuits", "effect": "writes_shared_selection", "purpose": "Search source-backed adult circuits by neuron, behavior, or body part and return their typed motor maps." },
     { "name": "draft_fly_hypothesis", "effect": "writes_hypothesis", "purpose": "Create a falsifiable agent_hypothesized claim from eligible evidence." },
     { "name": "design_stimulation_trial", "effect": "writes_protocol", "purpose": "Create controlled conditions, timing, seeds, and model assumptions." },
     { "name": "run_fly_simulation", "effect": "writes_simulation_batch", "purpose": "Run the exact approved deterministic virtual experiment." },
-    { "name": "analyze_fly_behavior", "effect": "writes_analysis", "purpose": "Compute the complete predefined five-metric behavior panel." },
+    { "name": "analyze_fly_behavior", "effect": "writes_analysis", "purpose": "Compute the selected motor map's complete five-metric behavior panel." },
     { "name": "compare_fly_trials", "effect": "writes_comparison_and_proposal", "purpose": "Rank conditions and propose, but never execute, one bounded follow-up." },
     { "name": "save_fly_evidence", "effect": "writes_evidence_bundle", "purpose": "Commit the exact source-to-result lineage and portable JSON envelope." }
   ],
@@ -54,10 +54,10 @@
       "operational_paths": ["/agent_context/state", "/agent_context/next_action", "/agent_context/human_gate", "/agent_context/pipeline"]
     },
     "find_fly_circuits": {
-      "required_data_fields": ["circuits", "evidence", "connectome_records", "dataset_versions", "hypothesis_eligible_evidence_ids", "causal_evidence_ids_by_perturbation", "evidence_role_policy", "coverage_warning", "next_action"],
-      "produced_artifacts": ["circuit_selection", "evidence_record", "connectome_record"],
-      "scientific_paths": ["/circuits", "/evidence", "/connectome_records", "/dataset_versions"],
-      "operational_paths": ["/hypothesis_eligible_evidence_ids", "/causal_evidence_ids_by_perturbation", "/evidence_role_policy", "/coverage_warning", "/next_action"]
+      "required_data_fields": ["candidate_circuits", "selection_status", "disambiguation", "circuits", "evidence", "connectome_records", "dataset_versions", "embodiment_coverage", "selected_circuit_id", "candidate_match_count", "hypothesis_eligible_evidence_ids", "causal_evidence_ids_by_perturbation", "evidence_role_policy", "coverage_warning", "next_action"],
+      "produced_artifacts": ["circuit_selection", "evidence_record", "connectome_record", "embodied_motor_map"],
+      "scientific_paths": ["/circuits", "/evidence", "/connectome_records", "/dataset_versions", "/embodiment_coverage"],
+      "operational_paths": ["/candidate_circuits", "/selection_status", "/disambiguation", "/selected_circuit_id", "/candidate_match_count", "/hypothesis_eligible_evidence_ids", "/causal_evidence_ids_by_perturbation", "/evidence_role_policy", "/coverage_warning", "/next_action"]
     },
     "draft_fly_hypothesis": {
       "required_data_fields": ["hypothesis", "next_action"],
@@ -67,15 +67,15 @@
     },
     "design_stimulation_trial": {
       "required_data_fields": ["experiment", "approval_required", "agent_status", "blocked_by", "agent_actionable", "human_gate", "next_action"],
-      "produced_artifacts": ["experiment", "trial_condition"],
-      "scientific_paths": ["/experiment", "/experiment/model", "/experiment/model/controllerMapping"],
+      "produced_artifacts": ["experiment", "trial_condition", "embodied_motor_map"],
+      "scientific_paths": ["/experiment", "/experiment/motorMap", "/experiment/model", "/experiment/model/controllerMapping"],
       "operational_paths": ["/experiment/approved", "/approval_required", "/agent_status", "/blocked_by", "/agent_actionable", "/human_gate", "/next_action"]
     },
     "run_fly_simulation": {
-      "required_data_fields": ["id", "experimentId", "status", "conditionRuns", "runHash", "protocol", "model", "provenance", "boundary", "next_action"],
-      "produced_artifacts": ["simulation_batch", "simulation_run", "illustrative_trajectory"],
-      "scientific_paths": ["", "/conditionRuns", "/protocol", "/model", "/model/controllerMapping", "/boundary"],
-      "operational_paths": ["/next_action"]
+      "required_data_fields": ["id", "experimentId", "targetCircuitId", "behavior", "motorMap", "status", "conditionRuns", "runHash", "protocol", "model", "provenance", "boundary", "next_action"],
+      "produced_artifacts": ["simulation_batch", "simulation_run", "illustrative_trajectory", "embodied_motor_map"],
+      "scientific_paths": ["", "/motorMap", "/conditionRuns", "/protocol", "/model", "/model/controllerMapping", "/boundary"],
+      "operational_paths": ["/status", "/next_action"]
     },
     "analyze_fly_behavior": {
       "required_data_fields": ["analysis", "metric_definitions", "unit_boundary", "next_action"],
@@ -139,10 +139,10 @@
     "agent_hypothesized"
   ],
   "scientific_scope": {
-    "release_slice": "adult MDN backward-walking circuit",
-    "model_version": "0.1.3",
-    "controller": "mdn-inspired-retreat-adapter.v2",
-    "boundary": "Hand-authored, uncalibrated reduced-order simulation; not neural dynamics, FlyGym execution, a wet-lab experiment, or biological validation."
+    "release_slice": "adult MDN leg-retreat and adult giant-fiber bilateral short-mode escape motor maps",
+    "model_version": "0.2.0",
+    "controller": "mapped-circuit-to-body-adapter.v1",
+    "boundary": "Hand-authored, uncalibrated reduced-order body-controller simulation; not neural dynamics, synapse execution, muscle mechanics, aerodynamics, FlyGym execution, a wet-lab experiment, or biological validation."
   },
   "license": "Apache-2.0"
 }

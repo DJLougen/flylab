@@ -4,29 +4,29 @@ This document defines what the current FlyLab challenge release does, what its o
 
 ## Validated product scope
 
-The challenge release is intentionally narrow:
+The challenge release is intentionally bounded:
 
 - organism and stage: adult *Drosophila*
-- neural target: Moonwalker descending neurons (MDNs), represented as a bilateral population; the pinned BANC specimen contains two proofread MDNs per side
-- behavior objective: backward walking/retreat in a simplified open field
+- neural targets: Moonwalker descending neurons (MDNs) for legged retreat and Giant Fiber/DNp01 for short-mode middle-leg/wing escape output
+- behavior objectives: backward walking/retreat and reduced-order GF short-mode escape in a simplified open field
 - perturbations: activate or silence in a unitless model control
 - laterality: bilateral, left, or right
 - controlled design: baseline, model-sham, primary perturbation, and unilateral comparisons for a bilateral design
 
-The catalog contains one exposed circuit, `circuit_mdn_adult`. A broad query does not imply broad biological coverage. The site returns a coverage warning stating that this is the validated adult MDN vertical slice.
+The catalog contains two exposed circuits, `circuit_mdn_adult` and `circuit_gf_adult`. A broad query does not imply whole-fly coverage. The body coverage registry marks a body part only where a source-backed path reaches a hand-authored reduced-order controller; this does not mean all muscles, joints, sensory inputs, or behaviors are represented.
 
 ## What the current embodiment is
 
 The runtime manifest is:
 
 ```text
-model       FlyLab reduced-order embodiment model
-version     0.1.3
-controller  mdn-inspired-retreat-adapter.v2
+model       FlyLab mapped-motor embodiment model
+version     0.2.0
+controller  mapped-circuit-to-body-adapter.v1
 environment open-field-model-scale.v2
 ```
 
-The model is a deterministic, reduced-order kinematic generator. It converts a bounded MDN control abstraction into virtual trajectories and behavior summaries. It uses a versioned controller adapter, seeded variation, a default five-second open-field trial, and explicit conditions.
+The model is a deterministic, reduced-order body-controller generator. It converts a bounded circuit-control abstraction into either MDN reverse-walk or GF short-mode escape outputs. Its typed motor maps are provenance records and controller bindings, not executable connectomes.
 
 The current embodiment is **not**:
 
@@ -47,16 +47,17 @@ The mesh is not a scan, specimen reconstruction, segmentation, morphometric data
 
 Both visual citations are exported in the agent-inspectable `VISUAL_REFERENCES` registry under `DATASET_MANIFEST.visualReferences`. They have `relation=visual_reference`, `hypothesisEligible=false`, and explicit interpretation boundaries, so an agent cannot use them as MDN hypothesis support.
 
-Trajectory position, heading, condition, and model-drive timing come from the versioned reduced-order simulation. Decorative leg, antenna, and body motion does not feed back into that simulation. The purple ring indicates selection of the unitless model-drive target window, not neural activity or an optical stimulus.
+Trajectory position, heading, lift, condition, and model-drive timing come from the versioned reduced-order simulation. The motor map selects the schematic appendage cue: six-leg walking for MDN or T2-leg extension plus wing tuck/downstroke for GF. Appendage rendering does not feed back into the simulation. The purple ring indicates selection of the unitless model-drive target window, not neural activity or an optical stimulus. Modeled movement instead follows `motorOutputActive`, so a silencing baseline or sham can replay the hand-authored reference drive without being falsely illuminated as a perturbation target.
 
 ## 3D circuit-view boundary
 
 The Three.js circuit view contains two geometry classes that must not be confused:
 
 - The six neuron lines are reconstruction-derived from the frozen BANC v888 L2 SWC products: four MDNs and two LBL40 cells. They share one recorded BANC-to-scene transform. Render assets preserve roots, branch points, endpoints, and intermediate points selected by cumulative path distance. Each raw source URL and SHA-256 checksum is pinned in the dataset manifest.
-- The translucent central-brain, optic-lobe, cervical-connective, VNC, and T3 envelopes are schematic orientation geometry. They are not BANC neuropil meshes, segmentation boundaries, volumetric measurements, or complete arborization assignments.
+- The GF→TTMn/TTM leg branch and GF→PSI→DLMn/DLM wing branch are literature-schematic lines. They have no bundled reconstruction or dataset ID and must never be described as BANC neuron geometry.
+- The translucent central-brain, optic-lobe, cervical-connective, VNC, T2, and T3 envelopes are schematic orientation geometry. The GF jump branch terminates in the displayed T2 context; these envelopes are not BANC neuropil meshes, segmentation boundaries, volumetric measurements, or complete arborization assignments.
 
-During replay, purple illumination means that a neuron is the current FlyLab **model-drive target**. Cyan illumination means that an LBL40 reconstruction is linked by the selected bundled MDN→LBL40 structural edge rows. The viewer does not display firing, voltage, calcium, optogenetic dose, direction or speed of biological signal propagation, or inferred neural dynamics. No pulse is animated along an edge. Baseline, sham, and out-of-window states remain unilluminated.
+During replay, purple illumination means that a neuron or schematic path is the current FlyLab **model-drive target**. In the MDN view, cyan marks the bundled structural LBL40 path. In the GF view, cyan marks the cited literature path, not an EM reconstruction. The viewer does not display firing, voltage, calcium, optogenetic dose, direction or speed of biological signal propagation, or inferred neural dynamics.
 
 Left-only model drive selects the two metadata-left MDNs and highlights their connectome-inferred right LBL40 target (52 + 51 v3-predicted synaptic links). Right-only drive selects the two metadata-right MDNs and highlights their left LBL40 target (26 + 24). These counts come from the v3 future-work product after its postsynapse-size ≥10-voxel filter; the Bates et al. paper analyses use v2 (≥5). This is a visualization of pinned identity and topology, not evidence that link count is functional weight, physiology, activity, or causal efficacy.
 
@@ -90,7 +91,7 @@ No later stage overwrites the provenance of an earlier one.
 
 Every evidence record also declares a claim-support scope. A hypothesis must cite at least one `role=hypothesis_support`, `kind=perturbation_effect` record whose declared perturbation and behavior match the proposed claim. `structural_path`, `specimen_inventory`, and `motor_context` records may supplement that causal record but cannot replace it. `model_context` and `catalog_context` records are rejected as hypothesis evidence. Source-level mappings state exactly which source supports which portion of a record and give a figure, section, file, row, or release locator.
 
-The operational lineage is equally strict. Discovery records only evidence IDs returned by the active filter. A hypothesis may cite only the selected circuit and those discovered IDs. A trial's target and perturbation must match the saved hypothesis. A comparison accepts analyses from exactly one batch and requires its objective metric in each analysis. Saving requires the current hypothesis, experiment, sole batch, and comparison plus exactly the comparison's complete analysis-ID set. The exact selected circuit, the hypothesis-supporting evidence/source closure, separately scoped model-method evidence/source closure, and those exact analyses are serialized; unrelated catalog context is not relabeled as support. The local model card is related as `method_definition`; the FlyGym paper and pinned release are related only as `embodiment_reference` and do not define FlyLab's equations.
+The operational lineage is equally strict. Discovery returns the full source closure required by the selected circuit and motor map, while `matches_requested_evidence_labels` and the eligible-ID lists preserve the active filter. A hypothesis may cite only the selected circuit and filtered discovered IDs. Changing the filter invalidates a hypothesis that no longer belongs to that selection. A trial's target and perturbation must match the saved hypothesis. A comparison accepts analyses from exactly one batch and requires its objective metric in each analysis. Saving requires the current hypothesis, experiment, sole batch, and comparison plus exactly the comparison's complete analysis-ID set. The exact selected circuit, the hypothesis-supporting evidence/source closure, separately scoped model-method evidence/source closure, and those exact analyses are serialized; unrelated catalog context is not relabeled as support. The local model card is related as `method_definition`; the FlyGym paper and pinned release are related only as `embodiment_reference` and do not define FlyLab's equations.
 
 ## Reproducibility contract
 
@@ -118,19 +119,18 @@ The saved payload includes the exact selected circuit record, the hypothesis's e
 
 ## Controls and metrics
 
-Every accepted protocol contains mandatory baseline and model-sham controls. A bilateral protocol contains:
+Every accepted protocol contains mandatory baseline and model-sham controls. Every supported protocol contains its requested perturbation arm; bilateral protocols add unilateral arms only when the selected motor map supports them. The current MDN map supports bilateral, left, and right routing, while the GF map is intentionally bilateral-only. The conditions are:
 
-- activation baseline: no retreat drive
-- activation sham: the nominal control setting is recorded separately from its zero effective retreat drive
-- silencing baseline: a hand-authored reference retreat drive with no suppression
-- silencing sham: the nominal suppression setting is recorded while the reference retreat drive is retained
-- bilateral MDN perturbation
-- left-only MDN perturbation
-- right-only MDN perturbation
+- activation baseline: no mapped motor drive
+- activation sham: the nominal control setting is recorded separately from its zero effective motor drive
+- silencing baseline: a hand-authored reference motor drive with no suppression
+- silencing sham: the nominal suppression setting is recorded while the reference motor drive is retained
+- the requested MDN or GF perturbation
+- left-only and right-only MDN perturbations when the requested MDN arm is bilateral
 
 These are model conditions, not a substitute for a biological control design. FlyLab does not model optics, heat, genotype, expression, handling, sex-specific effects, experimental batch effects, or endogenous MDN activity. The complete activation and suppression equations, every numeric constant, the synthetic stance-index definition, and the model-scale unit boundary are published in [the model card](MODEL_CARD.md).
 
-The behavior analysis exposes:
+The MDN behavior analysis exposes:
 
 - reverse-initiation probability across seeded runs
 - backward distance in uncalibrated model-scale millimeters
@@ -139,7 +139,9 @@ The behavior analysis exposes:
 - absolute heading change in degrees for comparison
 - stance-stability index
 
-The analysis method version is `flylab.behavior-metrics.v2`. The tool requires the complete predefined five-metric panel and returns machine-readable `metric_definitions` plus a `unit_boundary`; FlyLab does not claim a formal preregistration artifact. Reverse-initiation probability is also reported as an always-present response summary. These cards average the simulation-generated `replicates` records. The condition-level Three.js replay trajectory is independently generated for illustration and must not be presented as the raw replicate path used to calculate the cards. Response latency is a simulated delay from the protocol's nominal onset, averaged over responsive seeded runs only; the available reverse-travel time is `trial duration − onset − latency`, bounded at zero. For baseline and model-sham arms, the same nominal onset is a comparison reference rather than a delivered perturbation. When no seeded run responds, raw and aggregate latency are JSON `null`, the UI shows `n/a`, and the responsive denominator shows `0/n`; trial duration is never substituted as a fake latency. Distance and speed use uncalibrated model-scale millimeter units; the stance-stability value is a synthetic unitless index. These estimates summarize seeded simulator variation. They are not biological confidence intervals, effect sizes from animals, or statistical evidence for a biological hypothesis.
+The GF panel replaces those gait metrics with short-mode escape probability, response latency, vertical displacement, wing recruitment, and leg recruitment. This is not total takeoff probability; the parallel long-mode pathway is not modeled.
+
+The analysis method version is `flylab.behavior-metrics.v3`. Each motor map declares its complete five-metric panel, and the tool returns machine-readable `metric_definitions` plus a `unit_boundary`; FlyLab does not claim a formal preregistration artifact. Response initiation is also reported as an always-present simulation summary. The condition-level Three.js replay trajectory is independently generated for illustration and must not be presented as the raw per-replicate trace used to calculate cards. When no seeded run responds, latency is JSON `null`; trial duration is never substituted. Recruitment values are synthetic unitless indices, and vertical displacement is model-scale motion—not muscle force or aerodynamic lift. These estimates are not biological confidence intervals, animal effect sizes, or statistical evidence for a biological hypothesis.
 
 ## Operational shared-state boundary
 
@@ -172,6 +174,12 @@ This boundary supports assisted research planning, not autonomous biological exp
 
 Each claim remains scoped to the cited assay. Sufficiency under one protocol does not establish a universal dose-response rule, natural recruitment, or necessity in every context. FlyLab keeps the measured LUL130 claim without inventing a BANC node, because the pinned BANC metadata contains no LUL130 annotation.
 
+### Giant-fiber leg/wing escape evidence
+
+[von Reyn et al., *Nature Neuroscience* (2014)](https://doi.org/10.1038/nn.3741) supports assay-scoped GF activation, silencing, recording, and short-mode escape claims. [King & Wyman, *Journal of Neurocytology* (1980)](https://doi.org/10.1007/BF01205017) supports the primary thoracic anatomy of the TTM jump-leg and PSI/DLM flight-muscle branches. [Allen & Murphey, *European Journal of Neuroscience* (2007)](https://doi.org/10.1111/j.1460-9568.2007.05686.x) supports the electrical and cholinergic chemical components of the mixed GF–TTMn synapse only; FlyLab does not attribute it to the PSI/DLM or neuromuscular branches. [Azevedo et al., *Nature* (2024)](https://doi.org/10.1038/s41586-024-07389-x) supplies adult-female FANC structural context for coordinated leg/wing escape output.
+
+GF loss does not abolish every escape pathway; the parallel long-mode takeoff pathway is explicitly outside the current model. The cited sub-millisecond physiology does not calibrate FlyLab's hand-authored response-latency model. FANC is a separate specimen and dataset from BANC. FlyLab bundles no GF reconstruction or FANC edge table, and its schematic lines have no dataset IDs.
+
 ### Descending-neuron screen
 
 [Cande et al., *eLife* 7:e34275 (2018)](https://doi.org/10.7554/eLife.34275), licensed CC BY 4.0, supports a measured broad-screen context: 130 sparse split-GAL4 lines targeting approximately 160 neurons across 58 anatomical types in solitary adult males. The associated [Dryad version 1 dataset](https://doi.org/10.5061/dryad.fr89c0c) is CC0-1.0. FlyLab does not use this screen as MDN-specific causal validation, and a driver-line phenotype cannot automatically be assigned to one EM-reconstructed neuron.
@@ -192,7 +200,8 @@ The manifest also references [FlyEM MANC `manc:v1.2.1`](https://www.janelia.org/
 
 ## Claims the project may make
 
-- FlyLab exposes a source-backed, adult MDN-focused evidence workflow.
+- FlyLab exposes source-backed adult MDN leg-retreat and giant-fiber leg/wing escape workflows.
+- Agents can query typed motor paths and explicit body-part coverage before proposing a virtual experiment.
 - The agent can design and analyze controlled, seeded **virtual** experiments.
 - Same-seed simulation is deterministic in the current model.
 - The interface preserves explicit provenance and human approval.
@@ -202,6 +211,7 @@ The manifest also references [FlyEM MANC `manc:v1.2.1`](https://www.janelia.org/
 
 - FlyLab simulates a complete fruit-fly brain.
 - The connectome alone produces the displayed behavior.
+- FlyLab currently simulates every body part, motor neuron, muscle, or natural behavior of a fly.
 - The current application runs FlyGym or NeuroMechFly.
 - A simulation result is a newly measured biological result.
 - The displayed activation value maps to an experimental dose.

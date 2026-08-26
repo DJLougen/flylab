@@ -6,7 +6,7 @@ FlyLab is public, requires no account, and exposes exactly eight imperative WebM
 - Public source: <https://github.com/DJLougen/flylab>
 - Challenge-period source proof: [first public commit, August 26, 2026](https://github.com/DJLougen/flylab/commit/a45eb82ad29d62a1bf7afc0aff89f71a70384db9)
 - Deployed application release: [`104846997773c6905ed4c6da26fea67e0676c148`](https://github.com/DJLougen/flylab/commit/104846997773c6905ed4c6da26fea67e0676c148)
-- Release verification: [successful public CI run with 59 automated tests](https://github.com/DJLougen/flylab/actions/runs/33017176540)
+- Prior public release verification: [successful CI run from the earlier 59-test milestone](https://github.com/DJLougen/flylab/actions/runs/33017176540); the current source contains 74 tests and should be checked with the commands below.
 
 The complete path takes about three minutes. It intentionally pauses once at a visible approval control that is absent from the WebMCP tool surface.
 
@@ -100,11 +100,11 @@ This proves that visible human edits are authoritative and that the agent recove
 
 Repeating the exact workflow preserves canonical experiment and analysis identity. Repeating completed state-changing calls reuses the saved bundle ID, manifest hash, and saved timestamp. Changing the seed changes the generated runs.
 
-FlyLab runs its deterministic, hand-authored reduced-order model `0.1.3`; it does not run FlyGym, infer biological neural activity, simulate the full BANC connectome, or report a wet-lab result. Model distances and speeds are uncalibrated model-scale units. The five evidence labels are `measured`, `derived`, `connectome_inferred`, `simulation_predicted`, and `agent_hypothesized`.
+FlyLab runs its deterministic, hand-authored mapped-motor model `0.2.0`; it does not run FlyGym, infer biological neural activity, execute a connectome or synapse model, simulate muscle mechanics or aerodynamics, or report a wet-lab result. Model distances, lift, recruitment, and speeds are uncalibrated model outputs. The five evidence labels are `measured`, `derived`, `connectome_inferred`, `simulation_predicted`, and `agent_hypothesized`.
 
 The current pinned BANC boundary is four directed MDN→LBL40 rows totaling 153 **v3-predicted synaptic links** after the released postsynapse-size ≥10-voxel filter. This is the Dataverse v3 future-work product; the Bates et al. paper analyses use v2 with a ≥5-voxel filter. These specimen-level structural counts are not physiological weights, connection probabilities, activity measurements, or causal efficacy, and FlyLab does not assign the retained `norm` field a biological interpretation.
 
-The current source contains 59 automated tests. For local verification, run:
+The current source contains 74 automated tests. For local verification, run:
 
 ```bash
 npm ci
