@@ -33,16 +33,17 @@ Open the [public FlyLab deployment](https://flylab-neuroethology.d-lougen.chatgp
 
 OpenAI notes that site tools are unavailable with GPT-5.6 Luna and in Enterprise or Edu workspaces, and that availability can also depend on rollout. Therefore an absent `document.modelContext` in an otherwise compatible page is recorded as an environment limitation, not replaced with a browser polyfill.
 
-Reference: [OpenAI Site tools documentation](https://learn.chatgpt.com/docs/webmcp).
+References: [OpenAI Site tools documentation](https://learn.chatgpt.com/docs/webmcp) and [Chrome's WebMCP developer guide](https://developer.chrome.com/docs/ai/webmcp).
 
 ## Deployment checks
 
-The public response must remain HTTPS and return:
+The public response must remain HTTPS, must not opt out of origin-keyed agent clustering with `Origin-Agent-Cluster: ?0`, and must return:
 
 ```text
-Origin-Agent-Cluster: ?1
 Permissions-Policy: tools=(self)
 Referrer-Policy: strict-origin-when-cross-origin
 ```
+
+FlyLab requests `Origin-Agent-Cluster: ?1` in its application and local-development configuration. A hosting edge may omit that redundant opt-in header; the disabling value `?0` must not be present.
 
 The registration code performs a feature check before calling the API, so unsupported browsers continue to receive the ordinary laboratory interface without an error.
