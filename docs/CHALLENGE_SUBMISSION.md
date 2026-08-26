@@ -1,6 +1,6 @@
 # WebMCP Challenge submission
 
-The live application and public source links below are known, but the current agent-first candidate must be deployed and reverified before submission. The repository is licensed under Apache-2.0. The prior 2:15.821 narrated v6 demo predates the agent-control-plane and Three.js arena-fly upgrades and is retained only as an earlier build artifact; it is not submission evidence. A fresh demo must be generated after the corrected interface is approved. Public YouTube upload and Devpost publication are still pending.
+The current agent-first candidate is deployed publicly and has passed the complete Chrome 151 WebMCP workflow against the live HTTPS URL. The repository is public and licensed under Apache-2.0. The prior 2:15.821 narrated v6 demo predates the agent-control-plane and Three.js arena-fly upgrades and is retained only as an earlier build artifact; it is not submission evidence. A fresh demo must be generated after the corrected interface is approved. Public YouTube upload and Devpost publication are still pending.
 
 Submission deadline: **September 3, 2026 at 1:00 p.m. PDT**.
 
@@ -156,12 +156,12 @@ See [DEMO.md](DEMO.md) for replacement-demo proof requirements and the quarantin
 - [x] Verify the live HTTPS URL without private-site authentication.
 - [x] Confirm Chrome with the official WebMCP testing feature accepts all eight registrations.
 - [ ] Confirm ChatGPT's in-app browser discovers exactly eight tools.
-- [ ] Run `npm test`, `npm run lint`, and `npm run build` against the final pushed commit.
-- [ ] Confirm the deployed workflow stops at human approval before the visible person-only approval click.
-- [ ] Confirm on the final deployment that editing a protocol clears approval, playback, analyses, and the follow-up proposal.
-- [ ] Confirm on the final deployment that cancellation does not create a completed batch through both WebMCP protocol cancellation and the visible human cancel control.
-- [ ] Confirm on the final deployment that canceling evidence preparation creates no bundle, local-storage entry, or ledger entry and preserves the callable save recovery state.
-- [ ] Confirm on the final deployment that repeating all seven state-changing calls preserves `saved` stage, `complete` next action, bundle ID, manifest hash, and saved timestamp.
+- [x] Run `npm test`, `npm run lint`, and `npm run build` against the release candidate.
+- [x] Confirm the deployed workflow stops at human approval before the visible person-only approval click.
+- [x] Confirm on the final deployment that editing a protocol clears approval, playback, analyses, and the follow-up proposal.
+- [x] Confirm on the final deployment that cancellation does not create a completed batch through both WebMCP protocol cancellation and the visible human cancel control.
+- [x] Confirm on the final deployment that canceling evidence preparation creates no bundle, local-storage entry, or ledger entry and preserves the callable save recovery state.
+- [x] Confirm on the final deployment that repeating all seven state-changing calls preserves `saved` stage, `complete` next action, bundle ID, manifest hash, and saved timestamp.
 - [ ] Confirm the result and evidence badges remain visible in the replacement recording.
 - [x] Confirm the follow-up proposal is not executed.
 - [x] Confirm the saved bundle displays an ID and manifest hash.
