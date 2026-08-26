@@ -1,0 +1,19 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": false,
+    "incremental": false,
+    "allowJs": false,
+    "outDir": ".compiled",
+    "rootDir": "..",
+    "types": ["node"]
+  },
+  "include": [
+    "../lib/flylab.ts",
+    "../lib/webmcp.ts",
+    "./*.test.ts"
+  ]
+}
