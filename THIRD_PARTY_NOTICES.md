@@ -1,6 +1,6 @@
 # Third-party notices
 
-This file records the third-party data and software incorporated into FlyLab. It is an attribution record, not a license for FlyLab's own source code.
+This file records the third-party data and software incorporated into FlyLab. It is an attribution record, not a replacement for FlyLab's own [Apache License 2.0](LICENSE).
 
 ## BANC v888 connectome data
 

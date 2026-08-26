@@ -1,6 +1,6 @@
 # WebMCP Challenge submission
 
-The live application and public source links below have been verified. A 2:15.821 narrated v6 demo has been generated locally from 12 FlyLab interface captures, including the Three.js BANC circuit view. Public YouTube upload, Devpost publication, and an owner-approved repository license are still pending.
+The live application and public source links below have been verified. The repository is licensed under Apache-2.0. A 2:15.821 narrated v6 demo has been generated locally from 12 FlyLab interface captures, including the Three.js BANC circuit view. Public YouTube upload and Devpost publication are still pending.
 
 Submission deadline: **September 3, 2026 at 1:00 p.m. PDT**.
 
@@ -159,7 +159,7 @@ See [DEMO.md](DEMO.md) for the generated 12-frame narration and cue sheet, and [
 - [x] Confirm every linked scientific URL resolves to the intended primary page, allowing for publisher anti-bot interstitials where DOI and authoritative metadata independently confirm the destination. See [source verification](SOURCE_VERIFICATION.md).
 - [x] Confirm no copy or narration claims actual FlyGym execution or new biological results.
 - [x] Generate a 2:15.821 narrated 12-frame MP4 with Three.js BANC reconstruction views, English captions, thumbnail, and gallery stills.
-- [ ] Add an owner-approved open-source `LICENSE` file that Devpost can detect at the top of the repository.
+- [x] Add an owner-approved Apache-2.0 `LICENSE` file that Devpost can detect at the top of the repository.
 - [ ] Publish a public YouTube demo under three minutes with audio.
 - [ ] Verify the YouTube video in a signed-out browser, then replace `[YOUTUBE_DEMO_URL]`.
 - [ ] Publish and verify the Devpost entry, then replace `[DEVPOST_ENTRY_URL]`.

@@ -184,6 +184,6 @@ run_fly_simulation
 - Confirm the video never claims FlyGym execution, whole-brain dynamics, direct connectome simulation, or new biological results.
 - Confirm the public YouTube URL before replacing `[YOUTUBE_DEMO_URL]`.
 - Confirm the public Devpost URL before replacing `[DEVPOST_ENTRY_URL]`.
-- Leave repository licensing marked pending until the owner approves and adds a root `LICENSE` file.
+- Confirm the public repository displays the owner-approved Apache-2.0 root `LICENSE` file.
 
 See [YOUTUBE_DESCRIPTION.md](YOUTUBE_DESCRIPTION.md) for upload-ready title, description, chapters, tags, and asset pointers.

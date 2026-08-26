@@ -2,7 +2,7 @@
 
 ## Publication status
 
-This is upload-ready copy for the local v6 demo package. The YouTube video, Devpost entry, and owner-approved repository license are not yet complete. Keep bracketed placeholders until their public destinations have been opened and verified.
+This is upload-ready copy for the local v6 demo package. FlyLab's repository is licensed under Apache-2.0. The YouTube video and Devpost entry are not yet public; keep bracketed placeholders until their destinations have been opened and verified.
 
 ## Recommended upload fields
 
@@ -48,7 +48,7 @@ Not made for kids
 
 **License note**
 
-Choose the YouTube video-license setting deliberately during upload. That setting is separate from repository licensing. Do not describe the repository as open source until an owner-approved root `LICENSE` file exists.
+Choose the YouTube video-license setting deliberately during upload. That setting is separate from the repository's Apache-2.0 license.
 
 ## Description
 

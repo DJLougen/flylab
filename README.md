@@ -103,7 +103,7 @@ FlyLab ships a small curated evidence catalog rather than live literature retrie
 - [FlyEM MANC `manc:v1.2.1`](https://www.janelia.org/project-team/flyem/manc-connectome) — reference matches to a separate adult male ventral nerve cord specimen; CC BY 4.0. Matching IDs do not identify the same physical cells as the female BANC specimen.
 - [Wang-Chen et al., *Nature Methods* (2024)](https://doi.org/10.1038/s41592-024-02497-y) — NeuroMechFly v2/FlyGym publication. The pinned [FlyGym v2.1.0 release](https://github.com/NeLy-EPFL/flygym/releases/tag/v2.1.0) is Apache-2.0; FlyLab uses it as an embodiment reference and does not execute it.
 
-FlyLab's own distribution terms should be taken from the repository license, if and when one is added; third-party source licenses do not automatically license this project.
+FlyLab's original source code and documentation are licensed under the [Apache License 2.0](LICENSE). Third-party data and software retain their own terms; those licenses do not become FlyLab's license and FlyLab's license does not replace theirs.
 
 ## Project guide
 
