@@ -54,6 +54,13 @@ export interface PinnedDataFile {
   role: string;
 }
 
+export interface PinnedMorphologyFile {
+  banc_888_id: string;
+  format: 'SWC';
+  sha256: string;
+  source_url: string;
+}
+
 export const BANC_V888_SOURCE_FILES: readonly PinnedDataFile[] = [
   {
     name: 'banc_888_meta.feather',
@@ -267,6 +274,30 @@ export const BANC_V888_MDN_LBL40_TOTAL_CONTACTS = BANC_V888_EDGES.reduce(
   (total, edge) => total + edge.count,
   0,
 );
+
+export const BANC_V888_MORPHOLOGY_FILES: readonly PinnedMorphologyFile[] = [
+  ['720575941491012809', '1bdcc7ff77ccffd95628437c9d47bdce1cc01dd5893eb8249c52a19acdece689'],
+  ['720575941491065653', '15fd58ea59e56b19e5ed69469561876b153accd6a4e4fe202f6f1c6a102a3f2a'],
+  ['720575941499708745', 'f7394c2d5f9c7e5b65cd75df3098bc207d3ccabe36a9f5d4de9d59ac0cf31361'],
+  ['720575941614906387', '3d8d4cff8f6765efe67cc0622eec8a7210f1a245bc95686f449c839a2450bb6a'],
+  ['720575941669107187', '48f9ad4127f3ddd2bcc85b6730f3def6c2c3b52a3dbce1cda43575064de380c5'],
+  ['720575941669069043', '219ee955b38e21e5b933c2fbb38e99bc7aea1f1eecc6fbc11e1f67e50b01f76b'],
+].map(([banc_888_id, checksum]) => ({
+  banc_888_id,
+  format: 'SWC' as const,
+  sha256: checksum,
+  source_url: `https://storage.googleapis.com/lee-lab_brain-and-nerve-cord-fly-connectome/compiled_data/banc_888/banc_banc_space_split_swc/${banc_888_id}_split.swc`,
+}));
+
+export const BANC_V888_MORPHOLOGY_BUNDLE = {
+  snapshot: 'banc_888',
+  snapshotDate: '2026-04-17',
+  dataProduct: 'BANC L2 SWC skeletons in BANC voxel space',
+  license: 'CC-BY-4.0',
+  bundledManifest: '/data/banc-v888-skeletons/manifest.json',
+  files: BANC_V888_MORPHOLOGY_FILES,
+  displayBoundary: 'Neuron lines are reconstruction-derived. Playback glow is a FlyLab model selection, not recorded activity, voltage, calcium, firing rate, or signal propagation. The surrounding CNS shell is schematic.',
+} as const;
 
 export const BANC_V888_BUNDLE = {
   dataset: 'BANC',

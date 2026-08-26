@@ -634,42 +634,272 @@ dd {
   text-align: center;
 }
 
-.circuit-overlay {
+.arena-circuit {
+  height: clamp(440px, 57vh, 570px);
+  background: #061013;
+}
+
+.arena-circuit::before,
+.arena-circuit::after,
+.arena-circuit > .axis,
+.arena-circuit > .arena-scale,
+.arena-circuit > .arena-data {
+  display: none;
+}
+
+.fly-brain-viewer {
   position: absolute;
   z-index: 12;
   inset: 0;
-  padding: 0 7%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 226px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  background:
+    radial-gradient(circle at 32% 38%, rgba(49, 139, 130, 0.11), transparent 35%),
+    linear-gradient(145deg, #071416, #040b0e);
+}
+
+.brain-viewer-fallback {
+  position: absolute;
+  z-index: 12;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  background: rgba(3, 11, 13, 0.82);
-  backdrop-filter: blur(7px);
-}
-
-.circuit-overlay > i {
-  width: clamp(18px, 5vw, 62px);
-  height: 1px;
-  background: linear-gradient(90deg, var(--line), var(--teal));
-}
-
-.circuit-overlay .node {
-  min-width: 62px;
-  min-height: 62px;
-  padding: 7px;
-  display: grid;
-  place-items: center;
-  border: 1px solid var(--line-strong);
-  border-radius: 50%;
-  background: var(--panel-3);
+  gap: 9px;
+  background: #061013;
   color: var(--muted-2);
-  font-size: 0.6rem;
-  text-align: center;
+  font-size: 0.68rem;
+}
+
+.brain-canvas-wrap {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.brain-canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.brain-canvas canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: none;
+}
+
+.brain-viewer-status,
+.brain-camera-controls,
+.brain-orientation,
+.brain-hover-card,
+.brain-legend {
+  position: absolute;
+  z-index: 3;
+}
+
+.brain-viewer-status {
+  top: 13px;
+  left: 14px;
+  max-width: calc(100% - 205px);
+  display: grid;
+  gap: 3px;
+  pointer-events: none;
+}
+
+.viewer-load {
+  width: fit-content;
+  padding: 3px 6px;
+  border: 1px solid rgba(110, 231, 210, 0.2);
+  border-radius: 999px;
+  background: rgba(6, 16, 19, 0.7);
+  color: var(--teal);
+  font-size: 0.52rem;
+  font-weight: 750;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
 }
 
-.circuit-overlay .mdn { border-color: rgba(255, 207, 105, 0.68); color: var(--inferred); box-shadow: 0 0 28px rgba(255, 207, 105, 0.11); }
-.circuit-overlay p { position: absolute; bottom: 30px; color: var(--muted); font-size: 0.66rem; }
+.viewer-load.loading { color: var(--muted-2); }
+.viewer-load.failed { border-color: rgba(255, 142, 125, 0.3); color: var(--danger); }
+.brain-viewer-status strong { font-size: 0.72rem; font-weight: 680; }
+.brain-viewer-status small { color: var(--muted); font-size: 0.59rem; }
+
+.brain-camera-controls {
+  top: 12px;
+  right: 12px;
+  padding: 3px;
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(4, 12, 14, 0.76);
+  backdrop-filter: blur(8px);
+}
+
+.brain-camera-controls button {
+  min-height: 25px;
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.52rem;
+  font-weight: 720;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.brain-camera-controls button.active { background: rgba(110, 231, 210, 0.1); color: var(--teal); }
+
+.brain-orientation {
+  top: 50%;
+  left: 12px;
+  display: grid;
+  gap: 3px;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 0.52rem;
+  text-align: center;
+}
+
+.brain-orientation i { width: 1px; height: 24px; margin: auto; background: linear-gradient(var(--teal), transparent); }
+
+.brain-hover-card {
+  top: 50%;
+  right: 12px;
+  min-width: 120px;
+  padding: 7px 9px;
+  display: grid;
+  gap: 2px;
+  transform: translateY(-50%);
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: rgba(4, 12, 14, 0.88);
+  pointer-events: none;
+}
+
+.brain-hover-card strong { font-size: 0.65rem; }
+.brain-hover-card span { color: var(--muted); font-size: 0.54rem; }
+
+.brain-legend {
+  left: 14px;
+  bottom: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  pointer-events: none;
+  color: var(--muted-2);
+  font-size: 0.53rem;
+}
+
+.brain-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.brain-legend i,
+.brain-neuron-list button > i {
+  width: 6px;
+  height: 6px;
+  display: inline-block;
+  border-radius: 50%;
+  background: #6a9696;
+}
+.brain-legend .model-target { background: var(--agent); box-shadow: 0 0 9px var(--agent); }
+.brain-legend .structural-target { background: var(--teal); box-shadow: 0 0 9px var(--teal); }
+.brain-legend .reconstruction { border: 1px solid #7aa2a3; background: transparent; }
+
+.brain-neuron-panel {
+  min-width: 0;
+  overflow: auto;
+  border-left: 1px solid var(--line);
+  background: rgba(7, 18, 21, 0.88);
+  scrollbar-width: thin;
+}
+
+.brain-neuron-panel > header {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  padding: 13px 12px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(7, 18, 21, 0.96);
+}
+
+.brain-neuron-panel header h2 { margin-top: 3px; font-size: 0.75rem; }
+.brain-neuron-panel header > span { color: var(--muted); font-size: 0.56rem; }
+
+.brain-neuron-list { padding: 7px; display: grid; gap: 4px; }
+.brain-neuron-list button {
+  width: 100%;
+  min-height: 42px;
+  padding: 6px 7px;
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.018);
+  color: var(--muted-2);
+  cursor: pointer;
+  text-align: left;
+}
+
+.brain-neuron-list button:hover,
+.brain-neuron-list button.selected { border-color: var(--line-strong); background: rgba(255, 255, 255, 0.04); }
+.brain-neuron-list button.model-active { border-color: rgba(212, 156, 255, 0.32); background: rgba(212, 156, 255, 0.07); }
+.brain-neuron-list button.path-active { border-color: rgba(110, 231, 210, 0.3); background: rgba(110, 231, 210, 0.055); }
+.brain-neuron-list button.model-active > i { background: var(--agent); box-shadow: 0 0 8px var(--agent); }
+.brain-neuron-list button.path-active > i { background: var(--teal); box-shadow: 0 0 8px var(--teal); }
+.brain-neuron-list button span { min-width: 0; display: grid; gap: 2px; }
+.brain-neuron-list button strong { font-size: 0.62rem; font-weight: 680; }
+.brain-neuron-list button small { overflow: hidden; color: var(--muted); font-size: 0.51rem; text-overflow: ellipsis; }
+.brain-neuron-list button b { color: var(--muted); font-size: 0.48rem; font-weight: 720; letter-spacing: 0.05em; text-transform: uppercase; }
+.brain-neuron-list button.model-active b { color: var(--agent); }
+.brain-neuron-list button.path-active b { color: var(--teal); }
+
+.brain-cell-detail {
+  padding: 10px 12px;
+  border-top: 1px solid var(--line);
+  background: rgba(2, 9, 11, 0.25);
+}
+
+.brain-cell-detail > p:first-child { display: flex; justify-content: space-between; gap: 6px; }
+.brain-cell-detail p strong { font-size: 0.65rem; }
+.brain-cell-detail p span { color: var(--derived); font-size: 0.5rem; }
+.brain-cell-detail dl { margin-top: 8px; display: grid; gap: 6px; }
+.brain-cell-detail dl div { display: grid; gap: 2px; }
+.brain-cell-detail dt { color: var(--muted); font-size: 0.48rem; text-transform: uppercase; }
+.brain-cell-detail dd { overflow-wrap: anywhere; color: var(--muted-2); font-size: 0.55rem; line-height: 1.35; }
+.brain-select-hint { color: var(--muted); font-size: 0.57rem; line-height: 1.45; }
+
+.brain-edge-summary {
+  padding: 10px 12px 13px;
+  display: grid;
+  gap: 3px;
+  border-top: 1px solid var(--line);
+}
+.brain-edge-summary span { color: var(--muted); font-size: 0.5rem; text-transform: uppercase; }
+.brain-edge-summary strong { color: var(--inferred); font-size: 0.58rem; line-height: 1.35; }
+
+.brain-viewer-boundary {
+  grid-column: 1 / -1;
+  min-height: 42px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 9px 16px;
+  border-top: 1px solid var(--line);
+  background: #071417;
+  color: var(--muted);
+  font-size: 0.52rem;
+}
+
+.brain-viewer-boundary strong { margin-left: auto; color: var(--agent); font-weight: 620; text-align: right; }
 
 .playback-row {
   margin-top: 12px;
@@ -1099,6 +1329,10 @@ dd {
   .main-stage { padding: 19px 14px 27px; }
   .panel-heading { align-items: flex-start; flex-direction: column; }
   .arena { height: 370px; }
+  .arena-circuit { height: 590px; }
+  .fly-brain-viewer { grid-template-columns: minmax(0, 1fr) 196px; }
+  .brain-viewer-boundary { flex-wrap: wrap; }
+  .brain-viewer-boundary strong { width: 100%; margin-left: 0; text-align: left; }
   .condition-tabs { grid-template-columns: repeat(5, 118px); }
   .inspector-panel { display: grid; grid-template-columns: 1fr; padding: 16px 14px 25px; }
   .protocol-controls { grid-row: auto; }
@@ -1117,11 +1351,21 @@ dd {
   .view-switch { width: 100%; }
   .view-switch button { flex: 1; }
   .arena { height: 330px; min-height: 330px; }
+  .arena-circuit { height: 720px; }
+  .fly-brain-viewer { grid-template-columns: 1fr; grid-template-rows: minmax(350px, 1fr) 260px auto; }
+  .brain-neuron-panel { border-top: 1px solid var(--line); border-left: 0; }
+  .brain-neuron-panel > header { position: relative; }
+  .brain-neuron-list { grid-template-columns: 1fr 1fr; }
+  .brain-cell-detail,
+  .brain-edge-summary { display: none; }
+  .brain-viewer-boundary { grid-column: 1; }
+  .brain-viewer-status { max-width: calc(100% - 24px); }
+  .brain-viewer-status strong,
+  .brain-viewer-status small { display: none; }
+  .brain-camera-controls { top: 48px; left: 12px; right: auto; }
+  .brain-legend { right: 10px; }
   .timeline-labels { padding-left: 86px; }
   .metric-grid { grid-template-columns: 1fr 1fr; }
-  .circuit-overlay { padding: 0 4%; gap: 5px; }
-  .circuit-overlay .node { min-width: 48px; min-height: 48px; font-size: 0.5rem; }
-  .circuit-overlay > i { width: 12px; }
   .modal-backdrop { padding: 10px; }
   .evidence-modal { max-height: calc(100vh - 20px); }
   .evidence-detail { padding: 17px; }

@@ -75,13 +75,13 @@ Narration:
 
 Click **Approve experiment**.
 
-### 0:57–1:22 — Reproducible simulation
+### 0:57–1:22 — Reproducible simulation and circuit anatomy
 
-Submit Prompt 2. Show the approved status, activity log, condition tabs, and animated trajectory replay.
+Submit Prompt 2. Show the approved status and animated trajectory replay. Switch to **Circuit**, play through the model-drive window, and briefly show the bilateral purple MDNs, cyan structural LBL40 paths, 153-contact readout, and one selectable BANC cell ID. Switch to left-only long enough to show that only the two left MDNs and right LBL40 path are highlighted.
 
 Narration:
 
-> This is the reduced-order FlyLab model, version 0.1.1, using the MDN-inspired `mdn-inspired-retreat-adapter.v1`. It is deterministic for the saved seed and is explicitly not FlyGym or a whole-brain simulation.
+> These lines are the six pinned BANC v888 neuron reconstructions, not artist-drawn neurons. Purple marks the current model target and cyan its structural path; neither is measured activity. The behavior is still the deterministic reduced-order FlyLab model, not FlyGym or a whole-brain simulation.
 
 ### 1:22–1:43 — Analysis without overclaiming
 
@@ -112,6 +112,7 @@ Narration:
 - The activity rail visibly advances with tool calls.
 - The protocol remains Draft until the person clicks Approve.
 - The simulation result is labeled `simulation_predicted`.
+- The circuit view labels neuron lines as reconstruction-derived, the shell as schematic, and glow as model selection rather than neural activity.
 - The analysis is labeled both `derived` and `simulation_predicted`.
 - The follow-up is labeled `agent_hypothesized` and is not executed.
 - The evidence ledger shows primary-source links and cautions.

@@ -1,8 +1,8 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 
 const defaultUrl = 'https://flylab-neuroethology.d-lougen.chatgpt.site/';
 const expectedToolNames = [
@@ -33,6 +33,11 @@ const profile = await mkdtemp(join(tmpdir(), 'flylab-webmcp-'));
 const stderrLines = [];
 let chrome;
 let socket;
+let captureIndex = 0;
+const capturedFrames = [];
+const captureDirectory = process.env.FLYLAB_CAPTURE_DIR
+  ? resolve(process.env.FLYLAB_CAPTURE_DIR)
+  : null;
 
 function withTimeout(promise, milliseconds, label) {
   let timer;
@@ -137,6 +142,190 @@ async function readRuntimeStatus() {
   return JSON.parse(value);
 }
 
+async function captureStage(label) {
+  if (!captureDirectory) return;
+  await mkdir(captureDirectory, { recursive: true });
+  const screenshot = await sendCommand('Page.captureScreenshot', {
+    format: 'png',
+    fromSurface: true,
+    captureBeyondViewport: false,
+  });
+  const safeLabel = label.replace(/[^a-z0-9-]+/gi, '-').toLowerCase();
+  const filename = `${String(captureIndex).padStart(2, '0')}-${safeLabel}.png`;
+  const filepath = join(captureDirectory, filename);
+  captureIndex += 1;
+  await writeFile(filepath, Buffer.from(screenshot.data, 'base64'));
+  capturedFrames.push(filepath);
+}
+
+async function invokeRegisteredTool(tools, toolName, input) {
+  const tool = tools.find((candidate) => candidate.name === toolName);
+  if (!tool?.frameId) throw new Error(`Chrome did not return a frame for ${toolName}.`);
+  const invocation = await sendCommand('WebMCP.invokeTool', {
+    frameId: tool.frameId,
+    toolName,
+    input,
+  });
+  return waitForEvent(
+    'WebMCP.toolResponded',
+    (event) => event.invocationId === invocation.invocationId,
+  );
+}
+
+function decodedOutput(response) {
+  if (typeof response?.output !== 'string') return response?.output;
+  try {
+    return JSON.parse(response.output);
+  } catch {
+    return response.output;
+  }
+}
+
+function successfulEnvelope(response, toolName) {
+  const envelope = decodedOutput(response)?.structuredContent;
+  if (response?.status !== 'Completed' || envelope?.ok !== true || envelope?.tool !== toolName) {
+    throw new Error(`${toolName} did not complete successfully: ${JSON.stringify(response)}`);
+  }
+  return envelope;
+}
+
+async function runFullWorkflow(tools, discoveryResponse) {
+  const discovery = successfulEnvelope(discoveryResponse, 'find_fly_circuits');
+  const circuit = discovery.data.circuits[0];
+  const evidenceIds = discovery.data.evidence
+    .filter((record) => record.provenance === 'measured')
+    .slice(0, 4)
+    .map((record) => record.id);
+
+  const draftedResponse = await invokeRegisteredTool(tools, 'draft_fly_hypothesis', {
+    circuit_id: circuit.id,
+    claim: 'Activating adult MDNs in the FlyLab model should increase backward displacement relative to baseline and model-sham controls.',
+    predicted_behavior: 'backward_walking',
+    perturbation: 'activate',
+    evidence_ids: evidenceIds,
+    falsification_criterion: 'The prediction fails if bilateral activation does not increase backward distance relative to the model-sham condition.',
+  });
+  const drafted = successfulEnvelope(draftedResponse, 'draft_fly_hypothesis');
+  await captureStage('hypothesis-drafted');
+
+  const designedResponse = await invokeRegisteredTool(tools, 'design_stimulation_trial', {
+    hypothesis_id: drafted.data.hypothesis.id,
+    target_circuit_id: circuit.id,
+    perturbation: 'activate',
+    laterality: 'bilateral',
+    activation_level: 0.65,
+    onset_ms: 1000,
+    duration_ms: 2000,
+    trial_duration_ms: 5000,
+    replicates: 8,
+    include_baseline: true,
+    include_sham_control: true,
+    seed: 73142,
+  });
+  const designed = successfulEnvelope(designedResponse, 'design_stimulation_trial');
+  const experimentId = designed.data.experiment.id;
+
+  const lockedRun = await invokeRegisteredTool(tools, 'run_fly_simulation', {
+    experiment_id: experimentId,
+  });
+  const lockEnvelope = decodedOutput(lockedRun)?.structuredContent;
+  if (lockEnvelope?.error?.code !== 'APPROVAL_REQUIRED') {
+    throw new Error(`The pre-approval run was not blocked: ${JSON.stringify(lockedRun)}`);
+  }
+  await captureStage('protocol-locked');
+
+  const approval = await sendCommand('Runtime.evaluate', {
+    expression: `(() => {
+      const button = [...document.querySelectorAll('button')]
+        .find((candidate) => candidate.textContent?.includes('Approve experiment'));
+      const label = button?.textContent?.trim() ?? null;
+      button?.click();
+      return { clicked: Boolean(button), label };
+    })()`,
+    returnByValue: true,
+  });
+  if (approval?.result?.value?.clicked !== true) {
+    throw new Error(`The human-only approval control was not available: ${JSON.stringify(approval)}`);
+  }
+  await captureStage('human-approved');
+
+  const runResponse = await invokeRegisteredTool(tools, 'run_fly_simulation', {
+    experiment_id: experimentId,
+  });
+  const run = successfulEnvelope(runResponse, 'run_fly_simulation');
+  await new Promise((resolve) => setTimeout(resolve, 1_200));
+  await captureStage('simulation-replay');
+
+  const analysisResponse = await invokeRegisteredTool(tools, 'analyze_fly_behavior', {
+    batch_id: run.data.id,
+    metrics: [
+      'backward_distance_mm',
+      'signed_speed_mm_s',
+      'response_latency_ms',
+      'heading_change_deg',
+      'stance_stability',
+    ],
+    analysis_start_ms: 0,
+    analysis_end_ms: 5000,
+  });
+  const analysis = successfulEnvelope(analysisResponse, 'analyze_fly_behavior');
+  await captureStage('behavior-analysis');
+
+  const comparisonResponse = await invokeRegisteredTool(tools, 'compare_fly_trials', {
+    analysis_ids: [analysis.data.analysis.id],
+    objective_metric: 'backward_distance_mm',
+    objective: 'maximize',
+    next_experiment_budget: 5,
+  });
+  const comparison = successfulEnvelope(comparisonResponse, 'compare_fly_trials');
+  await captureStage('bounded-follow-up');
+
+  const saveResponse = await invokeRegisteredTool(tools, 'save_fly_evidence', {
+    title: 'Adult MDN backward-walking verification run',
+    hypothesis_id: drafted.data.hypothesis.id,
+    experiment_id: experimentId,
+    batch_ids: [run.data.id],
+    analysis_ids: [analysis.data.analysis.id],
+    comparison_id: comparison.data.comparison.id,
+    note: 'Automated live WebMCP verification with a DOM click at the human-only approval boundary.',
+  });
+  const saved = successfulEnvelope(saveResponse, 'save_fly_evidence');
+  await captureStage('evidence-saved');
+
+  await sendCommand('Runtime.evaluate', {
+    expression: `(() => {
+      const button = [...document.querySelectorAll('button')]
+        .find((candidate) => candidate.textContent?.includes('Evidence ledger'));
+      button?.click();
+      return Boolean(button);
+    })()`,
+    returnByValue: true,
+  });
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  await captureStage('evidence-ledger');
+
+  return {
+    sequence: [
+      'find_fly_circuits',
+      'draft_fly_hypothesis',
+      'design_stimulation_trial',
+      'human_approval_dom_click',
+      'run_fly_simulation',
+      'analyze_fly_behavior',
+      'compare_fly_trials',
+      'save_fly_evidence',
+    ],
+    preapproval_error: lockEnvelope.error.code,
+    experiment_id: experimentId,
+    batch_id: run.data.id,
+    analysis_id: analysis.data.analysis.id,
+    comparison_id: comparison.data.comparison.id,
+    evidence_bundle_id: saved.data.bundle.id,
+    manifest_hash: saved.data.bundle.manifestHash,
+    follow_up_execution_authorized: comparison.data.execution_authorized,
+  };
+}
+
 try {
   chrome = spawn(chromePath, [
     '--headless=new',
@@ -155,6 +344,12 @@ try {
   const port = new URL(browserDebuggerUrl).port;
   const page = await fetchTargets(port);
   socket = await connectToPage(page.webSocketDebuggerUrl);
+  await sendCommand('Emulation.setDeviceMetricsOverride', {
+    width: 1440,
+    height: 900,
+    deviceScaleFactor: 1,
+    mobile: false,
+  });
 
   let status;
   for (let attempt = 0; attempt < 40; attempt += 1) {
@@ -167,20 +362,13 @@ try {
   await sendCommand('WebMCP.enable');
   const registeredTools = await toolsAdded;
   const actualToolNames = registeredTools.tools.map((tool) => tool.name).sort();
-  const discoveryTool = registeredTools.tools.find((tool) => tool.name === 'find_fly_circuits');
-  if (!discoveryTool?.frameId) {
-    throw new Error('Chrome did not return a frame for find_fly_circuits.');
-  }
-
-  const invocation = await sendCommand('WebMCP.invokeTool', {
-    frameId: discoveryTool.frameId,
-    toolName: 'find_fly_circuits',
-    input: { query: 'MDN', behavior: 'backward_walking' },
-  });
-  const response = await waitForEvent(
-    'WebMCP.toolResponded',
-    (event) => event.invocationId === invocation.invocationId,
+  await captureStage('seven-tools-live');
+  const response = await invokeRegisteredTool(
+    registeredTools.tools,
+    'find_fly_circuits',
+    { query: 'MDN', behavior: 'backward_walking' },
   );
+  await captureStage('circuit-found');
 
   const verified = status?.modelContextType === 'object'
     && status?.registerToolType === 'function'
@@ -193,7 +381,11 @@ try {
     throw new Error(`WebMCP live verification failed: ${JSON.stringify({ status, actualToolNames, response })}`);
   }
 
-  console.log(JSON.stringify({
+  const workflow = process.env.FLYLAB_VERIFY_WORKFLOW === '1'
+    ? await runFullWorkflow(registeredTools.tools, response)
+    : undefined;
+
+  const report = {
     ok: true,
     url: status.location,
     browser_api: 'document.modelContext.registerTool',
@@ -201,7 +393,13 @@ try {
     invoked_tool: 'find_fly_circuits',
     invocation_status: response.status,
     origin_agent_cluster: true,
-  }, null, 2));
+  };
+  if (process.env.FLYLAB_VERIFY_VERBOSE === '1') {
+    report.invocation_output = response.output;
+  }
+  if (workflow) report.workflow = workflow;
+  if (capturedFrames.length) report.captured_frames = capturedFrames;
+  console.log(JSON.stringify(report, null, 2));
 } catch (error) {
   if (stderrLines.length) console.error(stderrLines.join('\n'));
   throw error;

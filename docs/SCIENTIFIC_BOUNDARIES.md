@@ -39,6 +39,17 @@ The current embodiment is **not**:
 
 The `activationLevel` value is a unitless internal control. It must not be reported as light power, firing rate, calcium activity, voltage, expression strength, or biological dose.
 
+## 3D circuit-view boundary
+
+The Three.js circuit view contains two geometry classes that must not be confused:
+
+- The six neuron lines are reconstruction-derived from the frozen BANC v888 L2 SWC products: four MDNs and two LBL40 cells. They share one recorded BANC-to-scene transform. Render assets preserve roots, branch points, endpoints, and intermediate points selected by cumulative path distance. Each raw source URL and SHA-256 checksum is pinned in the dataset manifest.
+- The translucent central-brain, optic-lobe, cervical-connective, VNC, and T3 envelopes are schematic orientation geometry. They are not BANC neuropil meshes, segmentation boundaries, volumetric measurements, or complete arborization assignments.
+
+During replay, purple illumination means that a neuron is the current FlyLab **model-drive target**. Cyan illumination means that an LBL40 reconstruction is linked by the selected bundled MDN→LBL40 structural edge rows. The viewer does not display firing, voltage, calcium, optogenetic dose, direction or speed of biological signal propagation, or inferred neural dynamics. No pulse is animated along an edge. Baseline, sham, and out-of-window states remain unilluminated.
+
+Left-only model drive selects the two metadata-left MDNs and highlights their connectome-inferred right LBL40 target (52 + 51 putative contacts). Right-only drive selects the two metadata-right MDNs and highlights their left LBL40 target (26 + 24). This is a visualization of pinned identity and topology, not evidence that contact count is functional weight or causal efficacy.
+
 FlyGym is a future adapter path: the tool contracts, experiment manifest, seed lineage, and evidence boundaries could wrap a FlyGym-backed worker later. The current manifest pins FlyGym v2.1.0 and commit `ca65a510c2afe6ac61c51df4f274c8d190c2f95f` as a software reference, but the released browser model does not execute it.
 
 ## Evidence classes
@@ -145,6 +156,8 @@ Each claim remains scoped to the cited assay. Sufficiency under one protocol doe
 [Bates et al., *Nature* (2026)](https://doi.org/10.1038/s41586-026-10735-w) is the primary article pointer for BANC. FlyLab pins the [BANC static dataset, Dataverse version 3.0 / snapshot `banc_888`](https://doi.org/10.7910/DVN/7WTH1N), licensed CC BY 4.0, and retains the two source-file identifiers plus MD5 and SHA-256 checksums. The bundled slice contains four proofread MDN rows, two LBL40 rows, and four selected directed MDN→LBL40 edge rows totaling 153 putative contacts.
 
 These are factual records from one adult female specimen, not a population estimate. FlyLab does not execute BANC neurons or interpret contact counts as physiological weights, connection probabilities, activity, or causal efficacy. The reconstruction is incomplete, and the stored `norm` field is preserved without a biological interpretation.
+
+The viewer additionally bundles topology-preserving render assets from the corresponding six v888 SWC skeleton products. Their raw checksums and source URLs are recorded separately from the metadata and edgelist checksums. Simplification changes rendering density, not cell identity or the registered source coordinate system; the result remains a display derivative rather than a new measurement.
 
 The manifest also references [FlyEM MANC `manc:v1.2.1`](https://www.janelia.org/project-team/flyem/manc-connectome), licensed CC BY 4.0, for pinned cross-dataset matches. MANC is a separate adult male ventral nerve cord specimen; a matching fragment or cell type is never the same physical cell as one in BANC.
 

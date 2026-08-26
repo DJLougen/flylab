@@ -1,0 +1,103 @@
+{
+  "schema": "flylab.banc-morphology.v1",
+  "snapshot": "banc_888",
+  "sourceSnapshotDate": "2026-04-17",
+  "sourceLicense": "CC-BY-4.0",
+  "sourceArticle": "Bates AS, Phelps JS, Kim M, Yang HHJ, et al. (2026). Distributed control circuits across a brain-and-cord connectome.",
+  "sourceArticleDoi": "https://doi.org/10.1038/s41586-026-10735-w",
+  "sourceDatasetDoi": "https://doi.org/10.7910/DVN/7WTH1N",
+  "sourceFormat": "SWC L2 skeletons in BANC voxel space",
+  "renderFormat": "Float32 line-segment endpoints",
+  "transform": {
+    "sourceBounds": {
+      "minimum": [
+        365091.951348191,
+        80096,
+        57375
+      ],
+      "maximum": [
+        579358.5,
+        931584,
+        288450
+      ]
+    },
+    "sourceCenter": [
+      472225.2256740955,
+      505840,
+      172912.5
+    ],
+    "scale": 0.000014092976060731332,
+    "mapping": "sceneX=(X-centerX)*scale; sceneY=-(Y-centerY)*scale; sceneZ=(Z-centerZ)*scale"
+  },
+  "simplification": {
+    "method": "Preserve roots, branch points, and endpoints; retain intermediate nodes by cumulative path distance.",
+    "nodeSpacingInSourceUnits": 1800
+  },
+  "neurons": [
+    {
+      "id": "720575941491012809",
+      "asset": "/data/banc-v888-skeletons/720575941491012809.bin",
+      "vertexCount": 7056,
+      "simplifiedSegmentCount": 3528,
+      "sourceNodeCount": 56406,
+      "sourceBytes": 4517274,
+      "sourceSha256": "1bdcc7ff77ccffd95628437c9d47bdce1cc01dd5893eb8249c52a19acdece689",
+      "sourceUrl": "https://storage.googleapis.com/lee-lab_brain-and-nerve-cord-fly-connectome/compiled_data/banc_888/banc_banc_space_split_swc/720575941491012809_split.swc"
+    },
+    {
+      "id": "720575941491065653",
+      "asset": "/data/banc-v888-skeletons/720575941491065653.bin",
+      "vertexCount": 7754,
+      "simplifiedSegmentCount": 3877,
+      "sourceNodeCount": 62272,
+      "sourceBytes": 4989825,
+      "sourceSha256": "15fd58ea59e56b19e5ed69469561876b153accd6a4e4fe202f6f1c6a102a3f2a",
+      "sourceUrl": "https://storage.googleapis.com/lee-lab_brain-and-nerve-cord-fly-connectome/compiled_data/banc_888/banc_banc_space_split_swc/720575941491065653_split.swc"
+    },
+    {
+      "id": "720575941499708745",
+      "asset": "/data/banc-v888-skeletons/720575941499708745.bin",
+      "vertexCount": 6834,
+      "simplifiedSegmentCount": 3417,
+      "sourceNodeCount": 54844,
+      "sourceBytes": 4389500,
+      "sourceSha256": "f7394c2d5f9c7e5b65cd75df3098bc207d3ccabe36a9f5d4de9d59ac0cf31361",
+      "sourceUrl": "https://storage.googleapis.com/lee-lab_brain-and-nerve-cord-fly-connectome/compiled_data/banc_888/banc_banc_space_split_swc/720575941499708745_split.swc"
+    },
+    {
+      "id": "720575941614906387",
+      "asset": "/data/banc-v888-skeletons/720575941614906387.bin",
+      "vertexCount": 34496,
+      "simplifiedSegmentCount": 17248,
+      "sourceNodeCount": 105496,
+      "sourceBytes": 8307456,
+      "sourceSha256": "3d8d4cff8f6765efe67cc0622eec8a7210f1a245bc95686f449c839a2450bb6a",
+      "sourceUrl": "https://storage.googleapis.com/lee-lab_brain-and-nerve-cord-fly-connectome/compiled_data/banc_888/banc_banc_space_split_swc/720575941614906387_split.swc"
+    },
+    {
+      "id": "720575941669107187",
+      "asset": "/data/banc-v888-skeletons/720575941669107187.bin",
+      "vertexCount": 3984,
+      "simplifiedSegmentCount": 1992,
+      "sourceNodeCount": 30074,
+      "sourceBytes": 2390799,
+      "sourceSha256": "48f9ad4127f3ddd2bcc85b6730f3def6c2c3b52a3dbce1cda43575064de380c5",
+      "sourceUrl": "https://storage.googleapis.com/lee-lab_brain-and-nerve-cord-fly-connectome/compiled_data/banc_888/banc_banc_space_split_swc/720575941669107187_split.swc"
+    },
+    {
+      "id": "720575941669069043",
+      "asset": "/data/banc-v888-skeletons/720575941669069043.bin",
+      "vertexCount": 4088,
+      "simplifiedSegmentCount": 2044,
+      "sourceNodeCount": 31257,
+      "sourceBytes": 2491388,
+      "sourceSha256": "219ee955b38e21e5b933c2fbb38e99bc7aea1f1eecc6fbc11e1f67e50b01f76b",
+      "sourceUrl": "https://storage.googleapis.com/lee-lab_brain-and-nerve-cord-fly-connectome/compiled_data/banc_888/banc_banc_space_split_swc/720575941669069043_split.swc"
+    }
+  ],
+  "boundaries": [
+    "Lines are reconstruction-derived BANC v888 L2 skeletons, not live neural activity.",
+    "Playback glow indicates the selected FlyLab model target, not voltage, calcium, firing rate, or signal propagation.",
+    "Contextual CNS surfaces in the viewer are schematic orientation geometry and are not BANC neuropil meshes."
+  ]
+}

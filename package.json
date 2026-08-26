@@ -9,6 +9,7 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "vinext start",
+    "assets:brain": "node scripts/build-banc-morphology.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "test": "tsc -p tests/tsconfig.json && node --test tests/.compiled/tests/*.test.js",
     "verify:webmcp": "node scripts/verify-live-webmcp.mjs"
@@ -16,7 +17,8 @@
   "dependencies": {
     "next": "16.2.6",
     "react": "19.2.6",
-    "react-dom": "19.2.6"
+    "react-dom": "19.2.6",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "1.37.1",
@@ -26,6 +28,7 @@
     "@types/node": "22.19.19",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
+    "@types/three": "^0.185.4",
     "@vitejs/plugin-react": "6.0.2",
     "@vitejs/plugin-rsc": "0.5.26",
     "eslint": "9.39.4",

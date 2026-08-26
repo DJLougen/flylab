@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BANC_V888_CELLS,
   BANC_V888_EDGES,
@@ -34,6 +34,8 @@ import {
 } from '@/lib/webmcp';
 
 type Stage = 'discover' | 'hypothesize' | 'design' | 'run' | 'analyze' | 'continue' | 'saved';
+
+const FlyBrain3D = lazy(() => import('@/components/FlyBrain3D').then((module) => ({ default: module.FlyBrain3D })));
 
 interface ActivityItem {
   id: string;
@@ -628,6 +630,12 @@ export default function Home() {
     return run ?? lab.batch?.conditionRuns[0] ?? null;
   }, [lab.batch, selectedConditionId]);
 
+  const selectedCondition = useMemo(() => (
+    lab.experiment?.conditions.find((condition) => condition.id === selectedConditionId)
+    ?? lab.experiment?.conditions[0]
+    ?? null
+  ), [lab.experiment, selectedConditionId]);
+
   const activePoint = useMemo(() => {
     if (!activeCondition?.trajectory.length) return null;
     return activeCondition.trajectory[Math.min(activeCondition.trajectory.length - 1, Math.floor(playhead * (activeCondition.trajectory.length - 1)))];
@@ -710,7 +718,7 @@ export default function Home() {
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Shared simulation arena</p>
-              <h1 id="arena-title">Open-field trial <span>· dorsal view</span></h1>
+              <h1 id="arena-title">{arenaView === 'circuit' ? <>BANC v888 circuit <span>· reconstruction view</span></> : <>Open-field trial <span>· dorsal view</span></>}</h1>
             </div>
             <div className="view-switch" aria-label="Arena view">
               {(['body', 'circuit', 'trace'] as const).map((view) => (
@@ -728,7 +736,7 @@ export default function Home() {
               <strong>{activePoint?.active ? 'unitless MDN-inspired drive' : lab.batch ? 'replay' : 'preview'}</strong>
             </div>
 
-            {(activeCondition?.trajectory ?? []).slice(0, Math.max(1, Math.floor(playhead * 80))).filter((_, index) => index % 3 === 0).map((point, index) => (
+            {arenaView !== 'circuit' && (activeCondition?.trajectory ?? []).slice(0, Math.max(1, Math.floor(playhead * 80))).filter((_, index) => index % 3 === 0).map((point, index) => (
               <i
                 className="trail-point"
                 key={`${point.t}-${index}`}
@@ -736,7 +744,7 @@ export default function Home() {
               />
             ))}
 
-            <div
+            {arenaView !== 'circuit' && <div
               className={`fly ${activePoint?.active ? 'activated' : ''}`}
               style={{
                 left: `calc(50% + ${(activePoint?.x ?? 0) * 95}px)`,
@@ -751,16 +759,20 @@ export default function Home() {
               <span className="leg l1" /><span className="leg l2" /><span className="leg l3" />
               <span className="leg r1" /><span className="leg r2" /><span className="leg r3" />
               <span className="activation-halo" />
-            </div>
+            </div>}
 
             {arenaView === 'circuit' && (
-              <div className="circuit-overlay" aria-label="Simplified MDN to ventral nerve cord model adapter">
-                <span className="node brain">brain</span><i /><span className="node mdn">MDN</span><i /><span className="node vnc">VNC adapter</span><i /><span className="node body">body</span>
-                <p><Badge kind="connectome_inferred" /> {BANC_V888_EDGES.length} directed pairs · {BANC_V888_MDN_LBL40_TOTAL_CONTACTS} putative contacts → explicit model adapter</p>
-              </div>
+              <Suspense fallback={<div className="brain-viewer-fallback"><span className="agent-pulse" /> Loading the BANC v888 reconstruction viewer…</div>}>
+                <FlyBrain3D
+                  laterality={activeCondition?.laterality ?? selectedCondition?.laterality ?? 'bilateral'}
+                  driveActive={Boolean(activePoint?.active)}
+                  conditionLabel={activeCondition?.label ?? selectedCondition?.label ?? 'Circuit orientation preview'}
+                  timeMs={Math.round(playhead * 5000)}
+                />
+              </Suspense>
             )}
 
-            {!lab.batch && <p className="arena-empty">Design and approve an experiment to generate seeded trajectories.</p>}
+            {!lab.batch && arenaView !== 'circuit' && <p className="arena-empty">Design and approve an experiment to generate seeded trajectories.</p>}
           </div>
 
           <div className="playback-row">

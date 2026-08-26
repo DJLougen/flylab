@@ -1,6 +1,7 @@
 import {
   BANC_V888_BUNDLE,
   BANC_V888_MDN_LBL40_TOTAL_CONTACTS,
+  BANC_V888_MORPHOLOGY_BUNDLE,
   LUL130_BUNDLE_STATUS,
   MANC_V121_REFERENCE,
 } from './mdn-banc.js';
@@ -10,6 +11,8 @@ export {
   BANC_V888_CELLS,
   BANC_V888_EDGES,
   BANC_V888_MDN_LBL40_TOTAL_CONTACTS,
+  BANC_V888_MORPHOLOGY_BUNDLE,
+  BANC_V888_MORPHOLOGY_FILES,
   BANC_V888_SOURCE_FILES,
   LUL130_BUNDLE_STATUS,
   MANC_V121_REFERENCE,
@@ -18,6 +21,7 @@ export {
   type BancV888CellRecord,
   type BancV888EdgeRecord,
   type PinnedDataFile,
+  type PinnedMorphologyFile,
 } from './mdn-banc.js';
 
 export type ProvenanceLabel =
@@ -232,6 +236,7 @@ export const DATASET_MANIFEST = {
     stableSnapshotKey: BANC_V888_BUNDLE.stableSnapshotKey,
     limitations: BANC_V888_BUNDLE.limitations,
     files: BANC_V888_BUNDLE.files,
+    morphology: BANC_V888_MORPHOLOGY_BUNDLE,
   },
   manc: MANC_V121_REFERENCE,
   cande: {

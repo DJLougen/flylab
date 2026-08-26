@@ -26,6 +26,8 @@ The person and agent share the same laboratory state. The agent can gather cited
 
 FlyLab's current embodiment is a deterministic reduced-order model, version `0.1.1`, with the MDN-inspired `mdn-inspired-retreat-adapter.v1`. It is not FlyGym, a complete fly brain, or a wet-lab experiment. Sources, assumptions, dataset and model versions, seeds, run IDs, analyses, limitations, and a manifest hash are saved together so a compelling result never loses its boundary. The WebMCP surface follows OpenAI's [Site tools documentation](https://learn.chatgpt.com/docs/webmcp).
 
+The circuit view is an orbitable Three.js rendering of the six pinned BANC v888 L2 skeleton reconstructions—four MDNs and two LBL40 cells—with camera presets and accessible cell inspection. Replay illumination follows the selected bilateral or unilateral model condition. The surrounding CNS shell is explicitly schematic, and the interface states that glow is model selection rather than recorded activity or signal propagation.
+
 **Problem**
 
 Neuroscience workflows combine different kinds of evidence: biological measurements, derived behavior screens, structural connectomes, simulation output, and new hypotheses. Conventional interfaces make those boundaries easy to lose, while visual browser automation forces agents to spend effort clicking instead of reasoning about experiments.
@@ -77,6 +79,7 @@ find evidence
 - Curated adult MDN evidence records with primary-source links
 - Baseline, model-sham, bilateral, left-only, and right-only conditions
 - A pinned BANC `banc_888` slice with checksummed source files, four proofread MDN rows, two LBL40 rows, and four selected directed MDN→LBL40 edge rows
+- Six checksummed, reconstruction-derived BANC v888 SWC render assets in an interactive Three.js circuit viewer
 - Deterministic seeded virtual trials
 - Five method-versioned behavior metrics
 - Five-class provenance model

@@ -13,6 +13,7 @@
   },
   "include": [
     "../lib/flylab.ts",
+    "../lib/fly-brain.ts",
     "../lib/webmcp.ts",
     "./*.test.ts"
   ]
