@@ -8,6 +8,39 @@ The prior local package remains technically verified at **2:15.821**, below the 
 
 The replacement capture must begin with `00-eight-tools-live.png`, show the new agent control plane, and describe the current surface as **one read-only state inspector plus seven scientific workflow actions**. It must visibly show real browser WebMCP discovery/invocation—not the guided example—with `inspect_flylab_state` returning the page revision, artifact IDs, person-only blocker, and exactly one next action before discovery, after approval, and after a protocol edit. Activity must visibly distinguish `webmcp agent · r#` from `human ui · r#`. The seven-tool wording below is archived historical narration and must not be reused.
 
+The replacement package also requires two tightly cropped, unbranded WebMCP debugging proof frames: `proof-webmcp-tools.png`, showing the live eight-tool inventory, and `proof-webmcp-invocations.png`, showing the real invocation history with structured statuses. The invocation proof must be a three-panel composite of the initial, post-approval, and post-edit `inspect_flylab_state` calls so all three recovery checkpoints are legible at once. The headless deterministic verifier supplies `00-eight-tools-live.png` through `12-protocol-edit-invalidates-results.png`, then exits and removes its isolated browser profile. It cannot capture browser chrome or the debugging panel. Capture the proof material in a separate headed Chrome 149+ session with both WebMCP flags enabled, following the same canonical `0.65` workflow and opening **Application → WebMCP**. Crop out browser logos and unrelated interface branding. Prefer a 1440 × 900 final proof frame; the builder safely scales and pads other dimensions. The video builder fails closed if any frame is missing.
+
+The replacement sequence is therefore:
+
+```text
+live Chrome WebMCP inventory
+→ initial inspector and one next action
+→ discovery
+→ falsifiable hypothesis
+→ controlled protocol and person-only block
+→ visible human approval and re-inspection
+→ seeded reduced-order replay
+→ bilateral and left-only BANC reconstruction views
+→ complete method-versioned analysis
+→ bounded, non-executed follow-up
+→ manifest-hashed evidence bundle and ledger
+→ protocol-edit invalidation and recovery
+→ Chrome WebMCP invocation history
+```
+
+`scripts/build-demo-video.mjs` targets `outputs/demo/v7`, includes the recovery frame, produces a native 1280 × 720 thumbnail and a one-tile-per-shot contact sheet, verifies the under-three-minute H.264/AAC/caption streams and integrated loudness, and writes a SHA-256 delivery report for every promoted artifact. It removes the prior success report before rendering, stages outputs privately, promotes validated files, and writes the new success report last so a failed rebuild cannot retain stale certification. Do not reuse v6 timestamps or hashes.
+
+Generate the clean page-state frames only after interface approval:
+
+```bash
+FLYLAB_DEMO_CAPTURE=1 \
+FLYLAB_VERIFY_WORKFLOW=1 \
+FLYLAB_CAPTURE_DIR=outputs/demo/v7/frames \
+npm run verify:webmcp
+```
+
+Clean capture mode uses the documented `0.65` model drive and omits negative cancellation tests and completed-lineage replay calls from the visible activity trail. The normal verifier remains the authoritative QA path and still exercises those cases with the full-precision `0.654321` protocol value.
+
 Credits for the replacement video/description must identify the BANC v888 static dataset, Harvard Dataverse version 3.0, <https://doi.org/10.7910/DVN/7WTH1N>, CC BY 4.0; six simplified L2 SWC render derivatives; and FlyLab's shared coordinate-transform/topology-preserving-simplification changes. See [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
 
 ## Delivery assets
@@ -17,8 +50,8 @@ Credits for the replacement video/description must identify the BANC v888 static
 | Video | `outputs/demo/v6/FlyLab-WebMCP-Demo.mp4` | Archived only; do not upload |
 | Captions | `outputs/demo/v6/FlyLab-WebMCP-Demo.srt` | Archived caption record |
 | Narration | `outputs/demo/v6/FlyLab-WebMCP-Demo-narration.txt` | Spoken-script review |
-| Thumbnail | `outputs/demo/v6/FlyLab-Devpost-Thumbnail.png` | YouTube and challenge-entry thumbnail |
-| Gallery | `outputs/demo/v6/gallery/` | Five submission-ready stills |
+| Thumbnail | `outputs/demo/v6/FlyLab-Devpost-Thumbnail.png` | Archived crop; do not reuse for upload |
+| Gallery | `outputs/demo/v6/gallery/` | Archived stills; not submission-ready |
 
 Verified delivery properties:
 
@@ -198,5 +231,7 @@ After the saved-bundle view, edit one protocol field and call `inspect_flylab_st
 - Confirm the public repository displays the owner-approved Apache-2.0 root `LICENSE` file.
 - Confirm the replacement shows real WebMCP tool use, visible actor/tool/revision activity, and no guided-example state presented as agent evidence.
 - Confirm the BANC CC BY 4.0 attribution and derivative-change notice appear in the public video description or credits.
+- Confirm the recording contains no unauthorized music, third-party trademarks, or other protected media; keep any necessary product-interface capture narrowly framed to the WebMCP proof being demonstrated.
+- Confirm the public app remains free and unrestricted through the judging period ending September 21, 2026 at 5:00 p.m. PT.
 
 See [YOUTUBE_DESCRIPTION.md](YOUTUBE_DESCRIPTION.md) for upload-ready title, description, chapters, tags, and asset pointers.

@@ -118,6 +118,8 @@ FlyLab's original source code and documentation are licensed under the [Apache L
 
 - [Challenge demo](docs/DEMO.md)
 - [WebMCP verification](docs/WEBMCP_VERIFICATION.md)
+- [Judge testing instructions](docs/JUDGE_TESTING.md)
+- [Chrome-only manual WebMCP test](docs/CHROME_MANUAL_TEST.md)
 - [Scientific boundaries](docs/SCIENTIFIC_BOUNDARIES.md)
 - [Scientific source verification](docs/SOURCE_VERIFICATION.md)
 - [BANC v888 slice reproducibility](docs/BANC_SLICE_REPRODUCIBILITY.md)

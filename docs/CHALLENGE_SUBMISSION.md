@@ -2,9 +2,9 @@
 
 The current agent-first candidate is deployed publicly and has passed the complete Chrome 151 WebMCP workflow against the live HTTPS URL. The repository is public and licensed under Apache-2.0. The prior 2:15.821 narrated v6 demo predates the agent-control-plane and Three.js arena-fly upgrades and is retained only as an earlier build artifact; it is not submission evidence. A fresh demo must be generated after the corrected interface is approved. Public YouTube upload and Devpost publication are still pending.
 
-Submission deadline: **September 3, 2026 at 1:00 p.m. PDT**.
+Submission deadline: **September 3, 2026 at 1:00 p.m. PDT**, as shown by both OpenAI and the binding Devpost official rules.
 
-FlyLab was created on August 26, 2026 during the challenge period. Its intended audience is computational-neuroethology researchers, neuroscience educators, and agent-tool builders who need a source-to-experiment workflow with machine-readable state and human review.
+FlyLab was created on August 26, 2026 during the challenge period. Its primary audience is a computational-neuroethology researcher or educator reviewing a source-backed virtual MDN experiment. The concrete failure it prevents is an agent silently continuing from stale page state or presenting a simulation result after its evidence lineage, protocol, or human approval has changed. Agent-tool builders are a secondary audience.
 
 ## Submission fields
 
@@ -32,6 +32,10 @@ The circuit view is an orbitable Three.js rendering of six real, pinned BANC v88
 
 The open-field arena now renders the adult fly itself in Three.js. Its major external landmarks are research-informed, while its mesh and decorative gait remain explicitly schematic. The replayed position, heading, and target window come from the reduced-order simulation; the body is not a scan, a FlyGym execution, or a biomechanical reconstruction.
 
+**Why WebMCP**
+
+FlyLab's tools are discovered from the website the person already has open, operate the same live page state and signed-in context, and make every human edit immediately authoritative for the agent. A conventional remote MCP server would not naturally share that visible in-page protocol and approval state, while visual browser automation would depend on brittle coordinates and inferred control meanings. WebMCP lets the agent act at the scientific-operation level without separating it from the human's instrument.
+
 **Problem**
 
 Neuroscience workflows combine different kinds of evidence: biological measurements, derived behavior screens, structural connectomes, simulation output, and new hypotheses. Conventional interfaces make those boundaries easy to lose, while visual browser automation forces agents to spend effort clicking instead of reasoning about experiments.
@@ -39,6 +43,8 @@ Neuroscience workflows combine different kinds of evidence: biological measureme
 **Solution**
 
 FlyLab makes the scientific workflow itself callable. WebMCP gives the agent high-level, validated actions that update the same protocol, arena, activity log, result cards, and evidence ledger the person sees. Stable record IDs connect each step, structured errors prevent invalid transitions, and the human retains authority at the point that matters most: experiment execution.
+
+This is not a generic CRUD wrapper: one browser session combines an interactive 3D scientific instrument, an exact evidence-to-experiment state machine, deterministic simulation, and a deliberately non-tool human approval boundary.
 
 **What makes the human-agent experience meaningful**
 
@@ -144,6 +150,8 @@ After human approval, the person sets the visible next-trial budget to five repl
 
 See [DEMO.md](DEMO.md) for replacement-demo proof requirements and the quarantined v6 record. [YOUTUBE_DESCRIPTION.md](YOUTUBE_DESCRIPTION.md) likewise preserves obsolete v6 metadata only as an archive until the approved agent-first demo is generated.
 
+Judge-ready prerequisites, prompts, expected state transitions, and recovery checks are in [JUDGE_TESTING.md](JUDGE_TESTING.md).
+
 ## Submission links
 
 - Live application: [https://flylab-neuroethology.d-lougen.chatgpt.site](https://flylab-neuroethology.d-lougen.chatgpt.site)
@@ -169,6 +177,9 @@ See [DEMO.md](DEMO.md) for replacement-demo proof requirements and the quarantin
 - [x] Confirm no copy or narration claims actual FlyGym execution or new biological results.
 - [ ] Regenerate the narrated under-three-minute MP4 after approval of the final agent-first interface; show real WebMCP discovery/invocation, same-page state changes, the Three.js BANC reconstruction view, English captions, thumbnail, and gallery stills.
 - [x] Add an owner-approved Apache-2.0 `LICENSE` file that Devpost can detect at the top of the repository.
+- [x] Prepare concise judge instructions and a no-login Chrome fallback in [JUDGE_TESTING.md](JUDGE_TESTING.md).
+- [ ] Confirm the public app remains free and unrestricted through the end of judging on September 21, 2026 at 5:00 p.m. PT.
+- [ ] Confirm the replacement video contains no unauthorized music, third-party trademarks, or other protected media.
 - [ ] Publish a public YouTube demo under three minutes with audio.
 - [ ] Verify the YouTube video in a signed-out browser, then replace `[YOUTUBE_DEMO_URL]`.
 - [ ] Publish and verify the Devpost entry, then replace `[DEVPOST_ENTRY_URL]`.

@@ -39,6 +39,7 @@ const capturedFrames = [];
 const captureDirectory = process.env.FLYLAB_CAPTURE_DIR
   ? resolve(process.env.FLYLAB_CAPTURE_DIR)
   : null;
+const cleanDemoCapture = process.env.FLYLAB_DEMO_CAPTURE === '1';
 
 function withTimeout(promise, milliseconds, label) {
   let timer;
@@ -196,7 +197,7 @@ async function waitForViewer() {
 
 async function captureCircuitPlayback() {
   if (!captureDirectory) return;
-  await clickButton({ text: 'circuit', exact: true });
+  await clickButton({ text: '3D brain', exact: true });
   await waitForViewer();
   await clickButton({ text: 'whole', exact: true });
   await clickButton({ ariaLabel: 'Restart replay' });
@@ -213,7 +214,8 @@ async function captureCircuitPlayback() {
   await new Promise((resolve) => setTimeout(resolve, 1_250));
   await captureStage('circuit-left-active');
   await clickButton({ ariaLabel: 'Pause replay' });
-  await clickButton({ text: 'body', exact: true });
+  await clickButton({ text: 'Bilateral MDN-inspired drive' });
+  await clickButton({ text: '3D fly', exact: true });
 }
 
 async function verifyVisibleProtocol(experiment) {
@@ -697,7 +699,8 @@ async function verifyCompletedLineageIdempotency(tools, inputs, savedBundle) {
   };
 }
 
-async function runFullWorkflow(tools, discoveryResponse, initialContext) {
+async function runFullWorkflow(tools, discoveryResponse, initialContext, options = {}) {
+  const cleanCapture = options.cleanDemoCapture === true;
   const discovery = successfulEnvelope(discoveryResponse, 'find_fly_circuits');
   const circuit = discovery.data.circuits[0];
   const evidenceIds = discovery.data.evidence
@@ -722,7 +725,7 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext) {
     target_circuit_id: circuit.id,
     perturbation: 'activate',
     laterality: 'bilateral',
-    activation_level: 0.654321,
+    activation_level: cleanCapture ? 0.65 : 0.654321,
     onset_ms: 1000,
     duration_ms: 2000,
     trial_duration_ms: 5000,
@@ -743,12 +746,16 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext) {
     throw new Error(`Inspector did not expose the person-only gate: ${JSON.stringify(lockedContext)}`);
   }
 
-  const lockedRun = await invokeRegisteredTool(tools, 'run_fly_simulation', {
-    experiment_id: experimentId,
-  });
-  const lockEnvelope = decodedOutput(lockedRun)?.structuredContent;
-  if (lockEnvelope?.error?.code !== 'APPROVAL_REQUIRED') {
-    throw new Error(`The pre-approval run was not blocked: ${JSON.stringify(lockedRun)}`);
+  let preapprovalError = null;
+  if (!cleanCapture) {
+    const lockedRun = await invokeRegisteredTool(tools, 'run_fly_simulation', {
+      experiment_id: experimentId,
+    });
+    const lockEnvelope = decodedOutput(lockedRun)?.structuredContent;
+    if (lockEnvelope?.error?.code !== 'APPROVAL_REQUIRED') {
+      throw new Error(`The pre-approval run was not blocked: ${JSON.stringify(lockedRun)}`);
+    }
+    preapprovalError = lockEnvelope.error.code;
   }
   await captureStage('protocol-locked');
 
@@ -771,8 +778,12 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext) {
   }
   await captureStage('human-approved');
 
-  const webmcpCancellation = await verifyRunningSimulationCancellation(tools, experimentId);
-  const humanCancellation = await verifyHumanRunningSimulationCancellation(tools, experimentId);
+  const webmcpCancellation = cleanCapture
+    ? { skipped_for_clean_demo_capture: true }
+    : await verifyRunningSimulationCancellation(tools, experimentId);
+  const humanCancellation = cleanCapture
+    ? { skipped_for_clean_demo_capture: true }
+    : await verifyHumanRunningSimulationCancellation(tools, experimentId);
 
   const runResponse = await invokeRegisteredTool(tools, 'run_fly_simulation', {
     experiment_id: experimentId,
@@ -821,7 +832,9 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext) {
     comparison_id: comparison.data.comparison.id,
     note: 'Automated live WebMCP verification with a DOM click at the human-only approval boundary.',
   };
-  const evidenceCancellation = await verifyEvidenceSaveCancellation(tools, saveInput);
+  const evidenceCancellation = cleanCapture
+    ? { skipped_for_clean_demo_capture: true }
+    : await verifyEvidenceSaveCancellation(tools, saveInput);
   const saveResponse = await invokeRegisteredTool(tools, 'save_fly_evidence', saveInput);
   const saved = successfulEnvelope(saveResponse, 'save_fly_evidence');
   const completedContext = await inspectAgentContext(tools);
@@ -830,15 +843,17 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext) {
     || completedContext.next_action?.kind !== 'complete') {
     throw new Error(`Inspector did not expose workflow completion: ${JSON.stringify(completedContext)}`);
   }
-  const idempotency = await verifyCompletedLineageIdempotency(tools, {
-    discovery: { query: 'MDN', behavior: 'backward_walking' },
-    hypothesis: hypothesisInput,
-    design: designInput,
-    run: { experiment_id: experimentId },
-    analysis: analysisInput,
-    comparison: comparisonInput,
-    save: saveInput,
-  }, saved.data.bundle);
+  const idempotency = cleanCapture
+    ? { skipped_for_clean_demo_capture: true }
+    : await verifyCompletedLineageIdempotency(tools, {
+      discovery: { query: 'MDN', behavior: 'backward_walking' },
+      hypothesis: hypothesisInput,
+      design: designInput,
+      run: { experiment_id: experimentId },
+      analysis: analysisInput,
+      comparison: comparisonInput,
+      save: saveInput,
+    }, saved.data.bundle);
   await captureStage('evidence-saved');
 
   await sendCommand('Runtime.evaluate', {
@@ -867,7 +882,8 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext) {
       'compare_fly_trials',
       'save_fly_evidence',
     ],
-    preapproval_error: lockEnvelope.error.code,
+    clean_demo_capture: cleanCapture,
+    preapproval_error: preapprovalError,
     visible_protocol_verified: Boolean(visibleProtocol),
     visible_analysis_verified: Boolean(visibleAnalysis),
     condition_tab_analysis_parity: conditionTabParity,
@@ -939,12 +955,12 @@ try {
   await sendCommand('WebMCP.enable');
   const registeredTools = await toolsAdded;
   const actualToolNames = registeredTools.tools.map((tool) => tool.name).sort();
-  await captureStage('eight-tools-live');
   const initialContext = await inspectAgentContext(registeredTools.tools);
   if (initialContext.next_tool !== 'find_fly_circuits'
     || initialContext.agent_status !== 'ready') {
     throw new Error(`Inspector did not expose the initial agent action: ${JSON.stringify(initialContext)}`);
   }
+  await captureStage('eight-tools-live');
   const response = await invokeRegisteredTool(
     registeredTools.tools,
     'find_fly_circuits',
@@ -964,7 +980,7 @@ try {
   }
 
   const workflow = process.env.FLYLAB_VERIFY_WORKFLOW === '1'
-    ? await runFullWorkflow(registeredTools.tools, response, initialContext)
+    ? await runFullWorkflow(registeredTools.tools, response, initialContext, { cleanDemoCapture })
     : undefined;
 
   const report = {

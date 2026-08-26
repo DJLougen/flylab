@@ -2,7 +2,7 @@
 
 ## Publication status
 
-This copy belongs to the prior local v6 demo package. That video predates the corrected Three.js arena fly and must not be uploaded. Regenerate the video and update its duration, chapters, thumbnail, and wording before publication. FlyLab's repository is licensed under Apache-2.0; the YouTube video and Devpost entry are not yet public.
+This copy belongs to the prior local v6 demo package. That video predates the corrected Three.js arena fly and must not be uploaded. Regenerate the video and update its duration, chapters, thumbnail, and wording before publication. The v7 builder also requires Chrome DevTools WebMCP inventory and invocation-history proof frames and includes the final protocol-edit recovery state. FlyLab's repository is licensed under Apache-2.0; the YouTube video and Devpost entry are not yet public.
 
 ## Archived v6 metadata — do not use for upload
 
@@ -85,10 +85,8 @@ The grouped chapter markers above keep every chapter at least ten seconds long. 
 The checks below describe the obsolete package only. Replacement paths, duration, chapters, captions, thumbnail, and hashes must be generated from the approved agent-first build before any upload.
 
 - Use `2:15.821` in any precise duration field; `2:16` is the reader-friendly description value.
-- Upload the separate English `.srt` even though the MP4 also contains an embedded caption stream.
-- Check that automatic caption processing has not replaced scientific terms such as BANC, MDN, LBL40, FlyGym, or WebMCP.
-- Preview the 1200 × 800 thumbnail in YouTube's 16:9 crop, confirm its text and circuit remain legible at small size, and confirm it does not imply measured neural activity.
+- The archived package contains a separate English `.srt` and an embedded caption stream; neither should be uploaded.
+- Its scientific-term caption checks, 1200 × 800 thumbnail crop, and duration record describe only the obsolete artifact.
 - Do not make the archived v6 video public or add it to the challenge entry.
-- Open the published video in a signed-out browser and verify playback, audio, captions, chapters, description links, and visibility.
-- Replace `[YOUTUBE_DEMO_URL]` in the submission docs only after that verification.
-- Replace `[DEVPOST_ENTRY_URL]` only after the challenge entry is published and publicly accessible.
+
+For the replacement v7 upload, use the newly generated `.srt` and native 1280 × 720 thumbnail, verify BANC, MDN, LBL40, FlyGym, and WebMCP in the processed captions, and open the published video in a signed-out browser to confirm playback, audio, captions, chapters, links, and visibility. Replace `[YOUTUBE_DEMO_URL]` only after that verification. Replace `[DEVPOST_ENTRY_URL]` only after the challenge entry is published and publicly accessible.
