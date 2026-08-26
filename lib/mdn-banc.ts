@@ -51,6 +51,8 @@ export interface PinnedDataFile {
   dataverse_datafile_id: string;
   md5: string;
   sha256: string;
+  bytes: number;
+  raw_rows: number;
   role: string;
 }
 
@@ -67,6 +69,8 @@ export const BANC_V888_SOURCE_FILES: readonly PinnedDataFile[] = [
     dataverse_datafile_id: '14033740',
     md5: '6275eda42f98c49539d1ab513d979d09',
     sha256: '819bbcff476e52702d6f8d8604ce1f12d1d7b11942281df2f49df2a73a6f15a5',
+    bytes: 57_550_610,
+    raw_rows: 188_508,
     role: 'Per-neuron annotations and pinned cross-dataset matches.',
   },
   {
@@ -74,6 +78,8 @@ export const BANC_V888_SOURCE_FILES: readonly PinnedDataFile[] = [
     dataverse_datafile_id: '13918810',
     md5: '08542b0771db7418ed474be60dc9886c',
     sha256: '8c296e946f3c69a8c7222f30ad75fa8a98eeb189124fec6df829c9125f4be64b',
+    bytes: 359_161_658,
+    raw_rows: 13_620_865,
     role: 'Directed neuron-to-neuron edge list rolled up from the v3 synapse set.',
   },
 ] as const;

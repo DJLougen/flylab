@@ -158,6 +158,109 @@ async function captureStage(label) {
   capturedFrames.push(filepath);
 }
 
+async function clickButton({ text, ariaLabel, exact = false }) {
+  const response = await sendCommand('Runtime.evaluate', {
+    expression: `(() => {
+      const text = ${JSON.stringify(text ?? null)};
+      const ariaLabel = ${JSON.stringify(ariaLabel ?? null)};
+      const exact = ${JSON.stringify(exact)};
+      const button = [...document.querySelectorAll('button')].find((candidate) => {
+        if (ariaLabel) return candidate.getAttribute('aria-label') === ariaLabel;
+        const value = candidate.textContent?.trim() ?? '';
+        return exact ? value === text : value.includes(text);
+      });
+      button?.click();
+      return { clicked: Boolean(button), label: button?.textContent?.trim() ?? null };
+    })()`,
+    returnByValue: true,
+  });
+  if (response?.result?.value?.clicked !== true) {
+    throw new Error(`Demo control was not available: ${JSON.stringify({ text, ariaLabel, response })}`);
+  }
+  return response.result.value;
+}
+
+async function waitForViewer() {
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const response = await sendCommand('Runtime.evaluate', {
+      expression: `document.querySelector('.viewer-load.ready')?.textContent?.trim() ?? null`,
+      returnByValue: true,
+    });
+    if (response?.result?.value === 'BANC v888 reconstructions') return;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  throw new Error('The Three.js reconstruction viewer did not finish loading.');
+}
+
+async function captureCircuitPlayback() {
+  if (!captureDirectory) return;
+  await clickButton({ text: 'circuit', exact: true });
+  await waitForViewer();
+  await clickButton({ text: 'whole', exact: true });
+  await clickButton({ ariaLabel: 'Restart replay' });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  await clickButton({ ariaLabel: 'Play replay' });
+  await new Promise((resolve) => setTimeout(resolve, 1_250));
+  await captureStage('circuit-bilateral-active');
+  await clickButton({ ariaLabel: 'Pause replay' });
+
+  await clickButton({ text: 'Left-only MDN-inspired model drive' });
+  await clickButton({ ariaLabel: 'Restart replay' });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  await clickButton({ ariaLabel: 'Play replay' });
+  await new Promise((resolve) => setTimeout(resolve, 1_250));
+  await captureStage('circuit-left-active');
+  await clickButton({ ariaLabel: 'Pause replay' });
+  await clickButton({ text: 'body', exact: true });
+}
+
+async function verifyProtocolEditInvalidation() {
+  await clickButton({ ariaLabel: 'Close evidence ledger' });
+  const response = await sendCommand('Runtime.evaluate', {
+    expression: `(() => {
+      const input = document.querySelector('input[type="range"][max="1"][step="0.05"]');
+      if (!(input instanceof HTMLInputElement)) return { edited: false, reason: 'activation slider missing' };
+      const nextValue = input.value === '0.7' ? '0.75' : '0.7';
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+      setter?.call(input, nextValue);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      return { edited: true, nextValue };
+    })()`,
+    returnByValue: true,
+  });
+  if (response?.result?.value?.edited !== true) {
+    throw new Error(`The protocol could not be edited for invalidation QA: ${JSON.stringify(response)}`);
+  }
+  await new Promise((resolve) => setTimeout(resolve, 200));
+
+  const state = await sendCommand('Runtime.evaluate', {
+    expression: `JSON.stringify({
+      approval: document.querySelector('.approval-chip')?.textContent?.trim() ?? null,
+      primaryAction: document.querySelector('.primary-action')?.textContent?.trim() ?? null,
+      resultPanelPresent: Boolean(document.querySelector('.results-panel')),
+      proposalPresent: Boolean(document.querySelector('.proposal')),
+      playbackDisabled: document.querySelector('button.play-button')?.disabled ?? null,
+      conditionStates: [...document.querySelectorAll('.condition-tabs small')].map((node) => node.textContent?.trim() ?? null),
+    })`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  const value = typeof state?.result?.value === 'string' ? JSON.parse(state.result.value) : null;
+  const verified = value?.approval === 'Draft'
+    && value?.primaryAction?.includes('Approve experiment')
+    && value?.resultPanelPresent === false
+    && value?.proposalPresent === false
+    && value?.playbackDisabled === true
+    && value?.conditionStates?.length === 5
+    && value.conditionStates.every((condition) => condition === 'draft');
+  if (!verified) {
+    throw new Error(`Editing did not clear approval and downstream results: ${JSON.stringify(value)}`);
+  }
+  await captureStage('protocol-edit-invalidates-results');
+  return true;
+}
+
 async function invokeRegisteredTool(tools, toolName, input) {
   const tool = tools.find((candidate) => candidate.name === toolName);
   if (!tool?.frameId) throw new Error(`Chrome did not return a frame for ${toolName}.`);
@@ -255,6 +358,7 @@ async function runFullWorkflow(tools, discoveryResponse) {
   const run = successfulEnvelope(runResponse, 'run_fly_simulation');
   await new Promise((resolve) => setTimeout(resolve, 1_200));
   await captureStage('simulation-replay');
+  await captureCircuitPlayback();
 
   const analysisResponse = await invokeRegisteredTool(tools, 'analyze_fly_behavior', {
     batch_id: run.data.id,
@@ -303,6 +407,7 @@ async function runFullWorkflow(tools, discoveryResponse) {
   });
   await new Promise((resolve) => setTimeout(resolve, 200));
   await captureStage('evidence-ledger');
+  const editInvalidationVerified = await verifyProtocolEditInvalidation();
 
   return {
     sequence: [
@@ -323,6 +428,7 @@ async function runFullWorkflow(tools, discoveryResponse) {
     evidence_bundle_id: saved.data.bundle.id,
     manifest_hash: saved.data.bundle.manifestHash,
     follow_up_execution_authorized: comparison.data.execution_authorized,
+    protocol_edit_invalidation_verified: editInvalidationVerified,
   };
 }
 

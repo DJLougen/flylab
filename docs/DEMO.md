@@ -1,27 +1,151 @@
-# FlyLab two-minute demo
+# FlyLab WebMCP challenge demo (v6)
 
-## Preparation
+## Artifact status
 
-1. Confirm the candidate build before recording:
+The v6 challenge demo is a generated, narrated sequence of 12 FlyLab interface captures. It includes two captures of the interactive Three.js circuit view, but the exported video itself is not a continuous live screen recording.
 
-   ```bash
-   npm ci
-   npm test
-   npm run build
-   ```
+The local video package is complete and verified at **2:15.821**, below the challenge's three-minute limit. Public YouTube upload and Devpost submission are still pending; do not replace the link placeholders or mark those steps complete until the public pages have been verified.
 
-2. Open the public HTTPS build in ChatGPT's in-app browser, which supports WebMCP for the challenge.
-3. Start from a fresh page load. Keep the agent chat and the complete FlyLab interface visible.
-4. Confirm the activity rail reports seven tools and the protocol is not approved.
-5. Do not describe the current model as FlyGym, NeuroMechFly, a full-brain simulation, or a biological experiment.
+## Delivery assets
 
-## Agent prompts
+| Asset | Path | Purpose |
+| --- | --- | --- |
+| Video | `outputs/demo/v6/FlyLab-WebMCP-Demo.mp4` | Challenge and YouTube upload |
+| Captions | `outputs/demo/v6/FlyLab-WebMCP-Demo.srt` | Separate English caption upload |
+| Narration | `outputs/demo/v6/FlyLab-WebMCP-Demo-narration.txt` | Spoken-script review |
+| Thumbnail | `outputs/demo/v6/FlyLab-Devpost-Thumbnail.png` | YouTube and challenge-entry thumbnail |
+| Gallery | `outputs/demo/v6/gallery/` | Five submission-ready stills |
 
-Use two prompts so the approval boundary is unambiguous.
+Verified delivery properties:
+
+- Duration: `00:02:15.821`
+- Video: H.264, 1440 × 900, 30 fps
+- Audio: AAC, 48 kHz, stereo, integrated loudness `-15.9 LUFS`
+- Captions: embedded English `mov_text` stream plus a separate `.srt`
+- File size: 6,557,544 bytes
+- Video SHA-256: `f052192ddf4b78ffffb309c766eeca1a97c3c758ff4945273d3726349fe102f1`
+
+## Scientific reading of the circuit view
+
+The Three.js view uses six real BANC v888 L2 skeleton reconstructions: four MDNs and two LBL40 cells. “Real” here refers to reconstruction geometry from the pinned BANC data, not recorded activity in the current FlyLab run.
+
+- Purple indicates the MDN targets receiving the selected **unitless model drive**.
+- Cyan indicates bundled, connectome-inferred structural LBL40 paths and contacts.
+- Glow indicates model selection during replay. It is **not measured neural activity**, calcium signal, voltage, or biological signal propagation.
+- The translucent central-nervous-system shell is schematic.
+- Behavioral trajectories come from FlyLab's deterministic reduced-order model. They are `simulation_predicted`, not FlyGym execution, whole-brain dynamics, or wet-lab measurements.
+- Behavior metrics computed from those trajectories are both `derived` and `simulation_predicted`.
+- The `measured` evidence label refers to findings summarized from cited biological studies; it does not describe the current model drive or generated trajectory.
+
+## Twelve-frame cue sheet and narration
+
+The frame order, millisecond cues, and spoken text below match the final v6 caption file. Use the `.srt` as the edit-point source of truth.
+
+### 1. Seven tools live — 0:00.000–0:10.478
+
+**Frame:** `00-seven-tools-live.png`
+
+Show the shared laboratory, seven-tool activity rail, empty arena, evidence classes, and current MDN-inspired objective.
+
+> FlyLab keeps measured evidence, structural connectomes, model output, and new hypotheses visibly separate while a person and an agent share one virtual fruit-fly laboratory.
+
+### 2. Circuit evidence found — 0:10.478–0:21.377
+
+**Frame:** `01-circuit-found.png`
+
+Show the Discover step completed with linked adult MDN evidence, pinned BANC version information, and coverage warnings.
+
+> Using a browser-native site tool, not screen scraping, the agent finds the adult Moonwalker descending-neuron circuit with primary sources, pinned BANC version data, and coverage warnings.
+
+### 3. Falsifiable hypothesis drafted — 0:21.377–0:29.564
+
+**Frame:** `02-hypothesis-drafted.png`
+
+Show the hypothesis artifact and its `agent_hypothesized` label.
+
+> It drafts a falsifiable claim labeled agent-hypothesized, so plausible language never silently becomes biological evidence.
+
+### 4. Controlled protocol locked — 0:29.564–0:38.332
+
+**Frame:** `03-protocol-locked.png`
+
+Show baseline, model-sham, bilateral, left-only, and right-only arms together with timing, unitless drive, replicates, seed, controller version, and assumptions.
+
+> The agent designs five controlled arms. Timing, model drive, replicates, seed, controller version, and assumptions stay visible.
+
+### 5. Human approval boundary — 0:38.332–0:47.586
+
+**Frame:** `04-human-approved.png`
+
+Move from the blocked run state to the visibly human-approved protocol. Approval is a person-only interface action, not one of the seven agent tools.
+
+> Execution remains blocked until a person reviews the exact protocol and uses the visible approval control. Approval is deliberately not available as an agent tool.
+
+### 6. Simulation replay — 0:47.586–0:57.061
+
+**Frame:** `05-simulation-replay.png`
+
+Show the completed seeded replay and its `simulation_predicted` label.
+
+> After approval, FlyLab produces seeded deterministic trajectories in a reduced-order model, not FlyGym execution, neural dynamics, or wet-lab data.
+
+### 7. Bilateral BANC circuit view — 0:57.061–1:14.058
+
+**Frame:** `06-circuit-bilateral-active.png`
+
+Show the Three.js reconstruction view with all four MDNs selected in purple and both structural LBL40 paths in cyan.
+
+> The circuit view renders six actual BANC version eight eighty-eight L two skeleton reconstructions: four M D N cells and two L B L forty cells. Purple marks the bilateral model targets. Cyan marks the bundled structural L B L forty paths: four edges and one hundred fifty-three putative contacts.
+
+### 8. Left-only drive and neural-activity boundary — 1:14.058–1:29.546
+
+**Frame:** `07-circuit-left-active.png`
+
+Show only the two metadata-left MDNs and their connectome-inferred right LBL40 target highlighted. Keep the on-screen reconstruction and schematic-shell cautions legible.
+
+> Switching to left-only illuminates only the two metadata-left M D N cells and their connectome-inferred right L B L forty target, totaling one hundred three contacts. The translucent central nervous system shell is schematic, and glow is model selection, not measured neural activity.
+
+### 9. Behavior analysis — 1:29.546–1:41.542
+
+**Frame:** `08-behavior-analysis.png`
+
+Show the preregistered behavior metrics and the paired `derived` and `simulation_predicted` provenance labels.
+
+> The agent calculates the preregistered behavior metrics from the completed batch. Results carry both derived and simulation-predicted labels, preserving the difference between arithmetic on a model and measurements from flies.
+
+### 10. Bounded follow-up — 1:41.542–1:51.255
+
+**Frame:** `09-bounded-follow-up.png`
+
+Show the ranked conditions and one proposed follow-up without executing it.
+
+> FlyLab can rank conditions and propose one bounded follow-up, but that proposal has no execution authority. A new or edited experiment would require another human review.
+
+### 11. Evidence bundle saved — 1:51.255–2:04.473
+
+**Frame:** `10-evidence-saved.png`
+
+Show the saved bundle ID and manifest-hash prefix.
+
+> Finally, the agent saves sources, evidence classes, hypothesis, protocol, seeds, runs, model versions, analyses, limitations, and the next proposal into one manifest-hashed evidence bundle.
+
+### 12. Evidence ledger close — 2:04.473–2:15.610
+
+**Frame:** `11-evidence-ledger.png`
+
+Close on the evidence ledger so the measured, derived, connectome-inferred, simulation-predicted, and agent-hypothesized classes remain visible.
+
+> This is the core of FlyLab. Seven Web M C P tools let an agent explore and run a transparent virtual neuroethology workflow, while every claim retains its source and a person retains control.
+
+The video container ends at 2:15.821, 0.211 seconds after the final caption cue.
+
+## Canonical prompts behind the captured state
+
+The generated video does not show a live prompt-entry sequence. These are the two prompts used to describe and reproduce the workflow represented by the captures.
 
 **Prompt 1 — evidence through protocol**
 
-> Find source-backed adult fruit-fly circuits associated with backward walking. Draft a falsifiable MDN activation hypothesis and design a controlled bilateral activation experiment with baseline, sham, left-only, and right-only comparisons. Use unitless model drive 0.65, onset 1000 ms, duration 2000 ms, trial duration 5000 ms, eight replicates per arm, and seed 73142. Stop before running anything so I can inspect and approve the protocol.
+> Find source-backed adult fruit-fly circuits associated with backward walking. Draft a falsifiable MDN activation hypothesis and design a controlled MDN-inspired model-drive experiment with baseline, model-sham, bilateral, left-only, and right-only comparisons. Use unitless model drive 0.65, onset 1000 ms, duration 2000 ms, trial duration 5000 ms, eight replicates per arm, and seed 73142. Stop before running anything so I can inspect and approve the protocol.
 
 Expected tool sequence:
 
@@ -32,9 +156,9 @@ find_fly_circuits
 → human approval required
 ```
 
-**Prompt 2 — approved execution through evidence**
+After a person clicks **Approve experiment**, use the second prompt.
 
-After clicking **Approve experiment**, ask:
+**Prompt 2 — approved execution through evidence**
 
 > Run the exact approved experiment. Analyze backward distance, signed speed, response latency, heading change, and stance stability. Rank the conditions by backward distance, propose one follow-up with a five-replicate budget, do not execute that proposal, and save the complete evidence bundle.
 
@@ -47,75 +171,19 @@ run_fly_simulation
 → save_fly_evidence
 ```
 
-## Recording script
+## Final pre-upload checks
 
-### 0:00–0:12 — The problem
+- Confirm the probed duration remains below `00:03:00` and the SHA-256 matches the value above.
+- Watch the exported MP4 from beginning to end with audio on.
+- Confirm the 12 frames appear in the documented order and no capture is cropped or unreadable.
+- Confirm the separate `.srt` matches the embedded English caption track.
+- Confirm “model drive” and “model selection” are never described as measured neural activity.
+- Confirm the BANC lines are described as real reconstruction geometry while the CNS shell remains labeled schematic.
+- Confirm simulation and derived outputs retain their provenance labels.
+- Confirm the follow-up is proposed but not executed.
+- Confirm the video never claims FlyGym execution, whole-brain dynamics, direct connectome simulation, or new biological results.
+- Confirm the public YouTube URL before replacing `[YOUTUBE_DEMO_URL]`.
+- Confirm the public Devpost URL before replacing `[DEVPOST_ENTRY_URL]`.
+- Leave repository licensing marked pending until the owner approves and adds a root `LICENSE` file.
 
-Show the empty shared arena, workflow rail, and evidence badges.
-
-Narration:
-
-> Neuroscience evidence, connectomes, models, and hypotheses are easy to blur together. FlyLab gives a person and an agent one shared laboratory where every claim keeps its scientific boundary.
-
-### 0:12–0:37 — The agent researches visibly
-
-Submit Prompt 1. Let the WebMCP calls advance the workflow from Discover to Design. Open the evidence ledger briefly and show the measured, derived, and connectome-inferred records with their source links.
-
-Narration:
-
-> The agent is not clicking through the interface or inventing a target. It uses structured site tools to find the bounded adult MDN evidence path, cite it, and turn it into a falsifiable hypothesis.
-
-### 0:37–0:57 — Controls and human authority
-
-Show the visible protocol: baseline, model-sham, bilateral, left-only, and right-only conditions; activation level; duration; replicate count; seed; and controller version. Point to the Draft status.
-
-Narration:
-
-> The proposed experiment includes controls, exact timing, replicates, and a seed. It cannot run yet. Approval is intentionally a human interface action, not an agent tool.
-
-Click **Approve experiment**.
-
-### 0:57–1:22 — Reproducible simulation and circuit anatomy
-
-Submit Prompt 2. Show the approved status and animated trajectory replay. Switch to **Circuit**, play through the model-drive window, and briefly show the bilateral purple MDNs, cyan structural LBL40 paths, 153-contact readout, and one selectable BANC cell ID. Switch to left-only long enough to show that only the two left MDNs and right LBL40 path are highlighted.
-
-Narration:
-
-> These lines are the six pinned BANC v888 neuron reconstructions, not artist-drawn neurons. Purple marks the current model target and cyan its structural path; neither is measured activity. The behavior is still the deterministic reduced-order FlyLab model, not FlyGym or a whole-brain simulation.
-
-### 1:22–1:43 — Analysis without overclaiming
-
-Show the metric cards and the paired `derived` and `simulation_predicted` badges. Switch between at least one control and the bilateral condition.
-
-Narration:
-
-> The agent computes versioned behavioral summaries from simulation-predicted run outputs. The interface never presents these values as measured flies or biological confidence intervals.
-
-### 1:43–1:57 — Bounded autoresearch
-
-Show the follow-up proposal and its five-replicate budget.
-
-Narration:
-
-> The agent ranks conditions and proposes the next activation levels, but the proposal carries no execution authority. A new or edited protocol would require another human approval.
-
-### 1:57–2:00 — Evidence handoff
-
-Show the saved evidence-bundle ID and manifest-hash prefix in the footer.
-
-Narration:
-
-> Sources, assumptions, versions, seeds, runs, analyses, and the next hypothesis travel together. That is FlyLab: agent-native exploration with a human still in control.
-
-## Recording checks
-
-- The activity rail visibly advances with tool calls.
-- The protocol remains Draft until the person clicks Approve.
-- The simulation result is labeled `simulation_predicted`.
-- The circuit view labels neuron lines as reconstruction-derived, the shell as schematic, and glow as model selection rather than neural activity.
-- The analysis is labeled both `derived` and `simulation_predicted`.
-- The follow-up is labeled `agent_hypothesized` and is not executed.
-- The evidence ledger shows primary-source links and cautions.
-- The saved bundle shows a stable ID and manifest hash.
-- No narration claims actual FlyGym execution, whole-brain dynamics, or new experimental discovery.
-- Do not quote metric values in the narration unless they are visibly present in that recorded run.
+See [YOUTUBE_DESCRIPTION.md](YOUTUBE_DESCRIPTION.md) for upload-ready title, description, chapters, tags, and asset pointers.

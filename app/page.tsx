@@ -453,7 +453,7 @@ export default function Home() {
       }));
       setNotice('Evidence bundle saved with sources, assumptions, versions, seeds, runs, and results.');
       return {
-        summary: 'Saved an immutable, provenance-rich FlyLab evidence bundle.',
+        summary: 'Saved a manifest-hashed, provenance-rich FlyLab evidence snapshot.',
         data: { bundle, local_reference: bundle.id, storage_scope: 'this browser origin' },
         provenance: ['measured', 'derived', 'connectome_inferred', 'simulation_predicted', 'agent_hypothesized'],
         stateRevision: next.revision,
@@ -827,7 +827,7 @@ export default function Home() {
 
           <section className="target-card">
             <div className="neuron-orbit" aria-hidden="true"><i /><i /><i /></div>
-            <div><span>Neural target</span><strong>Moonwalker descending neurons</strong><small>BANC v888 · 4 proofread MDNs · 2 per side</small></div>
+            <div><div className="target-card-heading"><span>Neural target</span><Badge kind="derived" /></div><strong>Moonwalker descending neurons</strong><small>BANC v888 · 4 proofread MDNs · 2 per side</small></div>
           </section>
 
           <section className="protocol-controls" aria-labelledby="protocol-title">

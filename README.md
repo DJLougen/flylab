@@ -65,7 +65,7 @@ The approval step is intentionally not a WebMCP tool. It remains a human action 
 | `run_fly_simulation` | Execute an approved experiment or return its existing deterministic batch. | Writes simulation runs; results are `simulation_predicted`. |
 | `analyze_fly_behavior` | Calculate requested behavior metrics from a completed batch. | Writes a method-versioned analysis; results are derived from simulation. |
 | `compare_fly_trials` | Rank compatible analyses and create one next-experiment proposal. | Writes a comparison; the proposal is not execution authority. |
-| `save_fly_evidence` | Save sources, claims, model assumptions, protocol, seeds, runs, analyses, and comparison. | Writes an immutable, locally persisted evidence bundle. |
+| `save_fly_evidence` | Save sources, claims, model assumptions, protocol, seeds, runs, analyses, and comparison. | Writes a manifest-hashed snapshot to best-effort browser-local storage. |
 
 The current WebMCP implementation uses `document.modelContext.registerTool(...)`, closed object schemas, `readOnlyHint`, `untrustedContentHint`, cancellable execution, and AbortSignal-owned registration lifecycle.
 It follows OpenAI's [Site tools documentation](https://learn.chatgpt.com/docs/webmcp) for making website capabilities directly available to agents.
@@ -86,7 +86,10 @@ An experiment stores its base seed. Replicate seeds are derived deterministicall
 
 The circuit viewer bundles simplified render assets derived from the six pinned BANC v888 L2 SWC skeletons. The asset manifest records every source URL, SHA-256 checksum, source node count, shared coordinate transform, and topology-preserving simplification rule. The neuron lines are reconstruction-derived; the translucent CNS envelope is explicitly schematic. Purple glow means the current FlyLab model targets that MDN during the replay window, while cyan marks its bundled structural LBL40 path. Neither means measured activity or signal propagation.
 
+The exact six-neuron/four-edge table slice is independently reproducible from the two pinned BANC Feather files. See [Reproducing the BANC v888 circuit slice](docs/BANC_SLICE_REPRODUCIBILITY.md) for source hashes, the read-only verification command, extraction rules, and the small canonical artifact used to test the runtime records.
+
 See [Scientific Boundaries](docs/SCIENTIFIC_BOUNDARIES.md) for the complete interpretation rules.
+Third-party data attribution and modification notices are recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Primary sources and license pointers
 
@@ -104,9 +107,11 @@ FlyLab's own distribution terms should be taken from the repository license, if 
 
 ## Project guide
 
-- [Two-minute demo](docs/DEMO.md)
+- [Challenge demo](docs/DEMO.md)
 - [WebMCP verification](docs/WEBMCP_VERIFICATION.md)
 - [Scientific boundaries](docs/SCIENTIFIC_BOUNDARIES.md)
+- [BANC v888 slice reproducibility](docs/BANC_SLICE_REPRODUCIBILITY.md)
+- [Third-party notices](THIRD_PARTY_NOTICES.md)
 - [Challenge submission copy](docs/CHALLENGE_SUBMISSION.md)
 - `lib/flylab.ts` — evidence records, manifests, deterministic model, metrics, and comparison logic
 - `lib/webmcp.ts` — seven tool contracts, validation, result envelopes, and registration lifecycle

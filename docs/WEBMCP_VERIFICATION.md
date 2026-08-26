@@ -24,7 +24,9 @@ npm run verify:webmcp
 
 The command creates an isolated temporary Chrome profile, enables Chrome's official `WebMCPTesting` feature for that process, loads the public deployment, and checks that the real page exposes `document.modelContext.registerTool`, is origin-keyed, and reaches **7 tools live**. It then uses Chrome's WebMCP debugging protocol to enumerate the exact seven tool names and complete a live `find_fly_circuits` invocation. It closes the isolated browser and removes the temporary profile afterward. Set `CHROME_BIN` to override the Chrome executable or `FLYLAB_URL` to check another deployment.
 
-For an end-to-end verification of all seven tools and the approval boundary, run `FLYLAB_VERIFY_WORKFLOW=1 npm run verify:webmcp`. The isolated test first confirms that simulation is blocked with `APPROVAL_REQUIRED`, clicks the visible human-only approval control through the DOM, then runs, analyzes, compares, and saves a complete evidence bundle.
+For an end-to-end verification of all seven tools and the approval boundary, run `FLYLAB_VERIFY_WORKFLOW=1 npm run verify:webmcp`. The isolated test first confirms that simulation is blocked with `APPROVAL_REQUIRED`, clicks the visible human-only approval control through the DOM, then runs, analyzes, compares, and saves a complete evidence bundle. After recording the bundle, it edits the visible protocol and verifies that approval, playback, analysis results, condition status, and the follow-up proposal are invalidated.
+
+Set `FLYLAB_CAPTURE_DIR` alongside the workflow flag to save ordered public-site captures, including bilateral and left-only Three.js circuit states plus the final protocol-edit invalidation state.
 
 ## Live discovery check
 

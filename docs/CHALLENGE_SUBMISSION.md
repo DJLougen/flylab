@@ -1,6 +1,6 @@
 # WebMCP Challenge submission
 
-The live application and public source links below have been verified. Add the demo-video and challenge-entry URLs after those artifacts exist.
+The live application and public source links below have been verified. A 2:15.821 narrated v6 demo has been generated locally from 12 FlyLab interface captures, including the Three.js BANC circuit view. Public YouTube upload, Devpost publication, and an owner-approved repository license are still pending.
 
 Submission deadline: **September 3, 2026 at 1:00 p.m. PDT**.
 
@@ -26,7 +26,7 @@ The person and agent share the same laboratory state. The agent can gather cited
 
 FlyLab's current embodiment is a deterministic reduced-order model, version `0.1.1`, with the MDN-inspired `mdn-inspired-retreat-adapter.v1`. It is not FlyGym, a complete fly brain, or a wet-lab experiment. Sources, assumptions, dataset and model versions, seeds, run IDs, analyses, limitations, and a manifest hash are saved together so a compelling result never loses its boundary. The WebMCP surface follows OpenAI's [Site tools documentation](https://learn.chatgpt.com/docs/webmcp).
 
-The circuit view is an orbitable Three.js rendering of the six pinned BANC v888 L2 skeleton reconstructions—four MDNs and two LBL40 cells—with camera presets and accessible cell inspection. Replay illumination follows the selected bilateral or unilateral model condition. The surrounding CNS shell is explicitly schematic, and the interface states that glow is model selection rather than recorded activity or signal propagation.
+The circuit view is an orbitable Three.js rendering of six real, pinned BANC v888 L2 skeleton reconstructions—four MDNs and two LBL40 cells—with camera presets and accessible cell inspection. Purple replay illumination marks the MDNs receiving the selected unitless model drive; cyan marks bundled connectome-inferred structural LBL40 paths. These encodings are not measured neural activity or biological signal propagation. The surrounding CNS shell is explicitly schematic.
 
 **Problem**
 
@@ -129,20 +129,20 @@ The five labels are `measured`, `derived`, `connectome_inferred`, `simulation_pr
 
 First ask:
 
-> Find source-backed adult fruit-fly circuits associated with backward walking. Draft a falsifiable MDN activation hypothesis and design a controlled bilateral activation experiment with baseline, sham, left-only, and right-only comparisons. Use unitless model drive 0.65, onset 1000 ms, duration 2000 ms, trial duration 5000 ms, eight replicates per arm, and seed 73142. Stop before running anything so I can inspect and approve the protocol.
+> Find source-backed adult fruit-fly circuits associated with backward walking. Draft a falsifiable MDN activation hypothesis and design a controlled MDN-inspired model-drive experiment with baseline, model-sham, bilateral, left-only, and right-only comparisons. Use unitless model drive 0.65, onset 1000 ms, duration 2000 ms, trial duration 5000 ms, eight replicates per arm, and seed 73142. Stop before running anything so I can inspect and approve the protocol.
 
 After human approval, ask:
 
 > Run the exact approved experiment. Analyze all five behavior metrics, rank conditions by backward distance, propose one follow-up with a five-replicate budget, do not execute that proposal, and save the complete evidence bundle.
 
-See [DEMO.md](DEMO.md) for the timed two-minute recording script.
+See [DEMO.md](DEMO.md) for the generated 12-frame narration and cue sheet, and [YOUTUBE_DESCRIPTION.md](YOUTUBE_DESCRIPTION.md) for upload metadata and chapter markers.
 
 ## Submission links
 
 - Live application: [https://flylab-neuroethology.d-lougen.chatgpt.site](https://flylab-neuroethology.d-lougen.chatgpt.site)
 - Public source repository: [https://github.com/DJLougen/flylab](https://github.com/DJLougen/flylab)
-- Demo video: `[DEMO_VIDEO_URL]`
-- Challenge entry: `[DEVPOST_ENTRY_URL]`
+- Demo video: `[YOUTUBE_DEMO_URL]` — pending public upload and verification
+- Challenge entry: `[DEVPOST_ENTRY_URL]` — pending publication and verification
 
 ## Submission checklist
 
@@ -150,15 +150,17 @@ See [DEMO.md](DEMO.md) for the timed two-minute recording script.
 - [x] Confirm Chrome with the official WebMCP testing feature accepts all seven registrations.
 - [ ] Confirm ChatGPT's in-app browser discovers exactly seven tools.
 - [x] Run `npm test`, `npm run lint`, and `npm run build` against the submitted commit.
-- [ ] Confirm the first demo prompt stops at human approval.
-- [ ] Confirm editing a protocol clears approval and previous downstream artifacts.
+- [x] Confirm the workflow stops at human approval before the visible person-only approval click.
+- [x] Confirm live that editing a protocol clears approval, playback, analyses, and the follow-up proposal.
 - [ ] Confirm cancellation does not create a completed batch.
-- [ ] Confirm the result and evidence badges remain visible in the recording.
-- [ ] Confirm the follow-up proposal is not executed.
-- [ ] Confirm the saved bundle displays an ID and manifest hash.
+- [x] Confirm the result and evidence badges remain visible in the recording.
+- [x] Confirm the follow-up proposal is not executed.
+- [x] Confirm the saved bundle displays an ID and manifest hash.
 - [ ] Confirm every linked scientific URL resolves to the intended primary page.
-- [ ] Confirm no copy or narration claims actual FlyGym execution or new biological results.
+- [x] Confirm no copy or narration claims actual FlyGym execution or new biological results.
+- [x] Generate a 2:15.821 narrated 12-frame MP4 with Three.js BANC reconstruction views, English captions, thumbnail, and gallery stills.
 - [ ] Add an owner-approved open-source `LICENSE` file that Devpost can detect at the top of the repository.
 - [ ] Publish a public YouTube demo under three minutes with audio.
-- [ ] Replace the two remaining bracketed URL placeholders with verified public URLs.
+- [ ] Verify the YouTube video in a signed-out browser, then replace `[YOUTUBE_DEMO_URL]`.
+- [ ] Publish and verify the Devpost entry, then replace `[DEVPOST_ENTRY_URL]`.
 - [ ] Include the required working app, repository, and demo video in the final challenge entry.

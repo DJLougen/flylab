@@ -153,7 +153,7 @@ export const flyLabToolContracts = [
   {
     name: 'save_fly_evidence',
     title: 'Save fly evidence',
-    description: 'Commit a complete FlyLab hypothesis, experiment, runs, analyses, comparison, citations, model versions and seeds to the visible evidence ledger. Returns an immutable bundle ID and manifest hash.',
+    description: 'Commit a complete FlyLab hypothesis, experiment, runs, analyses, comparison, citations, model versions and seeds to the visible browser-local evidence ledger. Returns a stable bundle ID and manifest hash.',
     annotations: { readOnlyHint: false, untrustedContentHint: true },
     inputSchema: objectSchema({
       title: { type: 'string', minLength: 1, maxLength: 120 },

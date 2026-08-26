@@ -25,6 +25,7 @@ interface FlyBrain3DProps {
 }
 
 type CameraPreset = 'whole' | 'brain' | 'vnc';
+type ViewerProvenance = 'derived' | 'connectome_inferred' | 'agent_hypothesized';
 
 interface NeuronRenderRecord {
   line: THREE.LineSegments;
@@ -66,6 +67,11 @@ const cameraPositions: Record<CameraPreset, { position: [number, number, number]
 
 function compactId(id: string) {
   return `${id.slice(0, 7)}…${id.slice(-5)}`;
+}
+
+function ViewerProvenanceTag({ kind }: { kind: ViewerProvenance }) {
+  const label = kind === 'derived' ? 'Derived' : kind === 'connectome_inferred' ? 'Connectome inferred' : 'Agent hypothesis';
+  return <b className={`brain-provenance ${kind}`}>{label}</b>;
 }
 
 function makeTextSprite(text: string, color: string, position: [number, number, number]) {
@@ -414,9 +420,9 @@ export function FlyBrain3D({ laterality, driveActive, conditionLabel, timeMs }: 
         <div className="brain-orientation" aria-hidden="true"><span>L</span><i /><span>R</span></div>
         {hoveredId && <div className="brain-hover-card"><strong>{cellByBancId(hoveredId)?.cell_type}</strong><span>{cellByBancId(hoveredId)?.side} · {compactId(hoveredId)}</span></div>}
         <div className="brain-legend">
-          <span><i className="model-target" /> model-drive target</span>
-          <span><i className="structural-target" /> linked structural target</span>
-          <span><i className="reconstruction" /> BANC reconstruction</span>
+          <span><i className="model-target" /><ViewerProvenanceTag kind="agent_hypothesized" /> model-drive target</span>
+          <span><i className="structural-target" /><ViewerProvenanceTag kind="connectome_inferred" /> linked target</span>
+          <span><i className="reconstruction" /><ViewerProvenanceTag kind="derived" /> BANC reconstruction</span>
         </div>
       </div>
 
@@ -443,7 +449,7 @@ export function FlyBrain3D({ laterality, driveActive, conditionLabel, timeMs }: 
         <div className="brain-cell-detail" aria-live="polite">
           {selectedCell ? (
             <>
-              <p><strong>{selectedCell.cell_type} · {selectedCell.side}</strong><span>reconstruction-derived</span></p>
+              <p><strong>{selectedCell.cell_type} · {selectedCell.side}</strong><ViewerProvenanceTag kind="derived" /></p>
               <dl>
                 <div><dt>BANC v888 ID</dt><dd>{selectedCell.banc_888_id}</dd></div>
                 <div><dt>Metadata region</dt><dd>{selectedCell.root_region}</dd></div>
@@ -455,15 +461,15 @@ export function FlyBrain3D({ laterality, driveActive, conditionLabel, timeMs }: 
           )}
         </div>
         <div className="brain-edge-summary">
-          <span>Selected structural path</span>
+          <span><ViewerProvenanceTag kind="connectome_inferred" /> selected structural path</span>
           <strong>{activity.highlightedEdges.length ? `${activity.highlightedEdges.length} edges · ${activity.highlightedEdges.reduce((total, edge) => total + edge.count, 0)} putative contacts` : 'none during baseline / sham / rest'}</strong>
         </div>
       </aside>
 
       <footer className="brain-viewer-boundary">
-        <span>Neuron lines: reconstruction-derived BANC v888 SWCs</span>
-        <span>Shell: schematic orientation geometry</span>
-        <strong>Glow is model selection—not measured neural activity or signal propagation.</strong>
+        <span><ViewerProvenanceTag kind="derived" /> neuron lines from BANC v888 SWCs</span>
+        <span>Not evidence · schematic orientation shell</span>
+        <strong><ViewerProvenanceTag kind="agent_hypothesized" /> glow is model selection, not measured activity or signal propagation.</strong>
       </footer>
     </section>
   );
