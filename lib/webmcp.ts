@@ -318,27 +318,32 @@ export async function installFlyLabWebMCP(actions: Record<string, FlyLabToolActi
 
   const registrationController = new AbortController();
   try {
-    await Promise.all(flyLabToolContracts.map(async (contract) => {
-      await modelContext.registerTool({
-        ...contract,
-        inputSchema: contract.inputSchema as Record<string, unknown>,
-        execute: async (rawInput: unknown, { signal }: { signal: AbortSignal }) => {
-          try {
-            const input = validateToolInput(contract.name, rawInput);
-            const action = actions[contract.name];
-            if (!action) throw new FlyLabDomainError('SIMULATION_UNAVAILABLE', `${contract.name} is not connected.`);
-            const result = await action(input, { signal });
-            if (signal.aborted) throw signal.reason ?? new DOMException('Tool cancelled', 'AbortError');
-            return toolSuccess(contract.name, result);
-          } catch (error) {
-            if (signal.aborted) throw signal.reason ?? new DOMException('Tool cancelled', 'AbortError');
-            if (error instanceof FlyLabDomainError) return toolFailure(contract.name, error);
-            console.error(`FlyLab tool failed: ${contract.name}`, error);
-            throw new Error(`${contract.name} could not complete`);
-          }
-        },
-      }, { signal: registrationController.signal });
-    }));
+    for (const contract of flyLabToolContracts) {
+      try {
+        await modelContext.registerTool({
+          ...contract,
+          inputSchema: contract.inputSchema as Record<string, unknown>,
+          execute: async (rawInput: unknown, { signal }: { signal: AbortSignal }) => {
+            try {
+              const input = validateToolInput(contract.name, rawInput);
+              const action = actions[contract.name];
+              if (!action) throw new FlyLabDomainError('SIMULATION_UNAVAILABLE', `${contract.name} is not connected.`);
+              const result = await action(input, { signal });
+              if (signal.aborted) throw signal.reason ?? new DOMException('Tool cancelled', 'AbortError');
+              return toolSuccess(contract.name, result);
+            } catch (error) {
+              if (signal.aborted) throw signal.reason ?? new DOMException('Tool cancelled', 'AbortError');
+              if (error instanceof FlyLabDomainError) return toolFailure(contract.name, error);
+              console.error(`FlyLab tool failed: ${contract.name}`, error);
+              throw new Error(`${contract.name} could not complete`);
+            }
+          },
+        }, { signal: registrationController.signal });
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : 'unknown browser error';
+        throw new Error(`WebMCP registration failed for ${contract.name}: ${detail}`);
+      }
+    }
   } catch (error) {
     registrationController.abort();
     throw error;

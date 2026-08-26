@@ -2,6 +2,9 @@
 
 FlyLab is a WebMCP-enabled virtual neuroethology lab for investigating how an adult fruit-fly neural circuit could influence behavior. A person and an agent share one visible workflow: find source-backed evidence, write a falsifiable hypothesis, design controls, approve a protocol, run a seeded simulation, quantify behavior, select a follow-up, and save the complete evidence lineage.
 
+- **Live lab:** [flylab-neuroethology.d-lougen.chatgpt.site](https://flylab-neuroethology.d-lougen.chatgpt.site)
+- **Public source:** [github.com/DJLougen/flylab](https://github.com/DJLougen/flylab)
+
 > **Current release boundary:** FlyLab is an adult Moonwalker descending neuron (MDN) backward-walking vertical slice. Its embodiment is the **FlyLab reduced-order model** version `0.1.1` with the versioned `mdn-inspired-retreat-adapter.v1` controller. It does not execute FlyGym, simulate neural dynamics, or emulate a complete fly brain.
 
 ## What the challenge release demonstrates
@@ -98,6 +101,7 @@ FlyLab's own distribution terms should be taken from the repository license, if 
 ## Project guide
 
 - [Two-minute demo](docs/DEMO.md)
+- [WebMCP verification](docs/WEBMCP_VERIFICATION.md)
 - [Scientific boundaries](docs/SCIENTIFIC_BOUNDARIES.md)
 - [Challenge submission copy](docs/CHALLENGE_SUBMISSION.md)
 - `lib/flylab.ts` — evidence records, manifests, deterministic model, metrics, and comparison logic

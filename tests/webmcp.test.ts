@@ -80,14 +80,22 @@ describe('FlyLab WebMCP contracts', () => {
 });
 
 describe('FlyLab WebMCP registration lifecycle', () => {
-  test('registers all seven contracts and unregisters all of them on dispose', async () => {
+  test('registers and invokes all seven contracts, then unregisters them on dispose', async () => {
     const registrations: Array<{
-      tool: { name: string; annotations?: Record<string, boolean> };
+      tool: {
+        name: string;
+        annotations?: Record<string, boolean>;
+        execute(input: unknown, context: { signal: AbortSignal }): Promise<unknown>;
+      };
       signal?: AbortSignal;
     }> = [];
     const modelContext = {
       async registerTool(
-        tool: { name: string; annotations?: Record<string, boolean> },
+        tool: {
+          name: string;
+          annotations?: Record<string, boolean>;
+          execute(input: unknown, context: { signal: AbortSignal }): Promise<unknown>;
+        },
         options?: { signal?: AbortSignal },
       ) {
         registrations.push({ tool, signal: options?.signal });
@@ -120,8 +128,60 @@ describe('FlyLab WebMCP registration lifecycle', () => {
     assert.ok(registrations.every(({ signal }) => signal?.aborted === false));
     assert.equal(new Set(registrations.map(({ signal }) => signal)).size, 1);
 
+    const discovery = registrations.find(({ tool }) => tool.name === 'find_fly_circuits');
+    assert.ok(discovery);
+    const callController = new AbortController();
+    const result = await discovery.tool.execute(
+      { query: 'MDN', behavior: 'backward_walking' },
+      { signal: callController.signal },
+    ) as {
+      isError?: boolean;
+      structuredContent?: { ok?: boolean; tool?: string; summary?: string };
+    };
+    assert.notEqual(result.isError, true);
+    assert.equal(result.structuredContent?.ok, true);
+    assert.equal(result.structuredContent?.tool, 'find_fly_circuits');
+    assert.equal(result.structuredContent?.summary, 'ok');
+
     installation.dispose();
 
     assert.ok(registrations.every(({ signal }) => signal?.aborted === true));
+  });
+
+  test('names a rejected tool and aborts partial registration', async () => {
+    const registrationSignals: AbortSignal[] = [];
+    const modelContext = {
+      async registerTool(
+        tool: { name: string },
+        options?: { signal?: AbortSignal },
+      ) {
+        if (options?.signal) registrationSignals.push(options.signal);
+        if (tool.name === 'design_stimulation_trial') {
+          throw new Error('schema rejected');
+        }
+      },
+    };
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: { modelContext },
+    });
+
+    const action: FlyLabToolAction = async () => ({
+      summary: 'ok',
+      data: {},
+      provenance: ['derived'],
+      stateRevision: 1,
+    });
+    const actions = Object.fromEntries(
+      expectedNames.map((name) => [name, action]),
+    );
+
+    await assert.rejects(
+      installFlyLabWebMCP(actions),
+      /WebMCP registration failed for design_stimulation_trial: schema rejected/,
+    );
+    assert.equal(registrationSignals.length, 3);
+    assert.equal(new Set(registrationSignals).size, 1);
+    assert.ok(registrationSignals.every((signal) => signal.aborted));
   });
 });

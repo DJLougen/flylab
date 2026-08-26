@@ -1,7 +1,13 @@
 import type { Metadata } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
-import { headers } from 'next/headers';
 import './globals.css';
+
+const productionSiteUrl = 'https://flylab-neuroethology.d-lougen.chatgpt.site';
+const trustedMetadataHosts = new Set([
+  'flylab-neuroethology.d-lougen.chatgpt.site',
+  'localhost:3001',
+  'localhost:3002',
+]);
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -13,11 +19,31 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 });
 
-export async function generateMetadata(): Promise<Metadata> {
-  const requestHeaders = await headers();
-  const host = (requestHeaders.get('x-forwarded-host') ?? requestHeaders.get('host') ?? 'localhost:3001').split(',')[0].trim();
-  const protocol = (requestHeaders.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https')).split(',')[0].trim();
-  const metadataBase = new URL(process.env.NEXT_PUBLIC_SITE_URL ?? `${protocol}://${host}`);
+function resolveMetadataBase() {
+  const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL;
+
+  if (configuredUrl) {
+    try {
+      const candidate = new URL(configuredUrl);
+      const isLocalDevelopment =
+        candidate.hostname === 'localhost' && candidate.protocol === 'http:';
+      const isProduction =
+        candidate.hostname === 'flylab-neuroethology.d-lougen.chatgpt.site' &&
+        candidate.protocol === 'https:';
+
+      if (trustedMetadataHosts.has(candidate.host) && (isLocalDevelopment || isProduction)) {
+        return candidate;
+      }
+    } catch {
+      // Ignore malformed configuration and use the known production origin.
+    }
+  }
+
+  return new URL(productionSiteUrl);
+}
+
+export function generateMetadata(): Metadata {
+  const metadataBase = resolveMetadataBase();
 
   return {
     metadataBase,

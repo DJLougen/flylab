@@ -1,6 +1,8 @@
 # WebMCP Challenge submission
 
-Replace the bracketed URL placeholders only after the corresponding public artifact has been verified.
+The live application and public source links below have been verified. Add the demo-video and challenge-entry URLs after those artifacts exist.
+
+Submission deadline: **September 3, 2026 at 1:00 p.m. PDT**.
 
 ## Submission fields
 
@@ -132,18 +134,18 @@ After human approval, ask:
 
 See [DEMO.md](DEMO.md) for the timed two-minute recording script.
 
-## Links to complete before submission
+## Submission links
 
-- Live application: `[LIVE_APP_URL]`
-- Public source repository: `[SOURCE_REPOSITORY_URL]`
+- Live application: [https://flylab-neuroethology.d-lougen.chatgpt.site](https://flylab-neuroethology.d-lougen.chatgpt.site)
+- Public source repository: [https://github.com/DJLougen/flylab](https://github.com/DJLougen/flylab)
 - Demo video: `[DEMO_VIDEO_URL]`
 - Challenge entry: `[DEVPOST_ENTRY_URL]`
 
 ## Submission checklist
 
-- [ ] Verify the live HTTPS URL from a signed-out browser session.
+- [x] Verify the live HTTPS URL without private-site authentication.
 - [ ] Confirm ChatGPT's in-app browser discovers exactly seven tools.
-- [ ] Run `npm test`, `npm run lint`, and `npm run build` against the submitted commit.
+- [x] Run `npm test`, `npm run lint`, and `npm run build` against the submitted commit.
 - [ ] Confirm the first demo prompt stops at human approval.
 - [ ] Confirm editing a protocol clears approval and previous downstream artifacts.
 - [ ] Confirm cancellation does not create a completed batch.
@@ -152,5 +154,7 @@ See [DEMO.md](DEMO.md) for the timed two-minute recording script.
 - [ ] Confirm the saved bundle displays an ID and manifest hash.
 - [ ] Confirm every linked scientific URL resolves to the intended primary page.
 - [ ] Confirm no copy or narration claims actual FlyGym execution or new biological results.
-- [ ] Replace every bracketed URL placeholder with a verified public URL.
+- [ ] Add an owner-approved open-source `LICENSE` file that Devpost can detect at the top of the repository.
+- [ ] Publish a public YouTube demo under three minutes with audio.
+- [ ] Replace the two remaining bracketed URL placeholders with verified public URLs.
 - [ ] Include the required working app, repository, and demo video in the final challenge entry.

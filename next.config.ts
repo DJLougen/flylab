@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
       {
         source: '/(.*)',
         headers: [
+          { key: 'Origin-Agent-Cluster', value: '?1' },
           { key: 'Permissions-Policy', value: 'tools=(self)' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
         ],

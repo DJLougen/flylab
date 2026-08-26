@@ -135,7 +135,7 @@ function stringArrayInput(input: Record<string, unknown>, key: string) {
 export default function Home() {
   const [lab, setLab] = useState<LabState>(initialState);
   const labRef = useRef(lab);
-  const [webmcpSupported, setWebmcpSupported] = useState<boolean | null>(null);
+  const [webmcpStatus, setWebmcpStatus] = useState<'checking' | 'active' | 'unsupported' | 'failed'>('checking');
   const [notice, setNotice] = useState('State a behavior goal, then ask the agent to investigate.');
   const [selectedConditionId, setSelectedConditionId] = useState('condition_bilateral');
   const [playhead, setPlayhead] = useState(0);
@@ -468,9 +468,10 @@ export default function Home() {
         return;
       }
       registration = result;
-      setWebmcpSupported(result.supported);
-    }).catch(() => {
-      if (!disposed) setWebmcpSupported(false);
+      setWebmcpStatus(result.supported ? 'active' : 'unsupported');
+    }).catch((error) => {
+      console.error('FlyLab WebMCP registration failed', error);
+      if (!disposed) setWebmcpStatus('failed');
     });
     return () => {
       disposed = true;
@@ -637,6 +638,12 @@ export default function Home() {
   const selectedSources = SOURCES.filter((source) => selectedEvidence.sourceIds.includes(source.id));
   const analysis = lab.analyses[0] ?? null;
   const bestResult = analysis?.conditions.find((condition) => condition.conditionId === 'condition_bilateral') ?? analysis?.conditions[0] ?? null;
+  const siteToolStatus = {
+    checking: 'checking site tools',
+    active: '7 tools live',
+    unsupported: 'browser API unavailable',
+    failed: 'tool registration failed',
+  }[webmcpStatus];
 
   return (
     <main className="lab-shell">
@@ -681,7 +688,7 @@ export default function Home() {
           <section className="agent-activity" aria-labelledby="agent-activity-title">
             <div className="section-title-row">
               <p className="eyebrow" id="agent-activity-title">Agent activity</p>
-              <span className={`tool-status ${webmcpSupported ? 'live' : ''}`}>{webmcpSupported ? '7 tools live' : 'site tools ready'}</span>
+              <span className={`tool-status ${webmcpStatus === 'active' ? 'live' : ''}`}>{siteToolStatus}</span>
             </div>
             {lab.activity.slice(0, 3).map((item) => (
               <article className={`activity-row ${item.status}`} key={item.id}>
@@ -852,7 +859,7 @@ export default function Home() {
       <footer className="lab-footer" aria-live="polite">
         <p><span className="agent-pulse" /> {notice}</p>
         <p>{lab.bundle ? `${lab.bundle.id} · ${lab.bundle.manifestHash.slice(0, 22)}…` : `state revision ${lab.revision}`}</p>
-        <div className="footer-tools"><span>{webmcpSupported ? 'WebMCP active' : 'WebMCP-ready'}</span><span>7 scientific tools</span></div>
+        <div className="footer-tools"><span>{webmcpStatus === 'active' ? 'WebMCP active' : 'WebMCP contracts wired'}</span><span>7 scientific tools</span></div>
       </footer>
 
       {evidenceOpen && (
