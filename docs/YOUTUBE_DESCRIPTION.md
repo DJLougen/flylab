@@ -2,7 +2,7 @@
 
 ## Publication status
 
-This is upload-ready copy for the local v6 demo package. FlyLab's repository is licensed under Apache-2.0. The YouTube video and Devpost entry are not yet public; keep bracketed placeholders until their destinations have been opened and verified.
+This copy belongs to the prior local v6 demo package. That video predates the corrected Three.js arena fly and must not be uploaded. Regenerate the video and update its duration, chapters, thumbnail, and wording before publication. FlyLab's repository is licensed under Apache-2.0; the YouTube video and Devpost entry are not yet public.
 
 ## Recommended upload fields
 

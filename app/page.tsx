@@ -45,6 +45,7 @@ import {
 type Stage = 'discover' | 'hypothesize' | 'design' | 'run' | 'analyze' | 'continue' | 'saved';
 
 const FlyBrain3D = lazy(() => import('@/components/FlyBrain3D').then((module) => ({ default: module.FlyBrain3D })));
+const FlyArena3D = lazy(() => import('@/components/FlyArena3D').then((module) => ({ default: module.FlyArena3D })));
 
 interface ActivityItem {
   id: string;
@@ -541,11 +542,13 @@ export default function Home() {
     playheadRef.current = playhead;
   }, [playhead]);
 
+  const playbackDurationMs = lab.batch?.protocol.trialDurationMs ?? lab.experiment?.trialDurationMs ?? 5000;
+
   useEffect(() => {
     if (!playing) return;
-    const startedAt = performance.now() - playheadRef.current * 5000;
+    const startedAt = performance.now() - playheadRef.current * playbackDurationMs;
     const timer = window.setInterval(() => {
-      const next = (performance.now() - startedAt) / 5000;
+      const next = (performance.now() - startedAt) / playbackDurationMs;
       if (next >= 1) {
         setPlayhead(1);
         setPlaying(false);
@@ -554,7 +557,7 @@ export default function Home() {
       }
     }, 40);
     return () => window.clearInterval(timer);
-  }, [playing]);
+  }, [playing, playbackDurationMs]);
 
   const invoke = useCallback(async (name: string, input: Record<string, unknown>) => {
     const controller = new AbortController();
@@ -633,7 +636,7 @@ export default function Home() {
       batch_id: batch.id,
       metrics: ['backward_distance_mm', 'signed_speed_mm_s', 'response_latency_ms', 'heading_change_deg', 'stance_stability'],
       analysis_start_ms: 0,
-      analysis_end_ms: 5000,
+      analysis_end_ms: batch.protocol.trialDurationMs,
     });
   }, [invoke]);
 
@@ -803,11 +806,11 @@ export default function Home() {
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Shared simulation arena</p>
-              <h1 id="arena-title">{arenaView === 'circuit' ? <>BANC v888 circuit <span>· reconstruction view</span></> : <>Open-field trial <span>· dorsal view</span></>}</h1>
+              <h1 id="arena-title">{arenaView === 'circuit' ? <>BANC v888 circuit <span>· Three.js reconstruction</span></> : <>Open-field trial <span>· Three.js 3D fly</span></>}</h1>
             </div>
             <div className="view-switch" aria-label="Arena view">
               {(['body', 'circuit', 'trace'] as const).map((view) => (
-                <button className={arenaView === view ? 'active' : ''} type="button" onClick={() => setArenaView(view)} key={view}>{view}</button>
+                <button className={arenaView === view ? 'active' : ''} type="button" onClick={() => setArenaView(view)} key={view}>{{ body: '3D fly', circuit: '3D brain', trace: 'trajectory' }[view]}</button>
               ))}
             </div>
           </div>
@@ -820,8 +823,9 @@ export default function Home() {
               <span>{activeCondition?.label ?? 'Awaiting protocol'}</span>
               <strong>{activePoint?.active ? 'unitless MDN-inspired drive' : lab.batch ? 'replay' : 'preview'}</strong>
             </div>
+            {arenaView !== 'circuit' && <div className="arena-render-mode"><i /> Three.js WebGL <small>schematic external morphology</small></div>}
 
-            {arenaView !== 'circuit' && (activeCondition?.trajectory ?? []).slice(0, Math.max(1, Math.floor(playhead * 80))).filter((_, index) => index % 3 === 0).map((point, index) => (
+            {arenaView !== 'circuit' && (activeCondition?.trajectory ?? []).slice(0, Math.max(1, Math.ceil(playhead * (activeCondition?.trajectory.length ?? 0)))).filter((_, index) => index % 3 === 0).map((point, index) => (
               <i
                 className="trail-point"
                 key={`${point.t}-${index}`}
@@ -829,22 +833,17 @@ export default function Home() {
               />
             ))}
 
-            {arenaView !== 'circuit' && <div
-              className={`fly ${activePoint?.active ? 'activated' : ''}`}
-              style={{
-                left: `calc(50% + ${(activePoint?.x ?? 0) * 95}px)`,
-                top: `calc(50% - ${(activePoint?.y ?? 0) * 95}px)`,
-                transform: `translate(-50%, -50%) rotate(${activePoint?.heading ?? 4}deg)`,
-              }}
-              role="img"
-              aria-label={activeCondition ? `Representative ${activeCondition.label} virtual fly at ${Math.round(playhead * 5000)} milliseconds` : 'Stylized adult virtual fruit fly awaiting an experiment'}
-            >
-              <span className="wing wing-left" /><span className="wing wing-right" />
-              <span className="fly-head" /><span className="fly-body" />
-              <span className="leg l1" /><span className="leg l2" /><span className="leg l3" />
-              <span className="leg r1" /><span className="leg r2" /><span className="leg r3" />
-              <span className="activation-halo" />
-            </div>}
+            {arenaView !== 'circuit' && (
+              <Suspense fallback={<div className="fly-3d-fallback"><span className="agent-pulse" /> Loading Three.js fly…</div>}>
+                <FlyArena3D
+                  point={activePoint}
+                  conditionLabel={activeCondition?.label ?? 'Arena orientation preview'}
+                  timeMs={Math.round(playhead * playbackDurationMs)}
+                  playing={playing}
+                  traceMode={arenaView === 'trace'}
+                />
+              </Suspense>
+            )}
 
             {arenaView === 'circuit' && (
               <Suspense fallback={<div className="brain-viewer-fallback"><span className="agent-pulse" /> Loading the BANC v888 reconstruction viewer…</div>}>
@@ -852,7 +851,7 @@ export default function Home() {
                   laterality={activeCondition?.laterality ?? selectedCondition?.laterality ?? 'bilateral'}
                   driveActive={Boolean(activePoint?.active)}
                   conditionLabel={activeCondition?.label ?? selectedCondition?.label ?? 'Circuit orientation preview'}
-                  timeMs={Math.round(playhead * 5000)}
+                  timeMs={Math.round(playhead * playbackDurationMs)}
                 />
               </Suspense>
             )}
@@ -863,12 +862,12 @@ export default function Home() {
           <div className="playback-row">
             <button type="button" onClick={() => { setPlayhead(0); setPlaying(false); }} aria-label="Restart replay">↺</button>
             <button className="play-button" type="button" onClick={() => setPlaying((value) => !value)} disabled={!lab.batch} aria-label={playing ? 'Pause replay' : 'Play replay'}>{playing ? 'Ⅱ' : '▶'}</button>
-            <span>{Math.round(playhead * 5000)} ms</span>
-            <div className="timeline-track" aria-label="Five-second trial timeline">
+            <span>{Math.round(playhead * playbackDurationMs)} ms</span>
+            <div className="timeline-track" aria-label={`${playbackDurationMs}-millisecond trial timeline`}>
               <i className="stimulus-window" />
               <b style={{ left: `${playhead * 100}%` }} />
             </div>
-            <span>5,000 ms</span>
+            <span>{playbackDurationMs.toLocaleString()} ms</span>
           </div>
           <div className="timeline-labels"><span>baseline</span><strong>unitless MDN-inspired drive</strong><span>recovery</span></div>
 

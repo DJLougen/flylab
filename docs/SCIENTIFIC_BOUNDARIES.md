@@ -39,6 +39,14 @@ The current embodiment is **not**:
 
 The `activationLevel` value is a unitless internal control. It must not be reported as light power, firing rate, calcium activity, voltage, expression strength, or biological dose.
 
+## 3D arena-body boundary
+
+The open-field arena renders the representative animal as a procedural Three.js model. It includes the major adult external landmarks needed to read it as *Drosophila*: distinct head, thorax, and tapered segmented abdomen; two large compound eyes and three ocelli; paired branched aristae; one membranous wing pair plus two halteres; and six thorax-rooted legs. These landmark choices are informed by the adult scanning-electron-microscopy atlas from [Jürgens et al. (2024)](https://doi.org/10.1093/genetics/iyae129).
+
+The mesh is not a scan, specimen reconstruction, segmentation, morphometric dataset, or FlyGym/NeuroMechFly body. Dimensions, colors, materials, and fine geometry are visual approximations. The small alternating-tripod motion cue is informed by adult walking measurements from [Chun, Biswas & Bhandawat (2021)](https://doi.org/10.7554/eLife.65878), but it does not solve foot contacts, forces, joint dynamics, or backward-gait biomechanics. It must not be interpreted as a measured gait replay.
+
+Trajectory position, heading, condition, and model-drive timing come from the versioned reduced-order simulation. Decorative leg, antenna, and body motion does not feed back into that simulation. The purple ring indicates selection of the unitless model-drive target window, not neural activity or an optical stimulus.
+
 ## 3D circuit-view boundary
 
 The Three.js circuit view contains two geometry classes that must not be confused:

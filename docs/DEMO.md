@@ -1,10 +1,10 @@
-# FlyLab WebMCP challenge demo (v6)
+# FlyLab WebMCP challenge demo (prior v6 artifact)
 
 ## Artifact status
 
-The v6 challenge demo is a generated, narrated sequence of 12 FlyLab interface captures. It includes two captures of the interactive Three.js circuit view, but the exported video itself is not a continuous live screen recording.
+The v6 challenge demo is a generated, narrated sequence of 12 FlyLab interface captures. It includes two captures of the interactive Three.js circuit view, but it predates the corrected Three.js arena fly and is no longer submission-ready. Keep it as a reproducible prior artifact until a fresh capture set is generated after interface approval.
 
-The local video package is complete and verified at **2:15.821**, below the challenge's three-minute limit. Public YouTube upload and Devpost submission are still pending; do not replace the link placeholders or mark those steps complete until the public pages have been verified.
+The prior local package remains technically verified at **2:15.821**, below the challenge's three-minute limit. Do not upload it. Public YouTube upload and Devpost submission remain pending until the corrected interface has a regenerated, verified video.
 
 ## Delivery assets
 

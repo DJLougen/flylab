@@ -11,6 +11,7 @@ FlyLab is a WebMCP-enabled virtual neuroethology lab for investigating how an ad
 
 - Seven browser-native WebMCP tools that operate the same lab interface a person sees.
 - A curated, primary-source-backed adult MDN evidence path.
+- A procedural Three.js adult-fly arena model with six legs, one wing pair plus halteres, compound eyes, branched aristae, a segmented abdomen, replay-linked heading, and an explicitly schematic morphology boundary.
 - An orbitable Three.js CNS viewer with six reconstruction-derived BANC v888 neuron skeletons, camera presets, cell inspection, and replay-linked laterality highlighting.
 - A controlled protocol with baseline, model-sham, bilateral, left-only, and right-only conditions.
 - A hard human-approval gate before simulation.
@@ -86,6 +87,8 @@ An experiment stores its base seed. Replicate seeds are derived deterministicall
 
 The circuit viewer bundles simplified render assets derived from the six pinned BANC v888 L2 SWC skeletons. The asset manifest records every source URL, SHA-256 checksum, source node count, shared coordinate transform, and topology-preserving simplification rule. The neuron lines are reconstruction-derived; the translucent CNS envelope is explicitly schematic. Purple glow means the current FlyLab model targets that MDN during the replay window, while cyan marks its bundled structural LBL40 path. Neither means measured activity or signal propagation.
 
+The open-field view uses a procedural Three.js model, not a scanned animal or a biomechanical reconstruction. Its major visible landmarks are informed by the adult external-anatomy atlas from Jürgens et al.; its restrained alternating-tripod gait cue is informed by Chun et al. The body animation is display-only: trajectory position and heading still come exclusively from the versioned FlyLab reduced-order model.
+
 The exact six-neuron/four-edge table slice is independently reproducible from the two pinned BANC Feather files. See [Reproducing the BANC v888 circuit slice](docs/BANC_SLICE_REPRODUCIBILITY.md) for source hashes, the read-only verification command, extraction rules, and the small canonical artifact used to test the runtime records.
 
 See [Scientific Boundaries](docs/SCIENTIFIC_BOUNDARIES.md) for the complete interpretation rules.
@@ -102,6 +105,8 @@ FlyLab ships a small curated evidence catalog rather than live literature retrie
 - [Bates et al., *Nature* (2026)](https://doi.org/10.1038/s41586-026-10735-w) — BANC structural context. FlyLab pins the [BANC Dataverse version 3.0 / `banc_888` snapshot](https://doi.org/10.7910/DVN/7WTH1N), licensed CC BY 4.0, with source-file checksums; FlyLab's two cited Feather inputs are unrestricted, while the broader deposit has mixed file-level access. The official [BANC released-data documentation](https://github.com/htem/bancpipeline#released-data-products) identifies the L2 SWC skeleton products used by the viewer.
 - [FlyEM MANC `manc:v1.2.1`](https://www.janelia.org/project-team/flyem/manc-connectome) — reference matches to a separate adult male ventral nerve cord specimen; CC BY 4.0. Matching IDs do not identify the same physical cells as the female BANC specimen.
 - [Wang-Chen et al., *Nature Methods* (2024)](https://doi.org/10.1038/s41592-024-02497-y) — NeuroMechFly v2/FlyGym publication. The pinned [FlyGym v2.1.0 release](https://github.com/NeLy-EPFL/flygym/releases/tag/v2.1.0) is Apache-2.0; FlyLab uses it as an embodiment reference and does not execute it.
+- [Jürgens et al., *Genetics* 228:iyae129 (2024)](https://doi.org/10.1093/genetics/iyae129) — scanning-electron-microscopy atlas used as a reference for the schematic arena fly's major adult external landmarks.
+- [Chun, Biswas & Bhandawat, *eLife* 10:e65878 (2021)](https://doi.org/10.7554/eLife.65878) — adult walking kinematics used only to guide the display-level alternating-tripod gait cue.
 
 FlyLab's original source code and documentation are licensed under the [Apache License 2.0](LICENSE). Third-party data and software retain their own terms; those licenses do not become FlyLab's license and FlyLab's license does not replace theirs.
 
@@ -118,6 +123,7 @@ FlyLab's original source code and documentation are licensed under the [Apache L
 - `lib/evidence-export.ts` — portable evidence-envelope schema, serialization, and filename helpers
 - `lib/webmcp.ts` — seven tool contracts, validation, result envelopes, and registration lifecycle
 - `components/FlyBrain3D.tsx` — Three.js BANC morphology viewer and accessible six-neuron inspector
+- `components/FlyArena3D.tsx` — procedural Three.js adult-fly arena renderer and replay-linked pose
 - `scripts/build-banc-morphology.mjs` — reproducible SWC download, checksum, transform, and render-asset build
 - `app/page.tsx` — shared human-agent laboratory interface and approval boundary
 - `tests/` — deterministic model and WebMCP contract tests

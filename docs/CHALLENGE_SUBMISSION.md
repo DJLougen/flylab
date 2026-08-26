@@ -1,6 +1,6 @@
 # WebMCP Challenge submission
 
-The live application and public source links below have been verified. The repository is licensed under Apache-2.0. A 2:15.821 narrated v6 demo has been generated locally from 12 FlyLab interface captures, including the Three.js BANC circuit view. Public YouTube upload and Devpost publication are still pending.
+The live application and public source links below have been verified. The repository is licensed under Apache-2.0. The prior 2:15.821 narrated v6 demo predates the Three.js arena-fly upgrade and is retained only as an earlier build artifact; a fresh demo must be generated after the corrected interface is approved. Public YouTube upload and Devpost publication are still pending.
 
 Submission deadline: **September 3, 2026 at 1:00 p.m. PDT**.
 
@@ -27,6 +27,8 @@ The person and agent share the same laboratory state. The agent can gather cited
 FlyLab's current embodiment is a deterministic reduced-order model, version `0.1.1`, with the MDN-inspired `mdn-inspired-retreat-adapter.v1`. It is not FlyGym, a complete fly brain, or a wet-lab experiment. Sources, assumptions, dataset and model versions, seeds, run IDs, analyses, limitations, and a manifest hash are saved together so a compelling result never loses its boundary. The WebMCP surface follows OpenAI's [Site tools documentation](https://learn.chatgpt.com/docs/webmcp).
 
 The circuit view is an orbitable Three.js rendering of six real, pinned BANC v888 L2 skeleton reconstructions—four MDNs and two LBL40 cells—with camera presets and accessible cell inspection. Purple replay illumination marks the MDNs receiving the selected unitless model drive; cyan marks bundled connectome-inferred structural LBL40 paths. These encodings are not measured neural activity or biological signal propagation. The surrounding CNS shell is explicitly schematic.
+
+The open-field arena now renders the adult fly itself in Three.js. Its major external landmarks are research-informed, while its mesh and decorative gait remain explicitly schematic. The replayed position, heading, and target window come from the reduced-order simulation; the body is not a scan, a FlyGym execution, or a biomechanical reconstruction.
 
 **Problem**
 
@@ -80,6 +82,7 @@ find evidence
 - Baseline, model-sham, bilateral, left-only, and right-only conditions
 - A pinned BANC `banc_888` slice with checksummed source files, four proofread MDN rows, two LBL40 rows, and four selected directed MDN→LBL40 edge rows
 - Six checksummed, reconstruction-derived BANC v888 SWC render assets in an interactive Three.js circuit viewer
+- A procedural Three.js adult-fly arena model with research-informed external landmarks and an explicit schematic boundary
 - Deterministic seeded virtual trials
 - Five method-versioned behavior metrics
 - Five-class provenance model
@@ -158,7 +161,7 @@ See [DEMO.md](DEMO.md) for the generated 12-frame narration and cue sheet, and [
 - [x] Confirm the saved bundle displays an ID and manifest hash.
 - [x] Confirm every linked scientific URL resolves to the intended primary page, allowing for publisher anti-bot interstitials where DOI and authoritative metadata independently confirm the destination. See [source verification](SOURCE_VERIFICATION.md).
 - [x] Confirm no copy or narration claims actual FlyGym execution or new biological results.
-- [x] Generate a 2:15.821 narrated 12-frame MP4 with Three.js BANC reconstruction views, English captions, thumbnail, and gallery stills.
+- [ ] Regenerate the narrated under-three-minute MP4 after approval of the Three.js arena-fly correction; include the Three.js BANC reconstruction view, English captions, thumbnail, and gallery stills.
 - [x] Add an owner-approved Apache-2.0 `LICENSE` file that Devpost can detect at the top of the repository.
 - [ ] Publish a public YouTube demo under three minutes with audio.
 - [ ] Verify the YouTube video in a signed-out browser, then replace `[YOUTUBE_DEMO_URL]`.
