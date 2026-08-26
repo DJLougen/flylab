@@ -110,6 +110,7 @@ FlyLab's own distribution terms should be taken from the repository license, if 
 - [Challenge demo](docs/DEMO.md)
 - [WebMCP verification](docs/WEBMCP_VERIFICATION.md)
 - [Scientific boundaries](docs/SCIENTIFIC_BOUNDARIES.md)
+- [Scientific source verification](docs/SOURCE_VERIFICATION.md)
 - [BANC v888 slice reproducibility](docs/BANC_SLICE_REPRODUCIBILITY.md)
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 - [Challenge submission copy](docs/CHALLENGE_SUBMISSION.md)

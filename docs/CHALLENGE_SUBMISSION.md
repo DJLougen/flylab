@@ -156,7 +156,7 @@ See [DEMO.md](DEMO.md) for the generated 12-frame narration and cue sheet, and [
 - [x] Confirm the result and evidence badges remain visible in the recording.
 - [x] Confirm the follow-up proposal is not executed.
 - [x] Confirm the saved bundle displays an ID and manifest hash.
-- [ ] Confirm every linked scientific URL resolves to the intended primary page.
+- [x] Confirm every linked scientific URL resolves to the intended primary page, allowing for publisher anti-bot interstitials where DOI and authoritative metadata independently confirm the destination. See [source verification](SOURCE_VERIFICATION.md).
 - [x] Confirm no copy or narration claims actual FlyGym execution or new biological results.
 - [x] Generate a 2:15.821 narrated 12-frame MP4 with Three.js BANC reconstruction views, English captions, thumbnail, and gallery stills.
 - [ ] Add an owner-approved open-source `LICENSE` file that Devpost can detect at the top of the repository.
