@@ -1,6 +1,6 @@
 # Reproducing the BANC v888 circuit slice
 
-FlyLab's runtime uses a deliberately small structural slice of the BANC version 3.0 `banc_888` release: four MDNs, two LBL40 cells, and the four directed MDN→LBL40 rows between them. The checked-in canonical extraction is [`data/banc-v888-mdn-lbl40-slice.json`](../data/banc-v888-mdn-lbl40-slice.json). The large Feather source files are not part of this repository.
+FlyLab's runtime uses a deliberately small structural slice of the BANC version 3.0 `banc_888` release: four MDNs, two LBL40 cells, and the four directed MDN→LBL40 rows between them. Those rows total 153 v3-predicted synaptic links after the released postsynapse-size ≥10-voxel filter. The v3 product is supplied for future work; the Bates et al. paper analyses use v2 with a ≥5-voxel filter. These counts are structural predictions, not physiology, activity, connection probability, or causal efficacy. The checked-in canonical extraction is [`data/banc-v888-mdn-lbl40-slice.json`](../data/banc-v888-mdn-lbl40-slice.json). The large Feather source files are not part of this repository.
 
 ## Source inputs
 
@@ -26,8 +26,8 @@ The default mode is read-only. It checks both source sizes, MD5 hashes, and SHA-
 
 1. selects every metadata row whose `cell_type` is exactly `MDN` or `LBL40`;
 2. verifies that this produces the pinned four-MDN/two-LBL40 inventory and normalizes the Feather boolean strings;
-3. selects directed edges whose `pre` is one of those MDNs and whose `post` is one of those LBL40 cells;
-4. verifies the exact four `(pre, post, count)` tuples and their 153-contact total; and
+3. selects directed rows whose `pre` is one of those MDNs and whose `post` is one of those LBL40 cells;
+4. verifies the exact four `(pre, post, count)` tuples and their 153-v3-predicted-link total; and
 5. performs a byte-for-byte comparison with the canonical JSON artifact.
 
 To deliberately regenerate the small artifact after reviewing a source or extraction change, add `--write`:
@@ -37,4 +37,4 @@ python3 scripts/verify-banc-v888-slice.py /path/to/banc-v888-files --write
 npm test
 ```
 
-The focused provenance tests compare every canonical cell, edge, source-file pin, and contact total with `lib/mdn-banc.ts`. They also derive the left, right, and bilateral selections from the artifact and compare them with `lib/fly-brain.ts`. This creates a checked chain from the pinned raw release to the data used by the viewer.
+The focused provenance tests compare every canonical cell, directed row, source-file pin, and predicted-link total with `lib/mdn-banc.ts`. They also derive the left, right, and bilateral selections from the artifact and compare them with `lib/fly-brain.ts`. This creates a checked chain from the pinned raw release to the data used by the viewer.

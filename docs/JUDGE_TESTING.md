@@ -5,7 +5,8 @@ FlyLab is public, requires no account, and exposes exactly eight imperative WebM
 - Live application: <https://flylab-neuroethology.d-lougen.chatgpt.site/>
 - Public source: <https://github.com/DJLougen/flylab>
 - Challenge-period source proof: [first public commit, August 26, 2026](https://github.com/DJLougen/flylab/commit/a45eb82ad29d62a1bf7afc0aff89f71a70384db9)
-- Release verification: [successful public CI run](https://github.com/DJLougen/flylab/actions/runs/33013840575)
+- Release commit: [`2228833e0c10f9985ca5916dc47b01a4de2cf169`](https://github.com/DJLougen/flylab/commit/2228833e0c10f9985ca5916dc47b01a4de2cf169)
+- Release verification: [successful public CI run with 58 automated tests](https://github.com/DJLougen/flylab/actions/runs/33015936229)
 
 The complete path takes about three minutes. It intentionally pauses once at a visible approval control that is absent from the WebMCP tool surface.
 
@@ -35,15 +36,23 @@ Confirm these eight names:
 
 `inspect_flylab_state` is the sole read-only tool. Human approval is deliberately not a ninth tool.
 
+## Expected v2 agent contracts
+
+- Every successful tool call returns `structuredContent.result_version: flylab.tool-result.v2` and a field-level `structuredContent.provenance_manifest`. The top-level provenance list is only the union summary; the manifest is authoritative for the scientific scope of individual result fields.
+- `inspect_flylab_state` returns `structuredContent.data.agent_context.schema_version: flylab.agent-context.v2`. Its `structuredContent.data.agent_context.artifact_manifest` recovers the current scientific artifacts and lineage independently of the operational artifact-ID fields, and `structuredContent.data.agent_context.provenance_policy` states the inheritance, operational-metadata, and untrusted-annotation boundaries.
+- `save_fly_evidence` returns the exact envelope at `structuredContent.data.evidence_export`, prepared and committed for the reported bundle, together with the bundle metadata, media type, and filename. The returned envelope—not a reconstructed approximation—is the portable evidence artifact available from the ledger.
+
 ## Optional rollout-dependent ChatGPT agent-driven workflow test
 
 Run this section only when the current ChatGPT model, account, workspace, and app expose Site Tools. Otherwise use the complete Chrome sequence above; an unavailable ChatGPT rollout does not imply that FlyLab registered a fallback transport or failed the verified Chrome path.
 
 Ask the agent to call `inspect_flylab_state`. A fresh page should report:
 
-- `agent_status: ready`
-- `next_tool: find_fly_circuits`
-- one monotonic page revision
+- `structuredContent.data.agent_context.schema_version: flylab.agent-context.v2`
+- `structuredContent.data.agent_context.agent_status: ready`
+- `structuredContent.data.agent_context.next_tool: find_fly_circuits`
+- one monotonic page revision at `structuredContent.data.agent_context.state.revision`
+- an empty `structuredContent.data.agent_context.artifact_manifest` plus the explicit `structuredContent.data.agent_context.provenance_policy`; subsequent inspections populate the manifest as scientific artifacts are created
 - fixed, nullable artifact fields rather than omitted keys
 
 Then use this prompt:
@@ -71,6 +80,7 @@ Expected behavior:
 - All five metrics remain visible. A condition with no responses uses JSON `null` and UI `n/a`, reports `0/n responsive`, and never substitutes the trial duration as a latency value. Responsive-condition latency is averaged over responsive runs and displays `responsiveN/n` separately.
 - The proposed follow-up uses the visible five-replicate budget and is not executed.
 - The evidence ledger shows an evidence-bundle ID and `sha256:` manifest hash.
+- The save result contains the exact `evidence_export` envelope for that bundle, and its tool result remains `flylab.tool-result.v2` with a field-level `provenance_manifest`.
 - A final inspection reports `agent_status: complete`, `state.stage: saved`, `next_tool: null`, and `next_action.kind: complete`.
 
 ## Recovery test
@@ -92,7 +102,9 @@ Repeating the exact workflow preserves canonical experiment and analysis identit
 
 FlyLab runs its deterministic, hand-authored reduced-order model `0.1.3`; it does not run FlyGym, infer biological neural activity, simulate the full BANC connectome, or report a wet-lab result. Model distances and speeds are uncalibrated model-scale units. The five evidence labels are `measured`, `derived`, `connectome_inferred`, `simulation_predicted`, and `agent_hypothesized`.
 
-For automated verification, run:
+The current pinned BANC boundary is four directed MDN→LBL40 rows totaling 153 **v3-predicted synaptic links** after the released postsynapse-size ≥10-voxel filter. This is the Dataverse v3 future-work product; the Bates et al. paper analyses use v2 with a ≥5-voxel filter. These specimen-level structural counts are not physiological weights, connection probabilities, activity measurements, or causal efficacy, and FlyLab does not assign the retained `norm` field a biological interpretation.
+
+The release contains 58 automated tests. For local verification, run:
 
 ```bash
 npm ci

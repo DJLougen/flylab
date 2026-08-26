@@ -149,7 +149,7 @@ Run `save_fly_evidence`:
 }
 ```
 
-Expected: the page's evidence ledger shows a stable bundle ID and a `sha256:` manifest hash.
+Expected: the tool result contains derived bundle metadata at `data.bundle` and the complete portable export envelope—including its full payload—at `data.evidence_export`. The page's evidence ledger shows the same stable bundle ID and a `sha256:` manifest hash.
 
 Run `inspect_flylab_state` once more. Expected: `agent_status: complete`, `state.stage: saved`, `next_tool: null`, and `next_action.kind: complete`.
 

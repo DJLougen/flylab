@@ -50,11 +50,11 @@ const segments = [
   },
   {
     frame: '06-circuit-bilateral-active.png',
-    narration: 'The 3D circuit renders six BANC version eight eighty-eight L two skeleton reconstructions: four M D Ns and two L B L forties. Purple marks bilateral model targets; cyan marks four directed structural edges and one hundred fifty-three putative contacts.',
+    narration: 'The 3D circuit renders six BANC version eight eighty-eight L two skeleton reconstructions: four M D Ns and two L B L forties. Purple marks model targets; cyan marks four v three edge rows totaling one hundred fifty-three predicted synaptic links, not physiology.',
   },
   {
     frame: '07-circuit-left-active.png',
-    narration: 'Left-only selects two metadata-left M D Ns and the connectome-inferred right L B L forty target, totaling one hundred three contacts. The shell is schematic; glow is model selection, not measured activity.',
+    narration: 'Left-only selects two metadata-left M D Ns and the connectome-inferred right L B L forty target, totaling one hundred three v three predicted links. The shell is schematic; glow is model selection, not measured activity.',
   },
   {
     frame: '08-behavior-analysis.png',
@@ -66,11 +66,11 @@ const segments = [
   },
   {
     frame: '10-evidence-saved.png',
-    narration: 'The saved bundle exposes its identifier and manifest hash, separates supporting claim evidence from model-method evidence, and lists the exact source IDs behind both.',
+    narration: 'The save tool returns the exact portable evidence export. Its identifier, manifest hash, field-level provenance, source closure, seeds, runs, analysis, comparison, and bounded proposal remain recoverable by the agent.',
   },
   {
     frame: '11-evidence-ledger.png',
-    narration: 'Selecting the pinned connectome record shows its connectome-inferred label, anatomical-contact boundary, and primary source, separate from measured findings and derived model context.',
+    narration: 'Selecting the pinned connectome record shows its connectome-inferred label, v three prediction boundary, and source support role, separate from measured findings and derived model context.',
   },
   {
     frame: '12-protocol-edit-invalidates-results.png',

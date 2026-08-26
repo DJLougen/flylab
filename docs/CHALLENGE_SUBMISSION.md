@@ -1,12 +1,14 @@
 # WebMCP Challenge submission
 
-The current agent-first candidate is deployed publicly and has passed the complete Chrome 151 WebMCP workflow against the live HTTPS URL. The repository is public, licensed under Apache-2.0, reproducible from a fresh public clone, and configured with public CI. The current 13-frame page sequence is verified, but the two headed-browser WebMCP proof composites and rights-cleared narration still require interface approval and recording. Public YouTube upload and Devpost publication are pending.
+The current agent-native candidate is deployed publicly and has passed the complete Chrome 151 WebMCP workflow against the live HTTPS URL. The repository is public, licensed under Apache-2.0, reproducible from a fresh public clone, and configured with public CI. The tested demo preflight requires exactly 15 frames—13 page-state frames plus two headed-browser WebMCP proof composites—and 15 rights-cleared narration clips; it fails closed until those inputs, narration rights, and explicit interface approval are present. The final inputs have not been assembled, and public YouTube upload and Devpost publication remain pending.
 
 Submission deadline: **September 3, 2026 at 1:00 p.m. PDT**, as shown by the [OpenAI challenge page](https://openai.com/webmcp-challenge/) and the binding [Devpost official rules](https://webmcp.devpost.com/rules).
 
-FlyLab was created on August 26, 2026 during the challenge period. The dated [first public commit](https://github.com/DJLougen/flylab/commit/a45eb82ad29d62a1bf7afc0aff89f71a70384db9) records the initial challenge build, and the current release candidate's [public CI run](https://github.com/DJLougen/flylab/actions/runs/33013840575) passed exact dependency installation, all 57 tests, lint, production build, and dependency audit. Its primary audience is a computational-neuroethology researcher or educator reviewing a source-backed virtual MDN experiment. The concrete failure it prevents is an agent silently continuing from stale page state or presenting a simulation result after its evidence lineage, protocol, or human approval has changed. Agent-tool builders are a secondary audience.
+FlyLab was created on August 26, 2026 during the challenge period. The dated [first public commit](https://github.com/DJLougen/flylab/commit/a45eb82ad29d62a1bf7afc0aff89f71a70384db9) records the initial challenge build. The deployed agent-native application at [commit `2228833`](https://github.com/DJLougen/flylab/commit/2228833e0c10f9985ca5916dc47b01a4de2cf169) has a [successful public CI run](https://github.com/DJLougen/flylab/actions/runs/33015936229) covering exact dependency installation, all 58 tests, lint, production build, and dependency audit. Its primary audience is a computational-neuroethology researcher or educator reviewing a source-backed virtual MDN experiment. The concrete failure it prevents is an agent silently continuing from stale page state or presenting a simulation result after its evidence lineage, protocol, or human approval has changed. Agent-tool builders are a secondary audience.
 
-## Submission fields
+## Prepared submission copy
+
+The available Devpost session is logged out, so the exact field labels inside the authenticated submission form have not been inspected. The headings below organize prepared copy only; they do not claim to reproduce Devpost's private form labels, and submission is not complete.
 
 **Project name**
 
@@ -24,11 +26,11 @@ FlyLab gives agents one read-only state inspector and seven WebMCP scientific ac
 
 FlyLab is an agent-native virtual neuroethology lab built around a scientifically transparent adult *Drosophila* MDN backward-walking vertical slice. Instead of asking an agent to guess its way through a complex brain viewer, the site exposes one read-only control-plane inspector plus seven structured scientific actions: find curated circuits, draft a falsifiable hypothesis, design controls, run an approved simulation, quantify behavior, compare trials, and save the evidence lineage.
 
-The person and agent share the same open-page state. `inspect_flylab_state` lets an agent recover the current monotonic revision, artifact IDs, discovered evidence, hypothesis perturbation, analysis metric sets, exact comparison lineage, person-selected limits, blocker, and one valid next action after a person edit or interruption—without scraping the interface. The agent can gather cited evidence and prepare a protocol with mandatory baseline/model-sham controls, but simulation is locked until the person reviews and approves the exact visible identifiers and parameters. While blocked, the inspector returns `waiting_for_human` and no callable next tool. If the person edits the protocol, approval and downstream results are cleared. Long preparations compare their captured revision with live state; `STALE_STATE` publishes nothing and directs the agent back to the inspector. After execution, the illustrative condition replay remains a simulation prediction while behavior cards are labeled as derived aggregates of separate simulation-generated per-run summaries. The agent can propose a bounded follow-up, but it cannot execute that proposal automatically.
+The person and agent share the same open-page state. `inspect_flylab_state` returns `flylab.agent-context.v2`: operational recovery state plus an `artifact_manifest` containing the current scientific artifacts and compact lineage. It lets an agent recover the current monotonic revision, compact artifact records rather than bare IDs, discovered evidence, hypothesis perturbation, analysis metric sets, exact comparison lineage, person-selected limits, blocker, and one valid next action after a person edit or interruption—without scraping the interface. The agent can gather cited evidence and prepare a protocol with mandatory baseline/model-sham controls, but simulation is locked until the person reviews and approves the exact visible identifiers and parameters. While blocked, the inspector returns `waiting_for_human` and no callable next tool. If the person edits the protocol, approval and downstream results are cleared. Long preparations compare their captured revision with live state; `STALE_STATE` publishes nothing and directs the agent back to the inspector. After execution, the illustrative condition replay remains a simulation prediction while behavior cards are labeled as derived aggregates of separate simulation-generated per-run summaries. The agent can propose a bounded follow-up, but it cannot execute that proposal automatically.
 
 FlyLab's current embodiment is a deterministic reduced-order model, version `0.1.3`, with the MDN-inspired `mdn-inspired-retreat-adapter.v2`. Its numeric parameters are hand-authored and uncalibrated; the public [model card](MODEL_CARD.md) gives every equation and constant. It is not FlyGym, a complete fly brain, or a wet-lab experiment. Sources, assumptions, dataset and model versions, seeds, run IDs, analyses, limitations, and a manifest hash are saved together so a compelling result never loses its boundary. The WebMCP surface follows OpenAI's [Site tools documentation](https://learn.chatgpt.com/docs/webmcp).
 
-The circuit view is an orbitable Three.js rendering of six real, pinned BANC v888 L2 skeleton reconstructions—four MDNs and two LBL40 cells—with camera presets and accessible cell inspection. Purple replay illumination marks the MDNs receiving the selected unitless model drive; cyan marks bundled connectome-inferred structural LBL40 paths. These encodings are not measured neural activity or biological signal propagation. The surrounding CNS shell is explicitly schematic.
+The circuit view is an orbitable Three.js rendering of six pinned, reconstruction-derived BANC v888 L2 skeletons—four MDNs and two LBL40 cells—with camera presets and accessible cell inspection. Purple replay illumination marks the MDNs receiving the selected unitless model drive; cyan marks four directed MDN→LBL40 structural rows totaling 153 v3-predicted synaptic links after the released postsynapse-size ≥10-voxel filter. This v3 future-work product differs from the v2 ≥5-voxel product used in the BANC paper analyses. Neither the link counts nor the visual encodings are measured neural activity, physiological weights, connection probabilities, causal efficacy, or biological signal propagation. The surrounding CNS shell is explicitly schematic.
 
 The open-field arena now renders the adult fly itself in Three.js. Its major external landmarks are research-informed, while its mesh and decorative gait remain explicitly schematic. The replayed position, heading, and target window come from the reduced-order simulation; the body is not a scan, a FlyGym execution, or a biomechanical reconstruction.
 
@@ -61,10 +63,22 @@ The official rules weight four criteria equally. FlyLab's evidence for each is:
 
 | Criterion | FlyLab evidence |
 |---|---|
-| **WebMCP Leverage** | Eight non-trivial page-registered tools expose the scientific workflow at the operation level rather than reproducing UI clicks. They share the visible page revision, exact artifact lineage, human approval blocker, cancellation boundary, structured recovery, and one valid next action. |
+| **WebMCP Leverage** | Eight non-trivial page-registered tools expose the scientific workflow at the operation level rather than reproducing UI clicks. `flylab.tool-result.v2` and `flylab.agent-context.v2` share the visible page revision, field-addressed scientific provenance, current artifact manifest, exact lineage, human approval blocker, cancellation boundary, structured recovery, and one valid next action. |
 | **Execution** | The no-login HTTPS application delivers a coherent adult MDN vertical slice with an interactive Three.js arena and circuit viewer, controlled seeded simulation, analysis, bounded follow-up, and evidence export. The release is covered by public CI and a complete Chrome 151 WebMCP workflow against the deployed site. |
 | **Potential Impact** | FlyLab addresses a specific failure for neuroscience researchers and educators: agents can no longer silently blur measured findings, derived summaries, connectome structure, simulation predictions, and new hypotheses or continue from stale experimental state. |
 | **Creativity & Ambition** | One shared browser instrument combines source-backed neuroethology, reconstruction-derived 3D cells, a deterministic experiment state machine, provenance-preserving evidence bundles, and a deliberately non-tool human review gate. |
+
+## Public requirements and prepared artifacts
+
+This maps the requirements visible on the public challenge page and rules to the release materials already prepared. It is a readiness map, not a claim that the final entry has been submitted.
+
+| Public requirement | Prepared artifact or current status |
+|---|---|
+| Working WebMCP project | The no-login [live application](https://flylab-neuroethology.d-lougen.chatgpt.site) and [Chrome workflow verification](WEBMCP_VERIFICATION.md) exercise all eight page-registered tools. |
+| Public source code | The [public repository](https://github.com/DJLougen/flylab), Apache-2.0 license, reproducibility instructions, and [passing release CI](https://github.com/DJLougen/flylab/actions/runs/33015936229) are prepared. |
+| Public demo video under three minutes with audio | The [15-frame demo plan and fail-closed preflight](DEMO.md), narration plan, rights gate, captions, and [YouTube metadata template](YOUTUBE_DESCRIPTION.md) are prepared; approved frames, rights-cleared audio, final MP4, upload, and signed-out playback verification remain pending. |
+| Clear explanation and judge access | This submission copy, [judge instructions](JUDGE_TESTING.md), public agent manifest, and generated machine-readable tool contract describe the WebMCP workflow, supervisor gate, recovery semantics, and scientific boundaries. |
+| Final challenge entry with working app, repository, and video links | App and repository URLs are prepared; the video and entry URLs remain placeholders. The available Devpost session is logged out, so its exact authenticated field labels remain uninspected and are not invented here. |
 
 ## WebMCP implementation
 
@@ -79,7 +93,11 @@ FlyLab registers exactly eight tools using the current `document.modelContext` A
 7. `compare_fly_trials`
 8. `save_fly_evidence`
 
-The tools use closed object schemas, strict runtime validation, standard `readOnlyHint` and `untrustedContentHint` annotations, cancellable execution, monotonic shared revisions, structured domain failures, and AbortSignal-owned registration lifecycle. The inspector is the sole read-only action and returns operational state with no scientific provenance. Discovery evidence, hypothesis, trial target/perturbation, batch, analysis metric sets, comparison, and save inputs are validated as one exact lineage. State-changing laboratory actions remain distinct, and externally sourced or person-authored text is marked untrusted.
+The tools use closed object schemas, strict runtime validation, standard `readOnlyHint` and `untrustedContentHint` annotations, cancellable execution, monotonic shared revisions, structured domain failures, and AbortSignal-owned registration lifecycle. Every success uses the `flylab.tool-result.v2` envelope. Its top-level `provenance` array is only the unique label union for the result; `flylab.provenance-manifest.v1` assigns labels, artifact IDs, parents, evidence IDs, source IDs, and scientific boundaries to RFC 6901 paths within `structuredContent.data`. A manifest entry applies to its scientific subtree unless a more specific nested entry overrides it. Declared operational paths do not inherit scientific provenance, and caller-supplied titles, goals, and notes remain untrusted administrative annotations excluded from scientific provenance counts.
+
+The inspector is the sole read-only action. Its `flylab.agent-context.v2` response separates operational recovery state from `artifact_manifest`, which carries field-auditable records for the selected circuit, discovered evidence, hypothesis, experiment, batch, analyses, comparison, and evidence bundle when present. Discovery evidence, hypothesis, trial target/perturbation, batch, analysis metric sets, comparison, and save inputs are validated as one exact lineage. State-changing laboratory actions remain distinct, and externally sourced or person-authored text is marked untrusted.
+
+`save_fly_evidence` returns the portable `flylab.evidence-export` version 2 object directly in `structuredContent.data.evidence_export`; it is not reconstructed later from the interface. That exact returned object contains `bundle`, `integrity`, and `payload`. The bundle and integrity records carry the SHA-256 of `JSON.stringify(payload)`, while the payload preserves the selected circuit, hypothesis, controlled experiment and condition IDs, batch and run IDs, analyses, comparison and unexecuted proposal, evidence/source partitions, field-addressed provenance manifest, and untrusted administrative annotation. The bundle also publishes `provenanceIndex`, `provenanceCounts`, and `lineageEdges`; the untrusted annotation is included for auditability but excluded from scientific provenance and scientific lineage.
 
 The canonical workflow is:
 
@@ -101,7 +119,7 @@ inspect shared page state
 
 - Curated adult MDN evidence records with primary-source links
 - Schema- and runtime-mandatory baseline/model-sham controls; bilateral designs add left-only and right-only comparisons
-- A pinned BANC `banc_888` slice with checksummed source files, four proofread MDN rows, two LBL40 rows, and four selected directed MDN→LBL40 edge rows
+- A pinned BANC Dataverse version 3.0 `banc_888` slice with checksummed source files, four proofread MDN rows, two LBL40 rows, and four selected directed MDN→LBL40 rows totaling 153 v3-predicted synaptic links after the postsynapse-size ≥10-voxel filter; this future-work v3 product is distinct from the paper's v2 ≥5-voxel analyses
 - Six checksummed, reconstruction-derived BANC v888 SWC render assets in an interactive Three.js circuit viewer
 - A procedural Three.js adult-fly arena model with research-informed external landmarks and an explicit schematic boundary
 - Deterministic seeded virtual trials
@@ -109,8 +127,8 @@ inspect shared page state
 - Five-class provenance model
 - Visible human-approval boundary
 - Bounded next-experiment proposal
-- Exact-lineage evidence bundle with separately scoped hypothesis-support and model-method source closures, model manifests, and hash
-- 57 automated tests for the model, model-card parity, recovery state machine, claim-compatible evidence gating, evidence export, synchronized public agent manifest and generated contract document, unsupported/active transport handoffs, absent-API fail-closed behavior, WebMCP contracts, and publication-safe submission assets and preflight gates
+- Exact-lineage evidence bundle and directly returned portable evidence export with separately scoped hypothesis-support, circuit-context, and model-method source closures, field-addressed provenance, lineage edges, model manifests, and payload hash
+- 58 automated tests for the model, model-card parity, recovery state machine, claim-compatible evidence gating, exact evidence export, synchronized public agent manifest and generated contract document, unsupported/active transport handoffs, absent-API fail-closed behavior, WebMCP v2 contracts, and publication-safe 15-frame submission preflight gates
 
 **Not claimed**
 
@@ -124,11 +142,11 @@ FlyGym is a future adapter path, not a hidden dependency or current runtime clai
 
 ## Reproducibility and provenance
 
-The same protocol and seed reproduce the same experiment, runs, trajectories, and run hash. Changing the seed changes the generated runs. Saving requires the current hypothesis, experiment, sole batch, comparison, and exactly the comparison's complete analysis set. Every saved bundle includes:
+The same protocol and seed reproduce the same experiment, runs, trajectories, and run hash. Changing the seed changes the generated runs. Saving requires the current hypothesis, experiment, sole batch, comparison, and exactly the comparison's complete analysis set. Every saved bundle and its exact returned `evidence_export` include:
 
 - the hypothesis's exact supporting source/evidence closure
 - a separately scoped model-method evidence/source closure in which the local model card defines the method and FlyGym remains an embodiment reference
-- provenance labels
+- a five-label `provenanceIndex`, matching counts, field-addressed `provenanceManifest`, and explicit lineage edges
 - hypothesis and falsification criterion
 - exact controlled protocol
 - model/controller/environment versions and assumptions
@@ -136,7 +154,7 @@ The same protocol and seed reproduce the same experiment, runs, trajectories, an
 - run IDs and run hash
 - analysis method version and complete predefined required metric panel
 - comparison and non-authorized follow-up proposal
-- evidence-bundle manifest hash
+- the evidence-export payload manifest hash, repeated in the bundle and integrity record
 
 The five labels are `measured`, `derived`, `connectome_inferred`, `simulation_predicted`, and `agent_hypothesized`.
 
@@ -146,7 +164,7 @@ The five labels are `measured`, `derived`, `connectome_inferred`, `simulation_pr
 - [Sen et al., *Current Biology* (2017)](https://doi.org/10.1016/j.cub.2017.02.008) — acute and stochastic adult MDN activation assays; Elsevier copyright.
 - [Feng et al., *Nature Communications* (2020)](https://doi.org/10.1038/s41467-020-19936-x) — MDN-induced backward-walking motor circuits; CC BY 4.0.
 - [Cande et al., *eLife* (2018)](https://doi.org/10.7554/eLife.34275) — broad descending-neuron screen; CC BY 4.0. The [Dryad version 1 dataset](https://doi.org/10.5061/dryad.fr89c0c) is CC0-1.0.
-- [Bates et al., *Nature* (2026)](https://doi.org/10.1038/s41586-026-10735-w) — BANC article context. The pinned [BANC static dataset, Harvard Dataverse version 3.0 / `banc_888`](https://doi.org/10.7910/DVN/7WTH1N) is CC BY 4.0. FlyLab uses two unrestricted Feather inputs and six simplified L2 SWC render derivatives; changes are one shared coordinate transform and topology-preserving simplification. The broader deposit has mixed file-level access. Full modification notices are in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
+- [Bates et al., *Nature* (2026)](https://doi.org/10.1038/s41586-026-10735-w) — BANC article context. The pinned [BANC static dataset, Harvard Dataverse version 3.0 / `banc_888`](https://doi.org/10.7910/DVN/7WTH1N) is CC BY 4.0. FlyLab uses two unrestricted Feather inputs, including the v3 edge product, and six simplified L2 SWC render derivatives. Its four selected MDN→LBL40 rows total 153 v3-predicted synaptic links after the ≥10-voxel filter; the paper analyses use v2 with a ≥5-voxel filter. These counts are structural data, not physiology or activity. Render changes are one shared coordinate transform and topology-preserving simplification. The broader deposit has mixed file-level access. Full modification notices are in [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md).
 - [FlyEM MANC `manc:v1.2.1`](https://www.janelia.org/project-team/flyem/manc-connectome) — cross-dataset reference to a separate adult male specimen; CC BY 4.0.
 - [Wang-Chen et al., *Nature Methods* (2024)](https://doi.org/10.1038/s41592-024-02497-y) — NeuroMechFly v2/FlyGym reference. The pinned [FlyGym v2.1.0 release](https://github.com/NeLy-EPFL/flygym/releases/tag/v2.1.0) is Apache-2.0 and is not executed by this release.
 
@@ -188,7 +206,7 @@ These eligibility and ownership facts must be verified personally by the entrant
 - [x] Confirm Chrome with the official WebMCP testing feature accepts all eight registrations.
 - [ ] Optional, rollout-dependent QA: confirm ChatGPT's in-app browser discovers exactly eight tools in a model/account/workspace where Site Tools are available. This is not a submission blocker because the challenge rules also accept the independently verified Chrome 149+ path. The current Codex in-app runtime has been verified to fail closed with `agent_invocation_available: false`, explicit unsupported-runtime copy, and read-only contract/state discovery instead of claiming registration.
 - [x] Run `npm test`, `npm run lint`, and `npm run build` against the release candidate.
-- [x] Re-clone the public GitHub repository and pass dependency installation, all 57 tests, lint, and production build from only the published files.
+- [x] Re-clone the public GitHub repository and pass dependency installation, all 58 tests, lint, and production build from only the published files.
 - [x] Add public CI for exact dependency installation, tests, lint, build, and dependency audit.
 - [x] Confirm the deployed workflow stops at the non-WebMCP review gate before the visible approval click.
 - [x] Confirm on the final deployment that editing a protocol clears approval, playback, analyses, and the follow-up proposal.

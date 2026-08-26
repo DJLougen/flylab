@@ -89,7 +89,7 @@ The delivery report records the SHA-256 hash of every narration input without co
 
 ## Scientific wording boundaries
 
-- Call the BANC table entries **four directed structural edges and 153 putative contacts**, not four neural pathways or measured connections.
+- Call the BANC table entries **four directed v3 rows totaling 153 predicted synaptic links after the postsynapse-size ≥10-voxel filter**, not four neural pathways, physiological weights, activity measurements, or measured connections.
 - “Real” refers only to the six pinned BANC v888 L2 reconstruction geometries.
 - Purple is unitless model-target selection; cyan is connectome-inferred structure.
 - Glow is not calcium, voltage, measured activity, or biological signal propagation.

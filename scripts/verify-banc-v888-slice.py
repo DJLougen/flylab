@@ -219,13 +219,13 @@ def extract_artifact(paths: dict[str, Path]) -> dict[str, Any]:
     observed_edges = tuple((edge["pre"], edge["post"], edge["count"]) for edge in edges)
     if observed_edges != EXPECTED_EDGES:
         raise VerificationError(
-            f"Expected the four pinned directed edges {EXPECTED_EDGES!r}, "
+            f"Expected the four pinned directed v3 rows {EXPECTED_EDGES!r}, "
             f"observed {observed_edges!r}"
         )
     total_contacts = sum(edge["count"] for edge in edges)
     if total_contacts != EXPECTED_CONTACT_TOTAL:
         raise VerificationError(
-            f"Expected {EXPECTED_CONTACT_TOTAL} contacts, observed {total_contacts}"
+            f"Expected {EXPECTED_CONTACT_TOTAL} predicted synaptic links, observed {total_contacts}"
         )
 
     return {
@@ -271,7 +271,7 @@ def write_or_check_artifact(artifact: dict[str, Any], path: Path, write: bool) -
         raise VerificationError(f"Canonical artifact does not match the pinned sources:\n{diff}")
     print(
         "Verified pinned BANC v888 sources and canonical slice: "
-        "6 neurons, 4 directed edges, 153 contacts"
+        "6 neurons, 4 directed v3 rows, 153 predicted synaptic links"
     )
 
 
@@ -279,7 +279,7 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Verify the pinned BANC v888 Feather files and reproduce FlyLab's "
-            "six-neuron/four-edge MDN-to-LBL40 slice."
+            "six-neuron/four-row MDN-to-LBL40 slice."
         )
     )
     parser.add_argument(

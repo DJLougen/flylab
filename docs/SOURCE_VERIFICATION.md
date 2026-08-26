@@ -29,7 +29,7 @@ This review verifies link identity, access description, and the pinned assets us
 - `E-MDN-LATERALITY-006`: Sen Figure 4A–C/Movie S4 supports recruitment/laterality context.
 - `E-FENG-LBL40-008` and `E-FENG-LUL130-009`: Feng Figures 5/7 and 6/7 support the respective motor-context claims.
 - `E-DN-SCREEN-002`: Cande's Introduction screen-design paragraph supplies the line/neuron/type counts; its Discussion limitations paragraph supplies the male-only/solitary scope; Dryad v1 identifies the released catalog dataset.
-- `E-BANC-PATH-003`: Dataverse file 13918810 and its recorded SHA-256 identify the four exact MDN→LBL40 rows and counts; the BANC article supplies dataset/specimen context.
+- `E-BANC-PATH-003`: Dataverse file 13918810 and its recorded SHA-256 identify four exact MDN→LBL40 rows totaling 153 v3-predicted synaptic links after the postsynapse-size ≥10-voxel filter; the BANC article supplies dataset/specimen context and distinguishes that future-work product from the paper's v2 ≥5 analysis product.
 - `E-BANC-MDN-INVENTORY-007`: Dataverse file 14033740 and its recorded SHA-256 identify the four exact proofread MDN rows and sides.
 - `E-FLYLAB-MODEL-004`: the local model card is the `method_definition`; the FlyGym paper and v2.1.0 release are `embodiment_reference` records only.
 
