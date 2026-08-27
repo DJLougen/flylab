@@ -2,7 +2,7 @@
 
 FlyLab exposes exactly eight native WebMCP tools on one shared page. The competition workflow leads with the adult Giant Fiber/DNp01 rapid-escape slice and pauses once for visible operator approval that is intentionally absent from the tool surface.
 
-Repository contents and automated tests establish the source contract. The tracked [local Chrome 151 report](release-evidence/chrome-151-v24.json) and [public Chrome 151 report](release-evidence/public-chrome-151-v24.json) establish the native-protocol workflow for the earlier v24/`0.2.0` release and the revisions named inside those reports. They are historical prior-release evidence: neither verifies the current `0.3.0` candidate, and neither claims that a ChatGPT Sol/Terra agent performed the run. Require fresh source-bound local and public reports before treating the current candidate as verified.
+Repository contents and automated tests establish the source contract. The current [local Chrome 151 report](release-evidence/chrome-151-model-v03.json) binds a clean 15-frame GF hero capture and 36 seeded runs to source commit `285d15718dcb6565fbc239fa54e4d55a9817ca39`. The [public Chrome 151 report](release-evidence/public-chrome-151-model-v03.json) binds Sites version 29/public model `0.3.0`, all eight registered and invoked tools, a 40-run MDN workflow, an additional 36-run GF workflow, and a served schema-valid v3 export to source revision `8ff890e07af63028c25a5b2cdbdf1e742493fe8b`. Both are automated protocol-client captures in Chrome `151.0.7922.175`, not ChatGPT Sol/Terra agent transcripts or identified-human approval evidence. The ChatGPT Sol/Terra agent run remains pending.
 
 ## Start the release candidate
 
@@ -18,7 +18,7 @@ Open the URL printed by the development server. The configured submission target
 - candidate application: <https://flylab-neuroethology.d-lougen.chatgpt.site/>
 - candidate source repository: <https://github.com/DJLougen/flylab>
 
-Treat those as links to verify, not proof of publication or availability.
+The current public Chrome report verifies the application link and public model-`0.3.0` workflow for its recorded source revision. Still verify the source-repository link and exact final submitted commit independently.
 
 ## Supported execution surfaces
 

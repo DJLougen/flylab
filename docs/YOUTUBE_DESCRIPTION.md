@@ -2,7 +2,7 @@
 
 ## Publication status
 
-Do not upload or describe the video as complete until the current `0.3.0` GF-first frames are approved, a fresh source-bound supported native WebMCP run is recorded locally and on the submitted deployment, rights-cleared narration exists, the delivery report passes, and signed-out playback is verified. Historical v24 reports verify the earlier `0.2.0` release only. Replace every bracketed value only from current retained evidence.
+Current model-`0.3.0` native WebMCP evidence is retained in the [local Chrome 151 report](release-evidence/chrome-151-model-v03.json)—including the clean 15-frame GF capture and 36 seeded runs—and the [public Chrome 151 report](release-evidence/public-chrome-151-model-v03.json)—including Sites version 29, all eight registered and invoked tools, a 40-run MDN workflow, an additional 36-run GF workflow, and the served schema-valid v3 export. These are automated protocol-client captures, not ChatGPT Sol/Terra agent transcripts or identified-human approval evidence. Do not upload or describe the video as complete until the GF-first frames are approved for final use, the pending ChatGPT Sol/Terra run is captured, rights-cleared narration exists, the delivery report passes, and signed-out playback is verified. Devpost publication and personal eligibility attestations also remain pending. Replace every remaining bracketed value only from current retained evidence.
 
 **Title**
 
@@ -49,7 +49,7 @@ Choose the YouTube video-license setting deliberately. It is separate from the r
 ```text
 FlyLab is an agent-operable, human-auditable virtual fruit-fly lab created for the 2026 WebMCP Challenge. It exposes one read-only state inspector and seven native scientific workflow actions inside the same page a person reviews.
 
-Try FlyLab: [VERIFIED_PUBLIC_APP_URL]
+Try FlyLab: https://flylab-neuroethology.d-lougen.chatgpt.site/
 Source repository: [VERIFIED_PUBLIC_SOURCE_URL]
 Challenge entry: [DEVPOST_ENTRY_URL]
 

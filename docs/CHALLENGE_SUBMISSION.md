@@ -1,6 +1,6 @@
 # WebMCP Challenge submission
 
-FlyLab's current source is the `0.3.0` behavioral-model candidate for the WebMCP Challenge and implements the v3 agent contract described below. The tracked Chrome 151 reports record the complete automated native-protocol workflow for the earlier v24/`0.2.0` release, locally and against its public no-login HTTPS deployment. They are historical prior-release evidence, not proof that `0.3.0` has been deployed or natively invoked. Fresh current-source local and public runs, a ChatGPT Sol/Terra agent run, the final video, and Devpost publication remain pending gates.
+FlyLab model `0.3.0` is live on Sites version 29 and implements the v3 agent contract described below. The current [local Chrome 151 report](release-evidence/chrome-151-model-v03.json) records all eight tools registered and invoked, a clean 15-frame GF capture, and 36 seeded GF runs at source commit `285d15718dcb6565fbc239fa54e4d55a9817ca39`. The [public Chrome 151 report](release-evidence/public-chrome-151-model-v03.json) records all eight tools registered and invoked on the live URL, a 40-run MDN workflow, an additional 36-run GF workflow, and an HTTP-200/schema-valid v3 export at source revision `8ff890e07af63028c25a5b2cdbdf1e742493fe8b`. These are automated native-protocol captures, not ChatGPT agent transcripts or identified-human approval evidence. A ChatGPT Sol/Terra agent run, final narration/video/upload, Devpost publication, and personal eligibility attestations remain pending gates.
 
 Submission deadline: **September 3, 2026 at 1:00 p.m. PDT**, as recorded in the challenge materials. Confirm the binding rules again before submission.
 
@@ -55,7 +55,7 @@ WebMCP keeps structured scientific actions in the page the person is already rev
 | Criterion | FlyLab evidence in the source contract |
 |---|---|
 | **WebMCP Leverage** | Eight page-native domain tools; v3 same-session/revision guards; structured recovery; operation replay; a deliberately non-tool operator gate. |
-| **Execution** | A coherent GF rapid-escape workflow, secondary MDN path, deterministic state-coherent per-run trajectories, exact selected-run Three.js replay, formal metrics, content hashing, and scoped evidence export. Runtime completion must still be proven on the submitted URL/client. |
+| **Execution** | A coherent GF rapid-escape workflow, secondary MDN path, deterministic state-coherent per-run trajectories, exact selected-run Three.js replay, formal metrics, content hashing, and scoped evidence export. Current local and public Chrome protocol-client completion is retained; a ChatGPT Sol/Terra agent run remains a separate pending gate. |
 | **Potential Impact** | Prevents agents from silently continuing on stale scientific state or upgrading measurements, connectome inference, model output, and hypotheses into one undifferentiated claim. |
 | **Creativity & Ambition** | One shared browser instrument combines cited neuroethology, explicit brain-to-body mappings, immutable protocol approval, auditable simulation, and mission-level provenance. |
 
@@ -102,7 +102,9 @@ After the operator approves the exact visible protocol, use:
 
 Neither product label proves the current task passed. Confirm the exact eight-tool inventory, retain the runtime diagnostic, and record a successful native workflow. Static manifests, DOM packets, and guided examples are read-only/helpful UI surfaces, not substitute transports.
 
-Historical prior-release protocol evidence: [`chrome-151-v24.json`](release-evidence/chrome-151-v24.json) records the clean local v24/`0.2.0` release and exact 15-frame capture; [`public-chrome-151-v24.json`](release-evidence/public-chrome-151-v24.json) repeats that workflow against its deployed URL. Both record Chrome 151, eight registered and invoked tools, fresh-session reload, browser export parity, approval-hash rejection, operation replay/conflict behavior, edit invalidation, and global source closure for the revision named inside each report. They are automated WebMCP client captures, not ChatGPT agent transcripts and not verification of the current `0.3.0` candidate.
+Current model-`0.3.0` protocol evidence: [`chrome-151-model-v03.json`](release-evidence/chrome-151-model-v03.json) records the clean local GF hero workflow, 36 seeded runs, and exact 15-frame capture at commit `285d15718dcb6565fbc239fa54e4d55a9817ca39`; [`public-chrome-151-model-v03.json`](release-evidence/public-chrome-151-model-v03.json) records the Sites version 29 public workflow at source revision `8ff890e07af63028c25a5b2cdbdf1e742493fe8b`, including the primary 40-run MDN workflow, an additional 36-run GF workflow, and the served schema's successful export validation. Both record Chrome `151.0.7922.175`, all eight tools registered and invoked, and a fresh eight-tool page session after reload.
+
+Historical prior-release evidence remains in [`chrome-151-v24.json`](release-evidence/chrome-151-v24.json) and [`public-chrome-151-v24.json`](release-evidence/public-chrome-151-v24.json). The current and historical reports are automated WebMCP protocol-client captures, not ChatGPT agent transcripts or identified-human approval records.
 
 ## Scientific scope
 
@@ -134,22 +136,23 @@ Historical prior-release protocol evidence: [`chrome-151-v24.json`](release-evid
 
 | Item | Honest current status |
 |---|---|
-| Source contract | `0.3.0` contract implemented in the working candidate; final tests/build/security gates and a source-bound report are still required. |
-| Candidate app URL | The URL has historical v24 public verification. Do not describe it as the `0.3.0` deployment until the exact current source is deployed and reverified. |
+| Source contract | Model `0.3.0` is implemented and source-bound in the clean local and public Chrome reports. Confirm the exact final submitted source commit again after any later change. |
+| Candidate app URL | Sites version 29/public model `0.3.0` is live. The public Chrome report binds its eight-tool workflow and valid served v3 schema to source revision `8ff890e07af63028c25a5b2cdbdf1e742493fe8b`. |
 | Candidate source URL | Public repository target exists; confirm the final `0.3.0` source commit and its retained verification before submission. |
 | ChatGPT Sol/Terra run | Supported path; no success claim without retained current-session evidence. |
-| Chrome 149+ run | Historical local and public-URL Chrome 151 v24 workflows passed. Fresh `0.3.0` local and deployed runs are pending. |
+| Chrome 149+ run | Current local and public model-`0.3.0` Chrome `151.0.7922.175` native-protocol workflows passed; each report names its exact source revision. |
 | Demo video | Pending final capture, rights-cleared narration, build, upload, and signed-out playback verification. |
 | Devpost entry | Pending authenticated publication and link verification. |
+| Personal attestations | Entrant eligibility, ownership, licensing, and conflict attestations remain pending and must be completed personally. |
 
 ## Final submission checklist
 
 - [ ] Run `npm test`, `npm run lint`, and `npm run build` on the final `0.3.0` source commit.
 - [ ] Verify the submitted source URL is public and contains that exact commit.
-- [ ] Verify the submitted app URL serves that exact candidate, is public, no-login, HTTPS, and returns the required headers and export schema.
-- [ ] Complete and retain fresh `0.3.0` native WebMCP workflow reports with the exact eight-tool inventory locally and on the public URL.
-- [ ] Demonstrate session/revision guards, approval-hash rejection, operation replay/conflict, and post-edit invalidation.
-- [ ] Demonstrate formal GF metrics with per-run traceability and a mission v3 bundle.
+- [x] Verify Sites version 29 at the submitted app URL serves public model `0.3.0` over HTTPS and returns the v3 manifest, contracts, and export schema with HTTP 200.
+- [x] Complete and retain model-`0.3.0` native WebMCP workflow reports with the exact eight-tool inventory locally and on the public URL.
+- [x] Demonstrate session/revision guards, approval-hash rejection, operation replay/conflict, and post-edit invalidation in the retained protocol reports.
+- [x] Demonstrate formal GF metrics with per-run traceability and a mission v3 bundle in the retained local report.
 - [ ] Record rights-cleared narration and build a passing under-three-minute demo.
 - [ ] Verify public video playback, audio, captions, links, and visibility while signed out.
 - [ ] Replace `[YOUTUBE_DEMO_URL]` and `[DEVPOST_ENTRY_URL]` only after verification.

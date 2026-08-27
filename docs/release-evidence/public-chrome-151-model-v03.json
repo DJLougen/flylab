@@ -1,0 +1,516 @@
+{
+  "ok": true,
+  "verified_at": "2026-08-27T15:51:14.880Z",
+  "url": "https://flylab-neuroethology.d-lougen.chatgpt.site/",
+  "source_revision": {
+    "schema_version": "flylab.source-revision.v1",
+    "git_available": true,
+    "git_commit": "8ff890e07af63028c25a5b2cdbdf1e742493fe8b",
+    "git_tree": "54956d5d6214e3da352add70633b412bfc21be5f",
+    "worktree_clean": true,
+    "worktree_change_count": 0
+  },
+  "served_artifacts": [
+    {
+      "pathname": "/flylab-agent-manifest.json",
+      "url": "https://flylab-neuroethology.d-lougen.chatgpt.site/flylab-agent-manifest.json",
+      "status": 200,
+      "content_type": "application/json",
+      "cache_control": "public, max-age=0, must-revalidate",
+      "schema_version": "flylab.agent-manifest.v3",
+      "schema_id": null,
+      "bytes": 11600,
+      "sha256": "sha256:154f1dd1d9fae59d55806e93a4cf8330c683e56976288af7725e3dfd7ac606f3"
+    },
+    {
+      "pathname": "/flylab-tool-contracts.json",
+      "url": "https://flylab-neuroethology.d-lougen.chatgpt.site/flylab-tool-contracts.json",
+      "status": 200,
+      "content_type": "application/json",
+      "cache_control": "no-cache",
+      "schema_version": "flylab.webmcp-contracts.v3",
+      "schema_id": null,
+      "bytes": 22281,
+      "sha256": "sha256:01ebef886b83d460d00147633ac5411076fe1252157e566aacc5738f6d5b9c9e"
+    },
+    {
+      "pathname": "/schemas/flylab-evidence-export-v3.schema.json",
+      "url": "https://flylab-neuroethology.d-lougen.chatgpt.site/schemas/flylab-evidence-export-v3.schema.json",
+      "status": 200,
+      "content_type": "application/json",
+      "cache_control": "public, max-age=0, must-revalidate",
+      "schema_version": null,
+      "schema_id": "https://flylab-neuroethology.d-lougen.chatgpt.site/schemas/flylab-evidence-export-v3.schema.json",
+      "bytes": 43888,
+      "sha256": "sha256:a60a224cc5e005fddb59f7886d3175cbee1a64ec49118c2841eef115ce1d4282"
+    }
+  ],
+  "browser_api": "document.modelContext.registerTool",
+  "browser_client": {
+    "chrome_full_version": "151.0.7922.175",
+    "chrome_major_version": 151,
+    "cdp_product": "Chrome/151.0.7922.175",
+    "cdp_protocol_version": "1.3",
+    "cdp_revision": "@02fcc75bd274240484d344e0ef73fd82953276bc",
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+    "webmcp_testing_flag_enabled": true,
+    "proof_capture_kind": "automated_flag_enabled_chrome_protocol_capture"
+  },
+  "registered_tools": [
+    "analyze_fly_behavior",
+    "compare_fly_trials",
+    "design_stimulation_trial",
+    "draft_fly_hypothesis",
+    "find_fly_circuits",
+    "inspect_flylab_state",
+    "run_fly_simulation",
+    "save_fly_evidence"
+  ],
+  "invoked_tools": [
+    "analyze_fly_behavior",
+    "compare_fly_trials",
+    "design_stimulation_trial",
+    "draft_fly_hypothesis",
+    "find_fly_circuits",
+    "inspect_flylab_state",
+    "run_fly_simulation",
+    "save_fly_evidence"
+  ],
+  "invocation_evidence": {
+    "source": "observed WebMCP.toolResponded protocol events",
+    "completed_event_count": 112,
+    "completed_counts_by_tool": {
+      "analyze_fly_behavior": 4,
+      "compare_fly_trials": 4,
+      "design_stimulation_trial": 5,
+      "draft_fly_hypothesis": 7,
+      "find_fly_circuits": 7,
+      "inspect_flylab_state": 69,
+      "run_fly_simulation": 10,
+      "save_fly_evidence": 6
+    }
+  },
+  "invocation_status": "Completed",
+  "reload_before_experiment_audit": {
+    "performed": true,
+    "before_page_session_id": "session_95e7360333514287",
+    "before_state_revision": 1,
+    "after_page_session_id": "session_3eef8be2e460419f",
+    "after_state_revision": 1,
+    "after_stage": "discover",
+    "registered_tools_after_reload": 8,
+    "fresh_session_created": true
+  },
+  "agent_transport": {
+    "status": "active",
+    "page_session_id": "session_3eef8be2e460419f",
+    "registered_tool_count": 8,
+    "workflow_next_tool": "find_fly_circuits",
+    "invocable_next_tool_before_first_call": null,
+    "agent_invocation_available_before_first_call": null,
+    "page_registration_status": "registered",
+    "page_invocation_handler_available": true,
+    "webmcp_invocation_observed": true,
+    "webmcp_client_availability": "invocation_observed_this_page_session",
+    "capability_diagnostic": {
+      "schema_version": "flylab.webmcp-capability-diagnostic.v1",
+      "document_ready_state": "complete",
+      "secure_context": true,
+      "origin_agent_cluster": true,
+      "permissions_policy_tools_allowed": true,
+      "document_model_context_present": true,
+      "register_tool_type": "function",
+      "registration_attempted": true,
+      "registrations_accepted_before_rollback": 8,
+      "failed_tool_name": null,
+      "registration_error_name": null,
+      "registration_error": null,
+      "availability_reason": "active"
+    },
+    "handoff_schema": "flylab.agent-handoff.v1"
+  },
+  "origin_agent_cluster": true,
+  "browser_user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
+  "mutation_context_guards": {
+    "page_session_id": "session_3eef8be2e460419f",
+    "preserved_state_revision": 1,
+    "wrong_session_error": "STALE_STATE",
+    "stale_revision_error": "STALE_STATE",
+    "mutation_committed": false
+  },
+  "discovery_decision": {
+    "id": "discovery_cb8d7dd90ebd5e2d7f72373400d61589233a2f25e0e2912f7834cc8054e36280",
+    "selected_circuit_id": "circuit_mdn_adult",
+    "candidate_count": 1,
+    "rejected_alternatives": 0
+  },
+  "workflow": {
+    "sequence": [
+      "inspect_flylab_state",
+      "find_fly_circuits",
+      "draft_fly_hypothesis",
+      "design_stimulation_trial",
+      "visible_operator_approval_control_dom_click",
+      "run_fly_simulation",
+      "analyze_fly_behavior",
+      "compare_fly_trials",
+      "save_fly_evidence"
+    ],
+    "clean_demo_capture": false,
+    "preapproval_error": "APPROVAL_REQUIRED",
+    "context_only_support_error": "EVIDENCE_MISMATCH",
+    "structural_only_support_error": "EVIDENCE_MISMATCH",
+    "wrong_perturbation_support_error": "EVIDENCE_MISMATCH",
+    "visible_protocol_verified": true,
+    "visible_analysis_verified": true,
+    "condition_tab_analysis_parity": {
+      "alternate_condition": "condition_baseline",
+      "restored_condition": "condition_bilateral"
+    },
+    "human_proposal_budget": {
+      "budget": 5,
+      "state_revision": 13
+    },
+    "visible_comparison_verified": true,
+    "visible_bundle_verified": true,
+    "evidence_export_audit": {
+      "schema": "flylab.evidence-export",
+      "schema_version": 3,
+      "schema_url": "https://flylab-neuroethology.d-lougen.chatgpt.site/schemas/flylab-evidence-export-v3.schema.json",
+      "media_type": "application/vnd.flylab.evidence+json",
+      "served_schema_valid": true,
+      "manifest_hash": "sha256:420a61706cb631bef9d136df684b9468ee09a43d5e5f297ba10f3306c3d162c3",
+      "evidence_records": 10,
+      "source_records": 15,
+      "manifest_source_records": 15,
+      "globally_source_closed": true,
+      "condition_ids": [
+        "condition_baseline",
+        "condition_sham",
+        "condition_bilateral",
+        "condition_left",
+        "condition_right"
+      ],
+      "run_ids": 40,
+      "per_run_trajectory_ids": 40,
+      "illustrative_trajectory_ids": 5,
+      "proposal_id": "proposal_2e25b72cd7f1ddc5470f9428dfa7d3b5a7111af4d18d62805b02ed81bb0c0b57",
+      "provenance_counts": {
+        "measured": 13,
+        "derived": 24,
+        "connectome_inferred": 3,
+        "simulation_predicted": 88,
+        "agent_hypothesized": 22
+      },
+      "lineage_edges": 317,
+      "scope": "mission",
+      "mission": {
+        "discovery_decision_id": "discovery_cb8d7dd90ebd5e2d7f72373400d61589233a2f25e0e2912f7834cc8054e36280",
+        "candidate_circuits": 1,
+        "rejected_alternatives": 0,
+        "evidence_records": 9,
+        "source_records": 10,
+        "source_closed": true
+      },
+      "untrusted_annotation_excluded": true
+    },
+    "browser_export_audit": {
+      "browser_observable_download": true,
+      "filename": "evidence_00ab4d7f1f0f9eb5960401c7c0435e7bef2362449e107856c8e3ba4e19ea7633.flylab-evidence.json",
+      "bytes": 2962440,
+      "sha256": "sha256:c4c3b4d33edfbdeb2c35601d4654589b9ed53d801ee419888df85d709cc7ca54",
+      "downloaded_envelope_exact": true,
+      "clipboard_matches_manual_fallback": true,
+      "manual_fallback_sha256": "sha256:c4c3b4d33edfbdeb2c35601d4654589b9ed53d801ee419888df85d709cc7ca54"
+    },
+    "metric_definition_audit": {
+      "method_version": "flylab.behavior-metrics.v5",
+      "objective_metric_definitions": 5,
+      "response_initiation_summary_separate": true,
+      "response_observation_summary_separate": true
+    },
+    "per_run_audit": {
+      "condition_count": 5,
+      "per_run_records": 40,
+      "common_random_number_pairing": true,
+      "state_coherent_per_run_traces": true,
+      "sha256_content_hash_verified": true,
+      "illustrative_replay_excluded_from_metrics": true
+    },
+    "run_approval_audit": {
+      "protocol_hash": "sha256:7c95391221271fb9c9e90671b636173ca1fe15c3a96ef419f3a2f5e13807bb84",
+      "seed_manifest_hash": "sha256:17699f63b761b9d4b3f7c790b277c03d0433b188f8b88ff9d2d3a5061ede7170",
+      "exact_protocol_snapshot": true
+    },
+    "approval": {
+      "protocol_hash": "sha256:7c95391221271fb9c9e90671b636173ca1fe15c3a96ef419f3a2f5e13807bb84",
+      "seed_manifest_hash": "sha256:17699f63b761b9d4b3f7c790b277c03d0433b188f8b88ff9d2d3a5061ede7170",
+      "approved_at": "2026-08-27T15:51:06.424Z",
+      "wrong_hash_guard": {
+        "error": "EVIDENCE_MISMATCH",
+        "expected_protocol_hash": "sha256:7c95391221271fb9c9e90671b636173ca1fe15c3a96ef419f3a2f5e13807bb84",
+        "rejected_protocol_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "before_state_revision": 5,
+        "rejected_state_revision": 5,
+        "after_state_revision": 5,
+        "resulting_batch_id": null,
+        "state_unchanged": true
+      }
+    },
+    "inspector": {
+      "initial_next_tool": "find_fly_circuits",
+      "blocked_status": "waiting_for_human",
+      "post_approval_next_tool": "run_fly_simulation",
+      "final_status": "complete",
+      "context_contract": "flylab.agent-context.v3",
+      "artifact_manifest_recovered": true
+    },
+    "cancellation": {
+      "commit_boundary": "prepare -> combined AbortSignal check -> synchronous state commit",
+      "abort_sources": [
+        "execute callback AbortSignal",
+        "Chrome 151 toolcancel compatibility event",
+        "visible operator cancel control"
+      ],
+      "human_control": {
+        "invocation_status": "Error",
+        "cancellation_phase": "after_tool_invoked_and_running_before_commit",
+        "completed_batch_committed": false,
+        "control": "visible Cancel running simulation button"
+      },
+      "webmcp_protocol": {
+        "invocation_status": "Canceled",
+        "cancellation_phase": "after_tool_invoked_and_running_before_commit",
+        "completed_batch_committed": false,
+        "manual_action_after_cancel": "Run MDN drive→",
+        "condition_states_after_cancel": [
+          "approved",
+          "approved",
+          "approved",
+          "approved",
+          "approved"
+        ]
+      },
+      "evidence_save": {
+        "invocation_status": "Canceled",
+        "cancellation_phase": "visible preparation before manifest commit",
+        "completed_bundle_committed": false,
+        "next_tool_after_cancel": "save_fly_evidence"
+      }
+    },
+    "completed_lineage_idempotency": {
+      "calls": [
+        "find_fly_circuits",
+        "draft_fly_hypothesis",
+        "design_stimulation_trial",
+        "run_fly_simulation",
+        "analyze_fly_behavior",
+        "compare_fly_trials",
+        "save_fly_evidence"
+      ],
+      "final_stage": "saved",
+      "stable_bundle_id": "evidence_00ab4d7f1f0f9eb5960401c7c0435e7bef2362449e107856c8e3ba4e19ea7633",
+      "stable_manifest_hash": "sha256:420a61706cb631bef9d136df684b9468ee09a43d5e5f297ba10f3306c3d162c3",
+      "stable_saved_at": "2026-08-27T15:51:09.313Z",
+      "replay_created_artifacts": 0,
+      "operation_replays": {
+        "run_fly_simulation": {
+          "operation_id": "verify_run_fly_simulation_5",
+          "previous_state_revision": 21,
+          "state_revision": 21,
+          "idempotent_replay": true,
+          "created_artifact_ids": []
+        },
+        "save_fly_evidence": {
+          "operation_id": "verify_save_fly_evidence_7",
+          "previous_state_revision": 23,
+          "state_revision": 23,
+          "idempotent_replay": true,
+          "created_artifact_ids": []
+        }
+      },
+      "conflicting_run_operation_error": "INVALID_INPUT",
+      "conflicting_save_operation_error": "INVALID_INPUT",
+      "conflict_state_unchanged": true
+    },
+    "experiment_id": "exp_98b755be9455171e40eb63bea30b079f210362daf49dbcd1c8947c4c71561a10",
+    "batch_id": "batch_078a2ddfc856049126fbe3203d4856b24a0a3828f3c3ed632f1c6bceb0afd831",
+    "analysis_id": "analysis_c9389b784ff273835fe091599ad2a1f89e5daac407a41496599ca731a1605d9c",
+    "comparison_id": "comparison_42a731a6503f4b80f7408d003f911482eafaf193ca576b055a69cac268112b08",
+    "evidence_bundle_id": "evidence_00ab4d7f1f0f9eb5960401c7c0435e7bef2362449e107856c8e3ba4e19ea7633",
+    "manifest_hash": "sha256:420a61706cb631bef9d136df684b9468ee09a43d5e5f297ba10f3306c3d162c3",
+    "follow_up_execution_authorized": false,
+    "protocol_edit_invalidation_verified": {
+      "ui_cleared": true,
+      "inspector_status": "waiting_for_human",
+      "next_tool": null,
+      "human_gate": "required",
+      "revised_experiment_id": "exp_c6f7ac0b60304eba222d582d8621a3f4bc9b0c1977a923db9c3e06142c093a2c",
+      "stale_operation_replay_guard": null
+    },
+    "gf_short_mode_escape": {
+      "sequence": [
+        "ambiguous_find",
+        "hero_multi_circuit_gf_find",
+        "draft_silencing_hypothesis",
+        "reject_unilateral_design",
+        "design_bilateral_protocol",
+        "visible_operator_approval_control_dom_click",
+        "run_exact_protocol",
+        "analyze_short_mode_escape",
+        "compare",
+        "save"
+      ],
+      "clean_demo_capture": false,
+      "selected_circuit_id": "circuit_gf_adult",
+      "rejected_alternative_circuit_id": "circuit_mdn_adult",
+      "visible_protocol_verified": false,
+      "visible_analysis_verified": false,
+      "selected_run_replay": {
+        "run_id": "run_281386185a2762c2dd9411a82998ba1d40b7d16c5e5df131014b01c8fb287341",
+        "seed": 91827,
+        "trajectory_id": "trajectory_48693935bcfc69ffc0dc821cf0e7dd05728ef6878b4dd2c0dcabf1c9a3d88035",
+        "trajectory_seed": 196556
+      },
+      "condition_tab_analysis_parity": null,
+      "visible_comparison_verified": false,
+      "visible_bundle_verified": false,
+      "experiment_arm_count": 3,
+      "replicates_per_arm": 12,
+      "total_seeded_runs": 36,
+      "analyzed_metrics": [
+        "response_latency_ms",
+        "short_mode_escape_probability",
+        "vertical_displacement_mm",
+        "wing_recruitment",
+        "leg_recruitment"
+      ],
+      "mission_bundle_format": "flylab.mission-evidence-bundle.v3",
+      "completed_stage": "saved",
+      "completed_state_revision": 35,
+      "completed_agent_status": "complete",
+      "protocol_edit_invalidation_verified": null,
+      "experiment_id": "exp_1c2cc69d3b6ef05e6a081bc36309365e400c8cd681097bb586a7f853f93cdaec",
+      "batch_id": "batch_8ce391daaba4b380188d43581b2940b74935fdf1223824f735e98a0153e3e173",
+      "analysis_id": "analysis_ce7e679e6adb37882151e3cec612dcd52b15a9075b20f262664d6d3eff6e2692",
+      "evidence_bundle_id": "evidence_70da6abaa819624648cdd36579bb1311908dfb15e5f86e85f69e42f8ed44a9d4",
+      "filter_to_inspector_parity": true,
+      "motor_map_source_closure": true,
+      "hero_candidate_count": 2,
+      "hero_rejected_mdn": true,
+      "reference_motion_without_target_glow": true,
+      "metric_definition_audit": {
+        "method_version": "flylab.behavior-metrics.v5",
+        "objective_metric_definitions": 5,
+        "response_initiation_summary_separate": true,
+        "response_observation_summary_separate": true
+      },
+      "per_run_audit": {
+        "condition_count": 3,
+        "per_run_records": 36,
+        "common_random_number_pairing": true,
+        "state_coherent_per_run_traces": true,
+        "sha256_content_hash_verified": true,
+        "illustrative_replay_excluded_from_metrics": true
+      },
+      "evidence_export_audit": {
+        "schema": "flylab.evidence-export",
+        "schema_version": 3,
+        "schema_url": "https://flylab-neuroethology.d-lougen.chatgpt.site/schemas/flylab-evidence-export-v3.schema.json",
+        "media_type": "application/vnd.flylab.evidence+json",
+        "served_schema_valid": true,
+        "manifest_hash": "sha256:7064b55449aa53fa7bb6a55af70d89a0210b556da82058b1c3f0421540fbd605",
+        "evidence_records": 5,
+        "source_records": 14,
+        "manifest_source_records": 18,
+        "globally_source_closed": true,
+        "condition_ids": [
+          "condition_baseline",
+          "condition_sham",
+          "condition_bilateral"
+        ],
+        "run_ids": 36,
+        "per_run_trajectory_ids": 36,
+        "illustrative_trajectory_ids": 3,
+        "proposal_id": "proposal_f99bf88ee328fffa9a3e2a222c5c95e83173a08f9a315c774bc6cb0825aea4f2",
+        "provenance_counts": {
+          "measured": 28,
+          "derived": 29,
+          "connectome_inferred": 4,
+          "simulation_predicted": 78,
+          "agent_hypothesized": 26
+        },
+        "lineage_edges": 355,
+        "scope": "mission",
+        "mission": {
+          "discovery_decision_id": "discovery_d6d4253610c603431f15a75c0a6328c45eb953675ec1cfe51c941380ed34a9ff",
+          "candidate_circuits": 2,
+          "rejected_alternatives": 1,
+          "evidence_records": 13,
+          "source_records": 15,
+          "source_closed": true
+        },
+        "untrusted_annotation_excluded": true
+      },
+      "browser_export_audit": {
+        "browser_observable_download": true,
+        "filename": "evidence_70da6abaa819624648cdd36579bb1311908dfb15e5f86e85f69e42f8ed44a9d4.flylab-evidence.json",
+        "bytes": 2916012,
+        "sha256": "sha256:4057c43c5e1781e535601f207f85af5d51e329bf70b6d3bc2f3f25e8253751ca",
+        "downloaded_envelope_exact": true,
+        "clipboard_matches_manual_fallback": true,
+        "manual_fallback_sha256": "sha256:4057c43c5e1781e535601f207f85af5d51e329bf70b6d3bc2f3f25e8253751ca"
+      },
+      "approval_hash_guard": {
+        "error": "EVIDENCE_MISMATCH",
+        "expected_protocol_hash": "sha256:06f0ab48dc98bc2eb323fb0e48534db24287a88f45977b99c70a93c1789cdf7b",
+        "rejected_protocol_hash": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+        "before_state_revision": 29,
+        "rejected_state_revision": 29,
+        "after_state_revision": 29,
+        "resulting_batch_id": null,
+        "state_unchanged": true
+      },
+      "idempotency_audit": {
+        "calls": [
+          "find_fly_circuits",
+          "draft_fly_hypothesis",
+          "design_stimulation_trial",
+          "run_fly_simulation",
+          "analyze_fly_behavior",
+          "compare_fly_trials",
+          "save_fly_evidence"
+        ],
+        "final_stage": "saved",
+        "stable_bundle_id": "evidence_70da6abaa819624648cdd36579bb1311908dfb15e5f86e85f69e42f8ed44a9d4",
+        "stable_manifest_hash": "sha256:7064b55449aa53fa7bb6a55af70d89a0210b556da82058b1c3f0421540fbd605",
+        "stable_saved_at": "2026-08-27T15:51:13.557Z",
+        "replay_created_artifacts": 0,
+        "operation_replays": {
+          "run_fly_simulation": {
+            "operation_id": "verify_run_fly_simulation_10",
+            "previous_state_revision": 38,
+            "state_revision": 38,
+            "idempotent_replay": true,
+            "created_artifact_ids": []
+          },
+          "save_fly_evidence": {
+            "operation_id": "verify_save_fly_evidence_11",
+            "previous_state_revision": 40,
+            "state_revision": 40,
+            "idempotent_replay": true,
+            "created_artifact_ids": []
+          }
+        },
+        "conflicting_run_operation_error": "INVALID_INPUT",
+        "conflicting_save_operation_error": "INVALID_INPUT",
+        "conflict_state_unchanged": true
+      },
+      "run_approval_audit": {
+        "protocol_hash": "sha256:06f0ab48dc98bc2eb323fb0e48534db24287a88f45977b99c70a93c1789cdf7b",
+        "seed_manifest_hash": "sha256:60d534291262816f69edb6ce55147fce48aa502e271a309286fa6aeb0ec6490a",
+        "exact_protocol_snapshot": true
+      }
+    }
+  }
+}

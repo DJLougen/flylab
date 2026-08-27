@@ -2,7 +2,7 @@
 
 FlyLab defines eight native site tools through `document.modelContext.registerTool(...)`: one read-only inspector plus seven scientific workflow mutations. This document distinguishes source-level checks, page registration, browser-mediated invocation, and a completed supported-runtime workflow. They are different evidence levels.
 
-The repository retains a [local Chrome 151 report](release-evidence/chrome-151-v24.json) from the automated, flag-enabled native WebMCP protocol verifier and a separate [public-deployment report](release-evidence/public-chrome-151-v24.json). Together they record clean source binding, the exact browser version, eight registered and invoked tools, a fresh-session reload, the completed GF workflow, browser export parity, negative guards, and the evidence audit for the earlier v24/`0.2.0` release. They are historical prior-release evidence, not verification of the current `0.3.0` source and not ChatGPT agent transcripts. The current candidate requires fresh local and deployed reports; a ChatGPT Sol/Terra claim requires its own retained evidence.
+The current [local Chrome 151 report](release-evidence/chrome-151-model-v03.json) binds all eight registered and invoked tools, a clean 15-frame GF capture, and 36 seeded GF runs to clean source commit `285d15718dcb6565fbc239fa54e4d55a9817ca39`. The [public Chrome 151 report](release-evidence/public-chrome-151-model-v03.json) binds all eight registered and invoked tools on Sites version 29/public model `0.3.0`, a 40-run MDN workflow, an additional 36-run GF workflow, and HTTP-200/schema-valid v3 exports to clean source revision `8ff890e07af63028c25a5b2cdbdf1e742493fe8b`. Both used Chrome `151.0.7922.175` and are automated, flag-enabled native-protocol captures. They are not ChatGPT agent transcripts or identified-human approval evidence; a ChatGPT Sol/Terra run remains pending and requires its own retained evidence. The v24/`0.2.0` reports remain historical prior-release evidence.
 
 ## Evidence levels
 
@@ -176,7 +176,7 @@ Registration lifetime and invocation lifetime are separate. The registration sig
 
 The code accepts the draft callback `AbortSignal` and Chrome's `toolcancel` compatibility event (plus the evolving `toolcanceled` spelling). This compatibility handling feeds the same tested commit boundary; it is not a substitute transport.
 
-## Deployment checks before making a public claim
+## Deployment checks and current public status
 
 For any candidate deployment, verify and retain evidence that:
 
@@ -186,4 +186,4 @@ For any candidate deployment, verify and retain evidence that:
 - the exact release being described is deployed;
 - the native eight-tool inventory and required workflow pass on a supported runtime.
 
-For v24, those checks are retained in `public-chrome-151-v24.json`. Repeat them after any deployment that changes executable source before describing the newer build as verified.
+Sites version 29/public model `0.3.0` satisfies the current native workflow and served-artifact/schema gates in `public-chrome-151-model-v03.json` for source revision `8ff890e07af63028c25a5b2cdbdf1e742493fe8b`. Repeat the deployment checks and retain a new source-bound report after any change to executable source. `public-chrome-151-v24.json` remains historical prior-release evidence only.

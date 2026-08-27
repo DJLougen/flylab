@@ -2,13 +2,13 @@
 
 ## Status and release gate
 
-The final `0.3.0` competition video has not been generated, uploaded, or verified. A tracked [local Chrome 151 native-protocol report](release-evidence/chrome-151-v24.json), its 15-frame capture, and the separate [public-deployment report](release-evidence/public-chrome-151-v24.json) bind the earlier v24/`0.2.0` release only. They are historical automated protocol evidence, not verification of the current candidate and not a ChatGPT agent transcript. Fresh `0.3.0` local/public captures, rights-cleared narration, the final video build, upload, and signed-out playback check remain pending.
+The current [local Chrome 151 native-protocol report](release-evidence/chrome-151-model-v03.json) supplies the clean 15-frame model-`0.3.0` GF hero capture and 36 seeded runs at source commit `285d15718dcb6565fbc239fa54e4d55a9817ca39`. The [public Chrome 151 report](release-evidence/public-chrome-151-model-v03.json) verifies Sites version 29/public model `0.3.0`, all eight registered and invoked tools, a 40-run MDN workflow, an additional 36-run GF workflow, and a served schema-valid v3 export at source revision `8ff890e07af63028c25a5b2cdbdf1e742493fe8b`. These are automated protocol-client captures, not ChatGPT agent transcripts or identified-human approval evidence. A ChatGPT Sol/Terra agent run, rights-cleared narration, the final video build, upload, and signed-out playback check remain pending.
 
 The video builder requires explicit interface approval, all planned frames, rights-cleared narration, and a duration below three minutes. Its preflight checks file presence and media requirements; a human must also confirm that every frame actually shows the v3 GF-first story below. Complete [NARRATION_RIGHTS_ATTESTATION.md](NARRATION_RIGHTS_ATTESTATION.md) before enabling the narration-rights gate.
 
 ## Story in one sentence
 
-FlyLab lets an agent use eight native WebMCP tools to turn a source-backed adult fruit-fly rapid-escape question into a falsifiable GF hypothesis, an immutable operator-authorized virtual protocol, state-coherent per-run simulation, auditable metrics, and a complete mission evidence bundle—without hiding stale page state or executing its own follow-up. Historical retained captures remain automated WebMCP client verification of their named prior revisions, not transcripts proving that a ChatGPT agent or identified supervisor performed those actions and not proof of the current candidate.
+FlyLab lets an agent use eight native WebMCP tools to turn a source-backed adult fruit-fly rapid-escape question into a falsifiable GF hypothesis, an immutable operator-authorized virtual protocol, state-coherent per-run simulation, auditable metrics, and a complete mission evidence bundle—without hiding stale page state or executing its own follow-up. The current retained local and public captures verify an automated WebMCP protocol client at their separately named source revisions; they do not prove that a ChatGPT agent or identified supervisor performed those actions.
 
 ## Required visual sequence
 
@@ -102,7 +102,7 @@ FLYLAB_REPORT_FILE=outputs/demo/candidate/webmcp-capture-report.json \
 npm run verify:webmcp
 ```
 
-Use the actual port if different. A successful command report must be retained with the browser version, URL, timestamp, source revision, and captures. Demo-capture mode must follow the current GF rapid-escape path represented by this narration plan; review the semantic contents of every frame rather than trusting its filename.
+Use the actual port if different. The current successful report is retained at `release-evidence/chrome-151-model-v03.json` with the browser version, URL, timestamp, source revision, hashes, and 15-frame capture contract. Demo-capture mode must follow the current GF rapid-escape path represented by this narration plan; review the semantic contents of every frame rather than trusting its filename, and regenerate after executable changes.
 
 Print the narration plan without producing media:
 

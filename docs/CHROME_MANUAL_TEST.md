@@ -2,7 +2,7 @@
 
 This is the direct Chrome protocol path for judges who want to inspect every request and response without a conversational agent. It uses Chrome's WebMCP debugging panel to call the same eight page-registered tools. It is a supported WebMCP execution surface, not a DOM or manifest fallback.
 
-A [tracked automated Chrome 151 report](release-evidence/chrome-151-v24.json) records one successful local native-protocol run for the earlier v24/`0.2.0` source revision named inside it. This manual sequence is the required fresh test for the current `0.3.0` candidate. The historical report is not verification of this candidate, a ChatGPT agent transcript, an identified-human approval record, or proof of the current public deployment.
+The current [local Chrome 151 report](release-evidence/chrome-151-model-v03.json) records all eight tools registered and invoked, a clean 15-frame GF hero capture, and 36 seeded runs at source commit `285d15718dcb6565fbc239fa54e4d55a9817ca39`. The [public Chrome 151 report](release-evidence/public-chrome-151-model-v03.json) records all eight tools registered and invoked on Sites version 29/public model `0.3.0`, the primary 40-run MDN workflow, an additional 36-run GF workflow, and a served schema-valid v3 export at source revision `8ff890e07af63028c25a5b2cdbdf1e742493fe8b`. Both used Chrome `151.0.7922.175`. This manual sequence remains useful for independent inspection and must be repeated after executable changes. The reports are automated protocol-client captures, not ChatGPT agent transcripts or identified-human approval records; the separate ChatGPT Sol/Terra agent run remains pending.
 
 ## Setup
 

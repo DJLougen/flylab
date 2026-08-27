@@ -7,7 +7,7 @@ FlyLab is a WebMCP-enabled virtual neuroethology lab for investigating how an ad
 
 The competition story leads with the adult Giant Fiber/DNp01 rapid-escape slice: a literature-supported, bilateral short-mode controller with middle-leg jump and wing-depressor output. FlyLab also includes an adult MDN reverse-walking slice. Both use the deterministic **FlyLab mapped-motor model** `0.3.0`, `state-coherent-mapped-circuit-adapter.v2`, and `stateful-open-field-model-scale.v3`; neither executes a connectome, synapses, muscles, aerodynamics, FlyGym, neural dynamics, or a complete fly.
 
-This repository is preparing the `0.3.0` behavioral-model successor. The retained [local Chrome 151 report](docs/release-evidence/chrome-151-v24.json) and [public-deployment report](docs/release-evidence/public-chrome-151-v24.json) verify the earlier v24/`0.2.0` release only. They are historical automated WebMCP protocol captures, not evidence that the current `0.3.0` source has been deployed or natively invoked and not ChatGPT agent transcripts. The current candidate requires fresh source-bound local and public verification before either claim is made.
+Sites version 29 now serves public model `0.3.0`. The current [local Chrome 151 report](docs/release-evidence/chrome-151-model-v03.json) binds a clean 15-frame GF hero capture and 36 seeded runs to source commit `285d15718dcb6565fbc239fa54e4d55a9817ca39`; the [public Chrome 151 report](docs/release-evidence/public-chrome-151-model-v03.json) binds the live deployment's 40-run MDN workflow, additional 36-run GF workflow, and HTTP-200/schema-valid v3 export to source revision `8ff890e07af63028c25a5b2cdbdf1e742493fe8b`. Both record all eight tools registered and invoked through an automated, flag-enabled WebMCP protocol client. They are not ChatGPT agent transcripts or proof that an identified person operated the approval control. A ChatGPT Sol/Terra agent run, final video and narration, Devpost publication, and entrant eligibility attestations remain pending.
 
 ## Competition prompt
 
@@ -32,7 +32,7 @@ inspect_flylab_state
 
 Approval is deliberately absent from the tool inventory. The person reviews and approves the exact visible protocol; the agent then continues through the same eight-tool page surface.
 
-## What the release candidate implements
+## What model 0.3 implements
 
 - One read-only inspector plus seven state-changing scientific actions registered with `document.modelContext.registerTool(...)`.
 - A persisted discovery decision that records ranked candidates, rejected alternatives, evidence eligibility, and motor-map coverage gaps.
