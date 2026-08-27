@@ -2592,11 +2592,11 @@ function verifySavedEvidenceExport(saved, expected) {
     throw new Error(`Evidence export did not preserve the exact immutable approval: ${JSON.stringify({ approval: payload.approval, expected: expected.approval })}`);
   }
   if (JSON.stringify(payload.batch?.approval) !== JSON.stringify(payload.approval)
-    || JSON.stringify(payload.batch?.approval) !== JSON.stringify(expected.approval)) {
+    || JSON.stringify(payload.batch?.approval) !== JSON.stringify(expected.batch?.approval)) {
     throw new Error(`Evidence export batch approval is not exactly bound to the saved and executed approval: ${JSON.stringify({
       batchApproval: payload.batch?.approval,
       payloadApproval: payload.approval,
-      expectedApproval: expected.approval,
+      executedBatchApproval: expected.batch?.approval,
     })}`);
   }
   if (payload.batch?.boundary !== payload.batch?.model?.boundary
