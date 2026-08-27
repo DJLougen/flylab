@@ -2,7 +2,7 @@
 
 FlyLab defines eight native site tools through `document.modelContext.registerTool(...)`: one read-only inspector plus seven scientific workflow mutations. This document distinguishes source-level checks, page registration, browser-mediated invocation, and a completed supported-runtime workflow. They are different evidence levels.
 
-The repository retains a [local Chrome 151 report](release-evidence/chrome-151-v24.json) from the automated, flag-enabled native WebMCP protocol verifier. It records the source commit/tree, exact browser version, eight registered and invoked tools, the completed GF workflow, negative guards, and evidence audit. It is not a ChatGPT agent transcript and does not prove that the candidate public URL serves that revision. Public-deployment and ChatGPT Sol/Terra claims require separate retained evidence.
+The repository retains a [local Chrome 151 report](release-evidence/chrome-151-v24.json) from the automated, flag-enabled native WebMCP protocol verifier and a separate [public-deployment report](release-evidence/public-chrome-151-v24.json). Together they record clean source binding, the exact browser version, eight registered and invoked tools, a fresh-session reload, the completed GF workflow, browser export parity, negative guards, and the evidence audit locally and on the public URL. They are not ChatGPT agent transcripts; a ChatGPT Sol/Terra claim requires separate retained evidence.
 
 ## Evidence levels
 
@@ -174,4 +174,4 @@ For any candidate deployment, verify and retain evidence that:
 - the exact release being described is deployed;
 - the native eight-tool inventory and required workflow pass on a supported runtime.
 
-Until those checks exist for the current release, describe the URL as a candidate target rather than a verified public deployment.
+For v24, those checks are retained in `public-chrome-151-v24.json`. Repeat them after any deployment that changes executable source before describing the newer build as verified.

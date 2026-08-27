@@ -1,6 +1,6 @@
 # WebMCP Challenge submission
 
-FlyLab is a release candidate for the WebMCP Challenge. The source implements the v3 agent contract described below. A tracked local Chrome 151 report records a complete automated native-protocol run for the source revision named inside it. Public deployment of that revision, a ChatGPT Sol/Terra agent run, the final video, and Devpost publication must still be verified separately; they are not claimed complete here.
+FlyLab is a public v24 release for the WebMCP Challenge. The source implements the v3 agent contract described below. Tracked Chrome 151 reports record the complete automated native-protocol workflow both locally and against the public no-login HTTPS deployment. A ChatGPT Sol/Terra agent run, the final video, and Devpost publication remain separate pending gates.
 
 Submission deadline: **September 3, 2026 at 1:00 p.m. PDT**, as recorded in the challenge materials. Confirm the binding rules again before submission.
 
@@ -100,7 +100,7 @@ After the person approves the exact visible protocol, use:
 
 Neither product label proves the current task passed. Confirm the exact eight-tool inventory, retain the runtime diagnostic, and record a successful native workflow. Static manifests, DOM packets, and guided examples are read-only/helpful UI surfaces, not substitute transports.
 
-Current local protocol evidence: [`docs/release-evidence/chrome-151-v24.json`](release-evidence/chrome-151-v24.json). It records Chrome 151, eight registered and invoked tools, the complete GF workflow, approval-hash rejection, operation replay/conflict behavior, edit invalidation, and global source closure. It is an automated WebMCP client capture, not a ChatGPT agent transcript or public-deployment proof.
+Current protocol evidence: [`chrome-151-v24.json`](release-evidence/chrome-151-v24.json) records the clean local release and exact 15-frame capture; [`public-chrome-151-v24.json`](release-evidence/public-chrome-151-v24.json) repeats the full workflow against the deployed URL. Both record Chrome 151, eight registered and invoked tools, fresh-session reload, browser export parity, approval-hash rejection, operation replay/conflict behavior, edit invalidation, and global source closure. They are automated WebMCP client captures, not ChatGPT agent transcripts.
 
 ## Scientific scope
 
@@ -123,26 +123,26 @@ Current local protocol evidence: [`docs/release-evidence/chrome-151-v24.json`](r
 - Actual FlyGym/NeuroMechFly execution
 - Muscle mechanics, aerodynamics, or calibrated biological effect sizes
 - New wet-lab evidence or autonomous biological experimentation
-- A ChatGPT Sol/Terra agent run, identified-human approval record, or public deployment of the current source revision
+- A ChatGPT Sol/Terra agent run or an identified-human approval record
 
 ## Submission status
 
 | Item | Honest current status |
 |---|---|
 | Source contract | Implemented; local tests/build/security gates must remain green on the final commit. |
-| Candidate app URL | Public older deployment is reachable; deploying and verifying the current v24 revision is pending. |
-| Candidate source URL | Repository is public with Apache-2.0 metadata; pushing and verifying the current v24 revision is pending. |
+| Candidate app URL | Public v24 deployment verified no-login over HTTPS with the required routes, headers, v3 artifacts, and native workflow. |
+| Candidate source URL | Final release source is public with Apache-2.0 metadata and retained verification reports. |
 | ChatGPT Sol/Terra run | Supported path; no success claim without retained current-session evidence. |
-| Chrome 149+ run | Local Chrome 151 native-protocol workflow passed; tracked report is linked above. Public-URL rerun remains pending. |
+| Chrome 149+ run | Local and public-URL Chrome 151 native-protocol workflows passed; both reports are linked above. |
 | Demo video | Pending final capture, rights-cleared narration, build, upload, and signed-out playback verification. |
 | Devpost entry | Pending authenticated publication and link verification. |
 
 ## Final submission checklist
 
-- [ ] Run `npm test`, `npm run lint`, and `npm run build` on the final commit.
-- [ ] Verify the submitted source URL is public and matches that commit.
-- [ ] Verify the submitted app URL is public, no-login, HTTPS, and serves the required headers.
-- [ ] Complete and retain one supported native WebMCP workflow report with the exact eight-tool inventory.
+- [x] Run `npm test`, `npm run lint`, and `npm run build` on the release source commit.
+- [x] Verify the submitted source URL is public and contains that release.
+- [x] Verify the submitted app URL is public, no-login, HTTPS, and serves the required headers.
+- [x] Complete and retain supported native WebMCP workflow reports with the exact eight-tool inventory locally and on the public URL.
 - [ ] Demonstrate session/revision guards, approval-hash rejection, operation replay/conflict, and post-edit invalidation.
 - [ ] Demonstrate formal GF metrics with per-run traceability and a mission v3 bundle.
 - [ ] Record rights-cleared narration and build a passing under-three-minute demo.
