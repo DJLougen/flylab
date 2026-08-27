@@ -95,7 +95,7 @@ After the person approves the exact visible protocol, use:
 
 ## Supported judging paths
 
-- ChatGPT desktop with GPT-5.6 Sol or GPT-5.6 Terra, current app, Site Tools enabled, and an eligible account/workspace rollout.
+- ChatGPT desktop's built-in browser with GPT-5.6 Sol or GPT-5.6 Terra, the current app, **Settings → Browser → Permissions → Enable site tools** enabled, and an eligible account/workspace rollout. The external Chrome extension is a browser-control surface, not the Site Tools bridge.
 - Chrome 149 or newer with WebMCP testing and DevTools WebMCP support enabled.
 
 Neither product label proves the current task passed. Confirm the exact eight-tool inventory, retain the runtime diagnostic, and record a successful native workflow. Static manifests, DOM packets, and guided examples are read-only/helpful UI surfaces, not substitute transports.

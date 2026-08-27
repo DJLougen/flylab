@@ -154,7 +154,7 @@ When WebMCP is unavailable, `/agent`, `/flylab-agent-manifest.json`, `/flylab-to
 
 ## Supported client inspection
 
-For agent-driven judging, use ChatGPT desktop with GPT-5.6 Sol or GPT-5.6 Terra, current app, Site Tools enabled, and an eligible account/workspace rollout. For direct protocol inspection, use Chrome 149+ as described above. In both cases, first confirm the exact eight-tool inventory and call `inspect_flylab_state`.
+For agent-driven judging, use ChatGPT desktop's built-in browser with GPT-5.6 Sol or GPT-5.6 Terra, the current app, Site Tools enabled, and an eligible account/workspace rollout. The external Chrome extension is a browser-control surface and does not provide the ChatGPT Site Tools bridge. For direct protocol inspection, use Chrome 149+ as described above. In both cases, first confirm the exact eight-tool inventory and call `inspect_flylab_state`.
 
 The supported label is a prerequisite, not a verification result. If a compatible-looking session lacks Site Tools or `document.modelContext`, record the diagnostic rather than claiming registration or silently switching to a non-WebMCP transport.
 

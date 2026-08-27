@@ -30,7 +30,7 @@ FlyLab lets an agent use eight native WebMCP tools to turn a source-backed adult
 | Visible edit recovery | New experiment/revision and cleared approval/downstream lineage. |
 | Runtime evidence | Supported client/version, target URL, timestamp, diagnostic, native invocation history, and final status. |
 
-The inventory and invocation proof must come from a supported WebMCP surface: ChatGPT desktop with GPT-5.6 Sol/Terra or Chrome 149+. Static manifests, inline JSON, a guided-example button, or ordinary DOM automation do not count as native tool proof.
+The inventory and invocation proof must come from a supported WebMCP surface: ChatGPT desktop's built-in browser with GPT-5.6 Sol/Terra, or Chrome 149+ for direct protocol inspection. The external Chrome extension supplies browser control, not the ChatGPT Site Tools bridge. Static manifests, inline JSON, a guided-example button, or ordinary DOM automation do not count as native tool proof.
 
 The automated Chrome capture invokes the registered WebMCP protocol directly and activates the visible approval control only to verify the boundary. Narration and proof panels must call it an automated WebMCP client/harness. In the judged interaction, the person must review and click that control; the app never exposes approval as a tool.
 

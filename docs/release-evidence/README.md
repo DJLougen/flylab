@@ -10,6 +10,10 @@ These are reproducible automated protocol captures. They are **not** ChatGPT age
 
 [`agent-chrome-run-2-2026-08-27.md`](agent-chrome-run-2-2026-08-27.md) is a separate user-controlled Chrome retest. That browser did not expose `document.modelContext`, so the run correctly stopped at the native-capability gate with zero registered or invoked tools. It is retained as a failed capability-precondition report, not as workflow-success evidence. Its two product-polish findings—the contradictory nested callability signal and deprecated Three.js shadow-map setting—were corrected after the observed run; the report itself remains unchanged as the contemporaneous record.
 
+[`agent-iab-run-3-2026-08-27.md`](agent-iab-run-3-2026-08-27.md) is a separate Codex in-app-browser retest in which the browser API remained absent. It confirms that the corrected recovery packet reports the logical workflow separately from effective browser callability, but it registered and invoked zero tools and created no scientific artifacts.
+
+[`agent-chrome-run-4-2026-08-27.md`](agent-chrome-run-4-2026-08-27.md) is a separate external-Chrome-extension operator log. Chrome exposed the API and FlyLab accepted all eight registrations, while that Codex task exposed zero page tools and observed no callbacks. [Official OpenAI documentation](https://learn.chatgpt.com/docs/webmcp) scopes Site Tools discovery to the ChatGPT desktop app's built-in browser; external Chrome remains useful for browser control and manual DevTools WebMCP inspection. This run is therefore a page-registration pass and client-exposure non-success, not an agent workflow transcript. It also captured an older restored page graph requesting a retired hashed 3D chunk; fresh public HTML referenced the available current chunk, and the follow-up release keeps the default fly viewer in the initial page graph while containing optional-viewer failures.
+
 Regenerate it from a running local release candidate with:
 
 ```bash

@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
+import { FlyArena3D } from '@/components/FlyArena3D';
 import {
   ANALYSIS_METRICS,
   BANC_V888_CELLS,
@@ -85,7 +86,32 @@ import {
 type Stage = 'discover' | 'hypothesize' | 'design' | 'run' | 'analyze' | 'continue' | 'saved';
 
 const FlyBrain3D = lazy(() => import('@/components/FlyBrain3D').then((module) => ({ default: module.FlyBrain3D })));
-const FlyArena3D = lazy(() => import('@/components/FlyArena3D').then((module) => ({ default: module.FlyArena3D })));
+
+class OptionalViewerBoundary extends Component<
+  { children: ReactNode; label: string },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error(`[FlyLab] Optional ${this.props.label} viewer failed.`, error, info.componentStack);
+  }
+
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <div className="optional-viewer-error" role="status">
+        <strong>{this.props.label} unavailable</strong>
+        <span>The research workspace and Site Tools remain active. Reload to fetch the current visual module.</span>
+        <button type="button" onClick={() => window.location.reload()}>Reload visual module</button>
+      </div>
+    );
+  }
+}
 
 interface ActivityItem {
   id: string;
@@ -3346,7 +3372,7 @@ export default function Home() {
             ))}
 
             {arenaView !== 'circuit' && (
-              <Suspense fallback={<div className="fly-3d-fallback"><span className="agent-pulse" /> Loading Three.js fly…</div>}>
+              <OptionalViewerBoundary label="3D fly">
                 <FlyArena3D
                   point={activePoint}
                   conditionLabel={activeCondition?.label ?? 'Arena orientation preview'}
@@ -3356,21 +3382,23 @@ export default function Home() {
                   motorProgram={lab.experiment?.motorMap.motorProgram}
                   targetBodyParts={lab.experiment?.motorMap.targetBodyParts}
                 />
-              </Suspense>
+              </OptionalViewerBoundary>
             )}
 
             {arenaView === 'circuit' && (
-              <Suspense fallback={<div className="brain-viewer-fallback"><span className="agent-pulse" /> Loading the BANC v888 reconstruction viewer…</div>}>
-                <FlyBrain3D
-                  laterality={activeCondition?.laterality ?? selectedCondition?.laterality ?? 'bilateral'}
-                  driveActive={Boolean(activePoint?.active)}
-                  perturbation={lab.experiment?.perturbation ?? 'activate'}
-                  conditionLabel={activeCondition?.label ?? selectedCondition?.label ?? 'Circuit orientation preview'}
-                  timeMs={Math.round(playhead * playbackDurationMs)}
-                  circuitId={lab.experiment?.targetCircuitId ?? selectedCircuit?.id ?? 'circuit_mdn_adult'}
-                  motorMap={lab.experiment?.motorMap ?? (selectedCircuit ? motorMapForCircuit(selectedCircuit.id) : undefined)}
-                />
-              </Suspense>
+              <OptionalViewerBoundary label="3D brain">
+                <Suspense fallback={<div className="brain-viewer-fallback"><span className="agent-pulse" /> Loading the BANC v888 reconstruction viewer…</div>}>
+                  <FlyBrain3D
+                    laterality={activeCondition?.laterality ?? selectedCondition?.laterality ?? 'bilateral'}
+                    driveActive={Boolean(activePoint?.active)}
+                    perturbation={lab.experiment?.perturbation ?? 'activate'}
+                    conditionLabel={activeCondition?.label ?? selectedCondition?.label ?? 'Circuit orientation preview'}
+                    timeMs={Math.round(playhead * playbackDurationMs)}
+                    circuitId={lab.experiment?.targetCircuitId ?? selectedCircuit?.id ?? 'circuit_mdn_adult'}
+                    motorMap={lab.experiment?.motorMap ?? (selectedCircuit ? motorMapForCircuit(selectedCircuit.id) : undefined)}
+                  />
+                </Suspense>
+              </OptionalViewerBoundary>
             )}
 
             {!lab.batch && arenaView !== 'circuit' && <p className="arena-empty">Design and approve an experiment to generate seeded trajectories.</p>}

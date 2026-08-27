@@ -1167,6 +1167,25 @@ dd {
   font-size: 0.68rem;
 }
 
+.optional-viewer-error {
+  position: absolute;
+  z-index: 14;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 28px;
+  text-align: center;
+  background: rgba(4, 11, 14, 0.94);
+  color: var(--muted-2);
+}
+
+.optional-viewer-error strong { color: var(--text); }
+.optional-viewer-error span { max-width: 390px; font-size: 0.68rem; line-height: 1.5; }
+.optional-viewer-error button { width: auto; margin-top: 4px; }
+
 .brain-canvas-wrap {
   position: relative;
   min-width: 0;

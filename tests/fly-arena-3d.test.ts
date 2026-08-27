@@ -15,8 +15,18 @@ describe('FlyLab Three.js arena fly', () => {
     assert.match(componentSource, /shadowMap\.type = THREE\.PCFShadowMap/);
     assert.doesNotMatch(componentSource, /PCFSoftShadowMap/);
     assert.match(componentSource, /data-renderer="three-js"/);
+    assert.match(pageSource, /import \{ FlyArena3D \} from '@\/components\/FlyArena3D'/);
+    assert.doesNotMatch(pageSource, /lazy\(\(\) => import\('@\/components\/FlyArena3D'\)/);
     assert.match(pageSource, /<FlyArena3D/);
     assert.doesNotMatch(pageSource, /className="fly-head"|className="fly-body"/);
+  });
+
+  test('keeps optional 3D failures inside the visual audit instead of the lab workspace', () => {
+    assert.match(pageSource, /class OptionalViewerBoundary extends Component/);
+    assert.match(pageSource, /The research workspace and Site Tools remain active/);
+    assert.match(pageSource, /Reload visual module/);
+    assert.match(pageSource, /<OptionalViewerBoundary label="3D fly">/);
+    assert.match(pageSource, /<OptionalViewerBoundary label="3D brain">/);
   });
 
   test('keeps the defining adult external features in the procedural model', () => {

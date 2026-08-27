@@ -12,6 +12,7 @@ A [tracked automated Chrome 151 report](release-evidence/chrome-151-v24.json) re
 4. Open FlyLab in a fresh tab.
 5. Open **DevTools → Application → WebMCP**.
 6. Confirm **Available Tools** contains exactly the eight names in [Judge testing instructions](JUDGE_TESTING.md#native-tool-inventory). Human approval must not appear as a ninth tool.
+7. Before creating state, require a console-clean default 3D fly, then switch once to **3D brain** and back. If an older restored tab references a retired hashed visual module, open the current deployment in a fresh tab; do not reload a mutated page session without exporting it first.
 
 ### If the inventory is absent
 

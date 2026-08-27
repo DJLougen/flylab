@@ -58,7 +58,7 @@ Open the local URL printed by the development server.
 
 Supported WebMCP execution surfaces for judging are:
 
-- ChatGPT desktop with GPT-5.6 Sol or GPT-5.6 Terra, current app, Site Tools enabled, and an eligible account/workspace rollout.
+- ChatGPT desktop's built-in browser with GPT-5.6 Sol or GPT-5.6 Terra, the current app, **Settings → Browser → Permissions → Enable site tools** enabled, and an eligible account/workspace rollout. The external Chrome extension is a browser-control surface, not the Site Tools bridge.
 - Chrome 149 or newer with WebMCP testing and DevTools WebMCP support enabled.
 
 An eligible product/version label is not proof that tools are available in the current page session. Check the visible runtime diagnostic and the client tool inventory. Do not substitute a static manifest, DOM packet, browser automation, or guided-example control for a WebMCP callback.
