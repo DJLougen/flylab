@@ -3146,7 +3146,7 @@ export default function Home() {
 
   return (
     <main className="lab-shell">
-      <script id="flylab-agent-context" type="application/json">{JSON.stringify(agentContext).replaceAll('<', '\\u003c')}</script>
+      <script id="flylab-agent-context" type="application/json">{JSON.stringify(agentHandoff.agent_context).replaceAll('<', '\\u003c')}</script>
       <script id="flylab-agent-runtime" type="application/json">{JSON.stringify(agentRuntime).replaceAll('<', '\\u003c')}</script>
       <script id="flylab-agent-handoff" type="application/json">{JSON.stringify(agentHandoff).replaceAll('<', '\\u003c')}</script>
       <h1 className="sr-only">FlyLab agent workspace</h1>

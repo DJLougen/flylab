@@ -22,6 +22,7 @@ describe('FlyLab submission assets', () => {
 
     assert.match(page, /id="agent-diagnostics"/);
     assert.match(page, /id="agent-recovery-packet"/);
+    assert.match(page, /JSON\.stringify\(agentHandoff\.agent_context\)/);
     assert.match(page, /Retry Site Tool detection/);
     assert.match(page, /does not exercise Site Tool discovery, registration, or agent invocation/);
     assert.match(guide, /Browser-readable recovery surface/);

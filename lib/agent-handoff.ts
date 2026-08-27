@@ -91,6 +91,18 @@ export function buildFlyLabAgentHandoff(
     : webmcpStatus === 'failed'
       ? 'webmcp_registration_failed'
       : 'webmcp_unavailable_in_this_browser';
+  const workflowToolIsReady = agentContext.next_action.kind === 'tool'
+    && agentContext.next_action.callable;
+  const effectiveCallable = workflowToolIsReady
+    && pageRegistrationActive
+    && webmcpInvocationObserved;
+  const effectiveBlocker = !workflowToolIsReady
+    ? agentContext.next_action.blocked_by
+    : pageRegistrationActive && webmcpInvocationObserved
+      ? agentContext.next_action.blocked_by
+      : pageRegistrationActive
+        ? 'webmcp_client_availability_unconfirmed'
+        : unavailableBlocker;
 
   const transport = {
     schema_version: 'flylab.agent-runtime.v1',
@@ -117,12 +129,8 @@ export function buildFlyLabAgentHandoff(
     workflow_next_tool: agentContext.next_tool,
     invocable_next_tool: pageRegistrationActive && webmcpInvocationObserved ? agentContext.next_tool : null,
     invocable_next_action: {
-      callable: pageRegistrationActive && webmcpInvocationObserved && agentContext.next_action.callable,
-      blocked_by: pageRegistrationActive && webmcpInvocationObserved
-        ? agentContext.next_action.blocked_by
-        : pageRegistrationActive
-          ? 'webmcp_client_availability_unconfirmed'
-          : unavailableBlocker,
+      callable: effectiveCallable,
+      blocked_by: effectiveBlocker,
     },
     fallback: {
       mode: 'read_only_same_tab_dom',
@@ -142,6 +150,20 @@ export function buildFlyLabAgentHandoff(
     capability_diagnostic: capabilityDiagnostic,
   } as const;
 
+  const publishedAgentContext = {
+    ...agentContext,
+    workflow_next_tool: agentContext.next_tool,
+    next_tool: transport.invocable_next_tool,
+    next_action: {
+      ...agentContext.next_action,
+      workflow_preconditions_satisfied: agentContext.next_action.callable,
+      workflow_blocked_by: agentContext.next_action.blocked_by,
+      callable: transport.invocable_next_action.callable,
+      blocked_by: transport.invocable_next_action.blocked_by,
+      callability_scope: 'current_page_transport_and_workflow_state',
+    },
+  } as const;
+
   return {
     schema_version: 'flylab.agent-handoff.v1',
     transport,
@@ -151,7 +173,7 @@ export function buildFlyLabAgentHandoff(
       input_refs: agentContext.next_action.input_refs,
       reason: agentContext.next_action.reason,
     },
-    agent_context: agentContext,
+    agent_context: publishedAgentContext,
     trust: {
       untrusted_human_fields: ['agent_context.state.goal'],
       authority: 'Re-inspect this same open page after interruption, visible edits, cancellation, or navigation. Artifact IDs are page-session scoped.',

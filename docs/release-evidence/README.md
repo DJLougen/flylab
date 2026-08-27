@@ -8,6 +8,8 @@ The same report hashes both served v3 contract artifacts and all 15 exact demo f
 
 These are reproducible automated protocol captures. They are **not** ChatGPT agent transcripts or identity proof for the person operating the approval control.
 
+[`agent-chrome-run-2-2026-08-27.md`](agent-chrome-run-2-2026-08-27.md) is a separate user-controlled Chrome retest. That browser did not expose `document.modelContext`, so the run correctly stopped at the native-capability gate with zero registered or invoked tools. It is retained as a failed capability-precondition report, not as workflow-success evidence. Its two product-polish findings—the contradictory nested callability signal and deprecated Three.js shadow-map setting—were corrected after the observed run; the report itself remains unchanged as the contemporaneous record.
+
 Regenerate it from a running local release candidate with:
 
 ```bash

@@ -12,6 +12,8 @@ const pageSource = readFileSync(join(process.cwd(), 'app/page.tsx'), 'utf8');
 describe('FlyLab Three.js arena fly', () => {
   test('uses a WebGL Three.js renderer instead of the former flat fly markup', () => {
     assert.match(componentSource, /new THREE\.WebGLRenderer/);
+    assert.match(componentSource, /shadowMap\.type = THREE\.PCFShadowMap/);
+    assert.doesNotMatch(componentSource, /PCFSoftShadowMap/);
     assert.match(componentSource, /data-renderer="three-js"/);
     assert.match(pageSource, /<FlyArena3D/);
     assert.doesNotMatch(pageSource, /className="fly-head"|className="fly-body"/);

@@ -253,7 +253,7 @@ export function FlyArena3D({ point, conditionLabel, timeMs, playing = false, tra
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
       renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.shadowMap.type = THREE.PCFShadowMap;
       renderer.domElement.setAttribute('aria-hidden', 'true');
       mount.appendChild(renderer.domElement);
 

@@ -63,6 +63,13 @@ describe('FlyLab inline agent handoff', () => {
       assert.equal(transport.invocable_next_tool, wanted.invocable);
       assert.equal(transport.invocable_next_action.callable, wanted.callable);
       assert.equal(transport.invocable_next_action.blocked_by, wanted.blocker);
+      assert.equal(packet.agent_context.workflow_next_tool, 'find_fly_circuits');
+      assert.equal(packet.agent_context.next_tool, wanted.invocable);
+      assert.equal(packet.agent_context.next_action.workflow_preconditions_satisfied, true);
+      assert.equal(packet.agent_context.next_action.workflow_blocked_by, null);
+      assert.equal(packet.agent_context.next_action.callable, wanted.callable);
+      assert.equal(packet.agent_context.next_action.blocked_by, wanted.blocker);
+      assert.equal(packet.agent_context.next_action.callability_scope, 'current_page_transport_and_workflow_state');
       assert.equal(transport.fallback.mutation_available, false);
       assert.equal(transport.fallback.browser_documentation_url, '/agent');
       assert.match(transport.execution_note, wanted.pageHandler ? /inspect_flylab_state/ : /not a fallback transport/i);
@@ -106,6 +113,9 @@ describe('FlyLab inline agent handoff', () => {
     assert.equal(observed.transport.webmcp_invocation_observed, true);
     assert.equal(observed.transport.webmcp_client_availability, 'invocation_observed_this_page_session');
     assert.equal(observed.transport.invocable_next_tool, 'find_fly_circuits');
+    assert.equal(observed.agent_context.next_tool, 'find_fly_circuits');
+    assert.equal(observed.agent_context.next_action.callable, true);
+    assert.equal(observed.agent_context.next_action.blocked_by, null);
     assert.match(observed.transport.execution_note, /tool callback has been observed/i);
 
     const rolledBackAfterObservation = buildFlyLabAgentHandoff(context, 'failed', undefined, true, 'session_test');
@@ -115,5 +125,30 @@ describe('FlyLab inline agent handoff', () => {
     assert.equal(rolledBackAfterObservation.transport.invocable_next_tool, null);
     assert.equal(rolledBackAfterObservation.transport.invocable_next_action.callable, false);
     assert.equal(rolledBackAfterObservation.transport.invocable_next_action.blocked_by, 'webmcp_registration_failed');
+    assert.equal(rolledBackAfterObservation.agent_context.next_tool, null);
+    assert.equal(rolledBackAfterObservation.agent_context.next_action.callable, false);
+    assert.equal(rolledBackAfterObservation.agent_context.next_action.blocked_by, 'webmcp_registration_failed');
+  });
+
+  test('preserves a workflow-owned blocker when the next action is not a WebMCP tool', () => {
+    const waitingForHuman = buildFlyLabAgentContext({
+      ...initialSnapshot,
+      discoveryDecisionId: 'discovery_test',
+      selectedCircuitId: 'circuit_gf_adult',
+      hypothesisId: 'hyp_test',
+      hypothesisPredictedBehavior: 'short_mode_escape',
+      hypothesisPerturbation: 'activate',
+      experimentId: 'exp_test',
+      conditionIds: ['condition_baseline', 'condition_sham', 'condition_bilateral'],
+    });
+    const packet = buildFlyLabAgentHandoff(waitingForHuman, 'unsupported');
+
+    assert.equal(packet.workflow_recommendation.kind, 'human_gate');
+    assert.equal(packet.transport.invocable_next_tool, null);
+    assert.equal(packet.transport.invocable_next_action.callable, false);
+    assert.equal(packet.transport.invocable_next_action.blocked_by, 'human_approval');
+    assert.equal(packet.agent_context.next_action.workflow_preconditions_satisfied, false);
+    assert.equal(packet.agent_context.next_action.callable, false);
+    assert.equal(packet.agent_context.next_action.blocked_by, 'human_approval');
   });
 });

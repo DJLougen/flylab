@@ -13,6 +13,18 @@ A [tracked automated Chrome 151 report](release-evidence/chrome-151-v24.json) re
 5. Open **DevTools → Application → WebMCP**.
 6. Confirm **Available Tools** contains exactly the eight names in [Judge testing instructions](JUDGE_TESTING.md#native-tool-inventory). Human approval must not appear as a ninth tool.
 
+### If the inventory is absent
+
+Stop before using the visible walkthrough. An empty inventory does not test native WebMCP.
+
+1. Open FlyLab's **Runtime diagnostic** and record the page session, capability fields, and visible recovery packet.
+2. If `document.modelContext` is absent, confirm both WebMCP flags are enabled and fully quit and relaunch Chrome; reloading the tab alone cannot add a process-level browser API.
+3. Open FlyLab in a new top-level tab and require all of these before proceeding: **Tools policy** is `yes`, **modelContext present** is `yes`, **registerTool type** is `function`, **Registration attempted** is `yes`, and **Registered now** is `8`.
+4. If `document.modelContext` remains absent, record the run as a failed capability-precondition check. Do not represent `/agent`, static JSON, inline recovery state, or the manual walkthrough as a native Site Tool success.
+5. If the API is present but registration fails, retain the named failed tool and exact registration exception shown by FlyLab; that is a separate contract/registration failure.
+
+In an API-absent browser, a `no` Tools-policy observation is not by itself proof that the deployment header is wrong because the browser may not recognize the draft feature. If it remains `no` after the flags and full process relaunch, verify the top-level response includes `Permissions-Policy: tools=(self)` and that the tab is not embedded before retrying.
+
 Every successful call returns `flylab.tool-result.v3`. In the examples below:
 
 - replace `SESSION_ID` with the inspected `page_session_id`;
