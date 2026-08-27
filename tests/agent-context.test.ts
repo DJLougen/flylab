@@ -13,6 +13,7 @@ const baseSnapshot: FlyLabAgentSnapshot = {
   goal: 'Investigate adult MDN-driven backward walking.',
   simulationRunning: false,
   evidenceSaveRunning: false,
+  discoveryDecisionId: null,
   selectedCircuitId: null,
   discoveredEvidenceIds: [],
   hypothesisEligibleEvidenceIds: [],
@@ -23,6 +24,10 @@ const baseSnapshot: FlyLabAgentSnapshot = {
   hypothesisPerturbation: null,
   experimentId: null,
   experimentApproved: false,
+  approvalExperimentId: null,
+  approvedProtocolHash: null,
+  approvedSeedManifestHash: null,
+  approvalTimestamp: null,
   conditionIds: [],
   batchId: null,
   analysisIds: [],
@@ -42,7 +47,7 @@ describe('FlyLab agent context', () => {
   test('returns a fixed, versioned recovery contract without changing the revision', () => {
     const result = context();
 
-    assert.equal(FLYLAB_AGENT_CONTEXT_VERSION, 'flylab.agent-context.v2');
+    assert.equal(FLYLAB_AGENT_CONTEXT_VERSION, 'flylab.agent-context.v3');
     assert.equal(result.schema_version, FLYLAB_AGENT_CONTEXT_VERSION);
     assert.equal(result.page_session_scope, 'current_open_page');
     assert.equal(result.state.revision, baseSnapshot.revision);
@@ -52,11 +57,17 @@ describe('FlyLab agent context', () => {
     assert.equal(result.next_action.kind, 'tool');
     assert.equal(result.next_action.callable, true);
     assert.equal(result.artifacts.selected_circuit_id, null);
+    assert.equal(result.artifacts.discovery_decision_id, null);
     assert.deepEqual(result.artifacts.discovered_evidence_ids, []);
     assert.deepEqual(result.artifacts.hypothesis_eligible_evidence_ids, []);
     assert.deepEqual(result.artifacts.causal_evidence_ids_by_perturbation, { activate: [], silence: [] });
     assert.deepEqual(result.artifacts.hypothesis_evidence_ids, []);
     assert.equal(result.artifacts.experiment_id, null);
+    assert.equal(result.artifacts.approval_binding_complete, false);
+    assert.equal(result.artifacts.approval_experiment_id, null);
+    assert.equal(result.artifacts.approved_protocol_hash, null);
+    assert.equal(result.artifacts.approved_seed_manifest_hash, null);
+    assert.equal(result.artifacts.approval_timestamp, null);
     assert.deepEqual(result.artifacts.condition_ids, []);
     assert.deepEqual(result.artifacts.analysis_ids, []);
     assert.deepEqual(result.artifacts.analysis_metrics_by_id, {});
@@ -103,6 +114,38 @@ describe('FlyLab agent context', () => {
     assert.equal('provenance' in result.artifacts, false);
   });
 
+  test('publishes stable discovery and immutable approval references as JSON-safe recovery state', () => {
+    const overrides: Partial<FlyLabAgentSnapshot> = {
+      discoveryDecisionId: 'discovery_8d662cb4',
+      selectedCircuitId: 'circuit_gf_adult',
+      hypothesisId: 'hyp_gf_1',
+      experimentId: 'exp_gf_1',
+      experimentApproved: true,
+      approvalExperimentId: 'exp_gf_1',
+      approvedProtocolHash: 'sha256:2e9eac5d',
+      approvedSeedManifestHash: 'sha256:76d7a3bb',
+      approvalTimestamp: '2026-08-26T12:34:56.000Z',
+    };
+
+    const first = context(overrides);
+    const second = context(overrides);
+
+    assert.equal(first.artifacts.discovery_decision_id, 'discovery_8d662cb4');
+    assert.equal(first.artifacts.approval_experiment_id, 'exp_gf_1');
+    assert.equal(first.artifacts.approved_protocol_hash, 'sha256:2e9eac5d');
+    assert.equal(first.artifacts.approved_seed_manifest_hash, 'sha256:76d7a3bb');
+    assert.equal(first.artifacts.approval_timestamp, '2026-08-26T12:34:56.000Z');
+    assert.equal(first.human_gate.approved_protocol_hash, 'sha256:2e9eac5d');
+    assert.equal(first.next_action.kind, 'tool');
+    assert.equal(first.next_action.name, 'run_fly_simulation');
+    assert.deepEqual(first.next_action.input_refs, {
+      experiment_id: 'exp_gf_1',
+      approved_protocol_hash: 'sha256:2e9eac5d',
+    });
+    assert.equal(JSON.stringify(first), JSON.stringify(second));
+    assert.deepEqual(JSON.parse(JSON.stringify(first)), first);
+  });
+
   test('derives exactly one next tool from the current artifact lineage', () => {
     const cases: Array<{
       overrides: Partial<FlyLabAgentSnapshot>;
@@ -137,6 +180,10 @@ describe('FlyLab agent context', () => {
           hypothesisId: 'hyp_1',
           experimentId: 'exp_1',
           experimentApproved: true,
+          approvalExperimentId: 'exp_1',
+          approvedProtocolHash: 'sha256:protocol-1',
+          approvedSeedManifestHash: 'sha256:seeds-1',
+          approvalTimestamp: '2026-08-26T12:00:00.000Z',
           conditionIds: ['condition_baseline', 'condition_bilateral'],
           stage: 'run',
         },
@@ -148,6 +195,10 @@ describe('FlyLab agent context', () => {
           hypothesisId: 'hyp_1',
           experimentId: 'exp_1',
           experimentApproved: true,
+          approvalExperimentId: 'exp_1',
+          approvedProtocolHash: 'sha256:protocol-1',
+          approvedSeedManifestHash: 'sha256:seeds-1',
+          approvalTimestamp: '2026-08-26T12:00:00.000Z',
           batchId: 'batch_1',
           stage: 'analyze',
         },
@@ -159,6 +210,10 @@ describe('FlyLab agent context', () => {
           hypothesisId: 'hyp_1',
           experimentId: 'exp_1',
           experimentApproved: true,
+          approvalExperimentId: 'exp_1',
+          approvedProtocolHash: 'sha256:protocol-1',
+          approvedSeedManifestHash: 'sha256:seeds-1',
+          approvalTimestamp: '2026-08-26T12:00:00.000Z',
           batchId: 'batch_1',
           analysisIds: ['analysis_1'],
           analysisMetricsById: { analysis_1: ['backward_distance_mm'] },
@@ -172,6 +227,10 @@ describe('FlyLab agent context', () => {
           hypothesisId: 'hyp_1',
           experimentId: 'exp_1',
           experimentApproved: true,
+          approvalExperimentId: 'exp_1',
+          approvedProtocolHash: 'sha256:protocol-1',
+          approvedSeedManifestHash: 'sha256:seeds-1',
+          approvalTimestamp: '2026-08-26T12:00:00.000Z',
           batchId: 'batch_1',
           analysisIds: ['analysis_1'],
           analysisMetricsById: { analysis_1: ['backward_distance_mm'] },
@@ -208,11 +267,18 @@ describe('FlyLab agent context', () => {
       }
       if (item.expected === 'save_fly_evidence') {
         assert.deepEqual(result.next_action.input_refs, {
+          scope: 'mission',
           hypothesis_id: 'hyp_1',
           experiment_id: 'exp_1',
           batch_ids: ['batch_1'],
           analysis_ids: ['analysis_1'],
           comparison_id: 'comparison_1',
+        });
+      }
+      if (item.expected === 'run_fly_simulation') {
+        assert.deepEqual(result.next_action.input_refs, {
+          experiment_id: 'exp_1',
+          approved_protocol_hash: 'sha256:protocol-1',
         });
       }
     }
@@ -240,12 +306,37 @@ describe('FlyLab agent context', () => {
     assert.equal(result.pipeline.find((step) => step.name === 'run_fly_simulation')?.status, 'blocked');
   });
 
+  test('fails closed when the approval reference is incomplete or bound to another experiment', () => {
+    const result = context({
+      selectedCircuitId: 'circuit_mdn_adult',
+      hypothesisId: 'hyp_1',
+      experimentId: 'exp_current',
+      experimentApproved: true,
+      approvalExperimentId: 'exp_prior',
+      approvedProtocolHash: 'sha256:protocol-prior',
+      approvedSeedManifestHash: 'sha256:seeds-prior',
+      approvalTimestamp: '2026-08-26T12:00:00.000Z',
+    });
+
+    assert.equal(result.state.stage, 'design');
+    assert.equal(result.agent_status, 'waiting_for_human');
+    assert.equal(result.next_tool, null);
+    assert.equal(result.next_action.blocked_by, 'human_approval');
+    assert.equal(result.artifacts.experiment_approved, false);
+    assert.equal(result.artifacts.approval_binding_complete, false);
+    assert.equal(result.human_gate.status, 'required');
+  });
+
   test('reports a running invocation as wait, never as another callable tool', () => {
     const result = context({
       selectedCircuitId: 'circuit_mdn_adult',
       hypothesisId: 'hyp_1',
       experimentId: 'exp_1',
       experimentApproved: true,
+      approvalExperimentId: 'exp_1',
+      approvedProtocolHash: 'sha256:protocol-1',
+      approvedSeedManifestHash: 'sha256:seeds-1',
+      approvalTimestamp: '2026-08-26T12:00:00.000Z',
       simulationRunning: true,
       stage: 'run',
     });
@@ -263,6 +354,10 @@ describe('FlyLab agent context', () => {
       hypothesisId: 'hyp_1',
       experimentId: 'exp_1',
       experimentApproved: true,
+      approvalExperimentId: 'exp_1',
+      approvedProtocolHash: 'sha256:protocol-1',
+      approvedSeedManifestHash: 'sha256:seeds-1',
+      approvalTimestamp: '2026-08-26T12:00:00.000Z',
       batchId: 'batch_1',
       analysisIds: ['analysis_1'],
       comparisonId: 'comparison_1',
@@ -285,6 +380,10 @@ describe('FlyLab agent context', () => {
       hypothesisId: 'hyp_1',
       experimentId: 'exp_1',
       experimentApproved: true,
+      approvalExperimentId: 'exp_1',
+      approvedProtocolHash: 'sha256:protocol-1',
+      approvedSeedManifestHash: 'sha256:seeds-1',
+      approvalTimestamp: '2026-08-26T12:00:00.000Z',
       batchId: 'batch_1',
       analysisIds: ['analysis_1'],
       comparisonId: 'comparison_1',
@@ -306,6 +405,10 @@ describe('FlyLab agent context', () => {
       hypothesisId: 'hyp_1',
       experimentId: 'exp_1',
       experimentApproved: true,
+      approvalExperimentId: 'exp_1',
+      approvedProtocolHash: 'sha256:protocol-1',
+      approvedSeedManifestHash: 'sha256:seeds-1',
+      approvalTimestamp: '2026-08-26T12:00:00.000Z',
       batchId: 'batch_1',
       analysisIds: ['analysis_1'],
       comparisonId: 'comparison_1',

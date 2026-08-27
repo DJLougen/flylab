@@ -9,7 +9,7 @@ import {
 } from './webmcp.js';
 
 export const flyLabAgentContractDocument = {
-  schema_version: 'flylab.webmcp-contracts.v2',
+  schema_version: 'flylab.webmcp-contracts.v3',
   name: 'FlyLab WebMCP contracts',
   site: 'https://flylab-neuroethology.d-lougen.chatgpt.site/',
   transport: {
@@ -35,8 +35,8 @@ export const flyLabAgentContractDocument = {
   },
   result_contract: {
     schema_version: FLYLAB_TOOL_RESULT_VERSION,
-    success_fields: ['ok', 'result_version', 'tool', 'summary', 'state_revision', 'provenance', 'provenance_scope', 'provenance_manifest', 'data'],
-    failure_fields: ['ok', 'result_version', 'tool', 'error'],
+    success_fields: ['ok', 'result_version', 'tool', 'summary', 'page_session_id', 'previous_state_revision', 'state_revision', 'created_artifact_ids', 'operation_id', 'idempotent_replay', 'next_action', 'verification', 'provenance', 'provenance_scope', 'provenance_manifest', 'data'],
+    failure_fields: ['ok', 'result_version', 'tool', 'page_session_id', 'state_revision', 'error', 'recovery'],
     failure_error_fields: ['code', 'message', 'retryable', 'details'],
     domain_error_codes: FLYLAB_ERROR_CODES,
     cancellation: 'A cancellation observed before commit rejects with AbortError and publishes no prepared batch or evidence bundle.',

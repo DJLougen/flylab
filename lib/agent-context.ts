@@ -1,4 +1,5 @@
 import { PROVENANCE_DEFINITIONS } from './flylab.js';
+import type { Sha256Digest } from './experiment-approval.js';
 
 export type AgentPipelineStatus =
   | 'available'
@@ -14,6 +15,7 @@ export interface FlyLabAgentSnapshot {
   goal: string;
   simulationRunning: boolean;
   evidenceSaveRunning: boolean;
+  discoveryDecisionId: string | null;
   selectedCircuitId: string | null;
   discoveredEvidenceIds: string[];
   hypothesisEligibleEvidenceIds: string[];
@@ -27,6 +29,10 @@ export interface FlyLabAgentSnapshot {
   hypothesisPerturbation: 'activate' | 'silence' | null;
   experimentId: string | null;
   experimentApproved: boolean;
+  approvalExperimentId: string | null;
+  approvedProtocolHash: Sha256Digest | null;
+  approvedSeedManifestHash: Sha256Digest | null;
+  approvalTimestamp: string | null;
   conditionIds: string[];
   batchId: string | null;
   analysisIds: string[];
@@ -46,13 +52,22 @@ export interface AgentPipelineStep {
   boundary: string;
 }
 
-export const FLYLAB_AGENT_CONTEXT_VERSION = 'flylab.agent-context.v2';
+export const FLYLAB_AGENT_CONTEXT_VERSION = 'flylab.agent-context.v3';
+
+function hasBoundExperimentApproval(snapshot: FlyLabAgentSnapshot) {
+  return snapshot.experimentApproved
+    && snapshot.experimentId !== null
+    && snapshot.approvalExperimentId === snapshot.experimentId
+    && snapshot.approvedProtocolHash !== null
+    && snapshot.approvedSeedManifestHash !== null
+    && snapshot.approvalTimestamp !== null;
+}
 
 export function deriveFlyLabAgentStage(snapshot: FlyLabAgentSnapshot) {
   if (snapshot.bundleId) return 'saved';
   if (snapshot.comparisonId || snapshot.analysisIds.length > 0) return 'continue';
   if (snapshot.batchId) return 'analyze';
-  if (snapshot.experimentId) return snapshot.experimentApproved ? 'run' : 'design';
+  if (snapshot.experimentId) return hasBoundExperimentApproval(snapshot) ? 'run' : 'design';
   if (snapshot.hypothesisId) return 'design';
   if (snapshot.selectedCircuitId) return 'hypothesize';
   return 'discover';
@@ -66,6 +81,7 @@ export function buildFlyLabAgentContext(snapshot: FlyLabAgentSnapshot) {
   const hasAnalysis = snapshot.analysisIds.length > 0;
   const hasComparison = Boolean(snapshot.comparisonId);
   const hasBundle = Boolean(snapshot.bundleId);
+  const hasApproval = hasBoundExperimentApproval(snapshot);
 
   const pipeline: AgentPipelineStep[] = [
     {
@@ -100,14 +116,14 @@ export function buildFlyLabAgentContext(snapshot: FlyLabAgentSnapshot) {
       name: 'human_approval',
       title: 'Supervisor reviews exact protocol',
       kind: 'human_gate',
-      status: snapshot.experimentApproved ? 'complete' : hasExperiment ? 'human_required' : 'blocked',
+      status: hasApproval ? 'complete' : hasExperiment ? 'human_required' : 'blocked',
       boundary: 'Intentionally not a WebMCP tool. Any protocol edit revokes approval and clears downstream work.',
     },
     {
       name: 'run_fly_simulation',
       title: 'Run the approved virtual batch',
       kind: 'tool',
-      status: hasBatch ? 'complete' : snapshot.simulationRunning ? 'running' : snapshot.experimentApproved ? 'recommended' : 'blocked',
+      status: hasBatch ? 'complete' : snapshot.simulationRunning ? 'running' : hasApproval ? 'recommended' : 'blocked',
       boundary: 'Reduced-order simulation only; no wet-lab action or neural dynamics.',
     },
     {
@@ -157,16 +173,16 @@ export function buildFlyLabAgentContext(snapshot: FlyLabAgentSnapshot) {
         ? { kind: 'tool' as const, name: 'draft_fly_hypothesis', callable: true, blocked_by: null, reason: 'Create a falsifiable claim using only discovered records marked hypothesis_support.', input_refs: { circuit_id: snapshot.selectedCircuitId, evidence_ids: snapshot.hypothesisEligibleEvidenceIds } }
         : !hasExperiment
           ? { kind: 'tool' as const, name: 'design_stimulation_trial', callable: true, blocked_by: null, reason: 'Create visible controls and a reproducible seed manifest.', input_refs: { hypothesis_id: snapshot.hypothesisId, target_circuit_id: snapshot.selectedCircuitId, perturbation: snapshot.hypothesisPerturbation } }
-          : !snapshot.experimentApproved
+          : !hasApproval
             ? { kind: 'human_gate' as const, name: null, callable: false, blocked_by: 'human_approval', reason: 'A supervisor must review and approve the exact visible protocol.', input_refs: { experiment_id: snapshot.experimentId } }
             : !hasBatch
-              ? { kind: 'tool' as const, name: 'run_fly_simulation', callable: true, blocked_by: null, reason: 'The exact current experiment is approved for virtual execution.', input_refs: { experiment_id: snapshot.experimentId } }
+              ? { kind: 'tool' as const, name: 'run_fly_simulation', callable: true, blocked_by: null, reason: 'The exact current experiment is approved for virtual execution.', input_refs: { experiment_id: snapshot.experimentId, approved_protocol_hash: snapshot.approvedProtocolHash } }
               : !hasAnalysis
                 ? { kind: 'tool' as const, name: 'analyze_fly_behavior', callable: true, blocked_by: null, reason: 'Quantify the completed simulation batch.', input_refs: { batch_id: snapshot.batchId } }
                 : !hasComparison
                   ? { kind: 'tool' as const, name: 'compare_fly_trials', callable: true, blocked_by: null, reason: 'Rank conditions and propose one bounded follow-up.', input_refs: { analysis_ids: snapshot.analysisIds, metrics_by_analysis_id: snapshot.analysisMetricsById } }
                   : !hasBundle
-                    ? { kind: 'tool' as const, name: 'save_fly_evidence', callable: true, blocked_by: null, reason: 'Commit the complete source-to-result lineage.', input_refs: { hypothesis_id: snapshot.hypothesisId, experiment_id: snapshot.experimentId, batch_ids: snapshot.batchId ? [snapshot.batchId] : [], analysis_ids: snapshot.comparisonAnalysisIds, comparison_id: snapshot.comparisonId } }
+                    ? { kind: 'tool' as const, name: 'save_fly_evidence', callable: true, blocked_by: null, reason: 'Commit the complete source-to-result lineage.', input_refs: { scope: 'mission' as const, hypothesis_id: snapshot.hypothesisId, experiment_id: snapshot.experimentId, batch_ids: snapshot.batchId ? [snapshot.batchId] : [], analysis_ids: snapshot.comparisonAnalysisIds, comparison_id: snapshot.comparisonId } }
                     : { kind: 'complete' as const, name: null, callable: false, blocked_by: null, reason: 'Workflow complete. Review or download the saved evidence bundle.', input_refs: { evidence_bundle_id: snapshot.bundleId } };
 
   return {
@@ -185,6 +201,7 @@ export function buildFlyLabAgentContext(snapshot: FlyLabAgentSnapshot) {
       goal: snapshot.goal,
     },
     artifacts: {
+      discovery_decision_id: snapshot.discoveryDecisionId,
       selected_circuit_id: snapshot.selectedCircuitId,
       discovered_evidence_ids: snapshot.discoveredEvidenceIds,
       hypothesis_eligible_evidence_ids: snapshot.hypothesisEligibleEvidenceIds,
@@ -194,7 +211,12 @@ export function buildFlyLabAgentContext(snapshot: FlyLabAgentSnapshot) {
       hypothesis_predicted_behavior: snapshot.hypothesisPredictedBehavior,
       hypothesis_perturbation: snapshot.hypothesisPerturbation,
       experiment_id: snapshot.experimentId,
-      experiment_approved: snapshot.experimentApproved,
+      experiment_approved: hasApproval,
+      approval_binding_complete: hasApproval,
+      approval_experiment_id: snapshot.approvalExperimentId,
+      approved_protocol_hash: snapshot.approvedProtocolHash,
+      approved_seed_manifest_hash: snapshot.approvedSeedManifestHash,
+      approval_timestamp: snapshot.approvalTimestamp,
       condition_ids: snapshot.conditionIds,
       batch_id: snapshot.batchId,
       analysis_ids: snapshot.analysisIds,
@@ -211,14 +233,18 @@ export function buildFlyLabAgentContext(snapshot: FlyLabAgentSnapshot) {
     },
     human_gate: {
       id: 'approve_experiment',
-      status: !hasExperiment ? 'not_applicable' : snapshot.experimentApproved ? 'satisfied' : 'required',
+      status: !hasExperiment ? 'not_applicable' : hasApproval ? 'satisfied' : 'required',
       subject_experiment_id: snapshot.experimentId,
       blocks_tool: 'run_fly_simulation',
       agent_can_satisfy: false,
       webmcp_tool_can_satisfy: false,
       scope: 'webmcp_site_tools',
       authorization_boundary: 'Approval is absent from the WebMCP tool surface and requires visible UI interaction. It is not identity-authenticated against general browser automation.',
-      human_control_label: snapshot.experimentApproved ? 'Approved' : 'Approve experiment',
+      human_control_label: hasApproval ? 'Approved' : 'Approve experiment',
+      approval_experiment_id: snapshot.approvalExperimentId,
+      approved_protocol_hash: snapshot.approvedProtocolHash,
+      approved_seed_manifest_hash: snapshot.approvedSeedManifestHash,
+      approval_timestamp: snapshot.approvalTimestamp,
       follow_up_execution: 'not_authorized',
     },
     pipeline,

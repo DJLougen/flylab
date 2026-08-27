@@ -2,15 +2,15 @@
 
 ## Publication status
 
-Do not upload until the agent-first UI is explicitly approved, the two real-WebMCP proof composites exist, the rights-cleared narration is recorded, and `scripts/build-demo-video.mjs` produces a passing delivery report. Fill every bracketed value from that report or the verified public URLs.
+Do not upload or describe the video as complete until the v3 GF-first frames are approved, a supported native WebMCP run is recorded, rights-cleared narration exists, the delivery report passes, and signed-out playback is verified. Replace every bracketed value only from retained evidence.
 
 **Title**
 
-FlyLab — Agent-Native Neuroethology with WebMCP
+FlyLab — Agent-Native Rapid-Escape Neuroethology with WebMCP
 
 **Video file**
 
-`outputs/demo/v7/FlyLab-WebMCP-Demo.mp4`
+`[FINAL_VIDEO_FILE]`
 
 **Runtime**
 
@@ -18,11 +18,11 @@ FlyLab — Agent-Native Neuroethology with WebMCP
 
 **Thumbnail**
 
-`outputs/demo/v7/FlyLab-Devpost-Thumbnail.png` — native 1280 × 720
+`[FINAL_1280_X_720_THUMBNAIL]`
 
 **Captions**
 
-`outputs/demo/v7/FlyLab-WebMCP-Demo.srt` plus the embedded English caption stream
+`[FINAL_SRT_FILE]` plus the embedded English caption stream
 
 **Category**
 
@@ -30,7 +30,7 @@ Science & Technology
 
 **Visibility**
 
-Public
+Public, only after signed-out verification
 
 **Audience setting**
 
@@ -38,7 +38,7 @@ Not made for kids
 
 **Suggested tags**
 
-`FlyLab, WebMCP, Drosophila, fruit fly, neuroethology, neuroscience, human in the loop, BANC connectome, Moonwalker descending neurons, MDN, Three.js, reproducible simulation, scientific provenance, AI agent`
+`FlyLab, WebMCP, Drosophila, fruit fly, neuroethology, Giant Fiber, DNp01, rapid escape, human in the loop, reproducible simulation, scientific provenance, AI agent`
 
 **License note**
 
@@ -47,17 +47,27 @@ Choose the YouTube video-license setting deliberately. It is separate from the r
 ## Description
 
 ```text
-FlyLab is an agent-operable, human-auditable virtual fruit-fly lab created during the 2026 WebMCP Challenge for computational-neuroethology researchers, neuroscience educators, and agent-tool builders. It exposes one read-only WebMCP state inspector and seven browser-native scientific workflow actions.
+FlyLab is an agent-operable, human-auditable virtual fruit-fly lab created for the 2026 WebMCP Challenge. It exposes one read-only state inspector and seven native scientific workflow actions inside the same page a person reviews.
 
-Try FlyLab: https://flylab-neuroethology.d-lougen.chatgpt.site
-Source repository: https://github.com/DJLougen/flylab
+Try FlyLab: [VERIFIED_PUBLIC_APP_URL]
+Source repository: [VERIFIED_PUBLIC_SOURCE_URL]
 Challenge entry: [DEVPOST_ENTRY_URL]
 
-The agent inspects the shared page revision, artifact IDs, blocker, and exact next action; finds cited adult Moonwalker descending-neuron evidence; drafts a falsifiable hypothesis; and prepares five controlled conditions. It must stop at a visible supervisor approval control that is absent from the WebMCP tool surface. After approval and re-inspection, it runs a seeded reduced-order simulation, analyzes the complete predefined behavior panel, proposes—but cannot execute—one bounded follow-up, and saves a manifest-hashed exact-lineage evidence bundle. A later protocol edit clears approval and downstream results, proving that visible human changes remain authoritative.
+Competition prompt:
+“Investigate how the adult fruit-fly brain coordinates leg and wing output during rapid escape. Separate measured findings from connectome inference and simulation assumptions, draft a falsifiable hypothesis, and design a controlled experiment. Stop for my approval, then continue, analyze every metric, compare conditions, and save the complete evidence bundle.”
 
-The Three.js circuit view displays six reconstruction-derived cells from the BANC v888 static dataset, Harvard Dataverse version 3.0 (https://doi.org/10.7910/DVN/7WTH1N), licensed CC BY 4.0: four MDNs and two LBL40 cells. FlyLab's six simplified L2 SWC derivatives use one shared coordinate transform and topology-preserving simplification; see THIRD_PARTY_NOTICES.md in the repository. Purple shows selected unitless model targets. Cyan shows four directed, connectome-inferred v3 rows totaling 153 predicted synaptic links after the released postsynapse-size ≥10-voxel filter. The counts are not physiology, and glow is model selection rather than measured neural activity. The CNS shell is schematic.
+The agent begins by inspecting the current page-session ID and revision. Every mutation must echo both, so a stale tab or human edit fails closed. It ranks source-backed circuits, persists the discovery alternatives and coverage gaps, drafts a falsifiable Giant Fiber/DNp01 short-mode escape hypothesis, and prepares a bilateral three-arm virtual protocol.
 
-FlyLab's condition replay is a deterministic illustrative simulation prediction, not a raw replicate path, FlyGym execution, whole-brain dynamics, direct BANC simulation, or a wet-lab result. Metric cards aggregate separate simulation-generated per-run summaries and remain labeled derived plus simulation-predicted. Findings summarized from cited biological studies retain a separate measured-evidence label.
+Execution stops at a visible human approval control that is not a WebMCP tool. Approval commits an immutable protocol snapshot and complete seed manifest with SHA-256 hashes. The simulation caller must echo the exact approved protocol hash. Run and evidence-save operations use caller-generated operation IDs, so identical retries replay without another mutation and conflicting reuse is rejected.
+
+Each seeded run exposes its own ID, seed, trajectory ID, trajectory seed, and simulated trajectory. The condition-level Three.js replay is a separate illustration and is never used to calculate metric cards. FlyLab behavior-metrics v4 publishes the formula, unit, sign, aggregation, null rule, analysis window, provenance, and boundary for every GF metric, plus per-run audit rows.
+
+The final mission v3 evidence bundle preserves the goal, discovery decision, considered and rejected circuits, exclusions, coverage gaps, exact human approval, simulation, formal analysis, comparison, and proposal. The proposal is not authorized or executed. The export checksum detects payload changes; it is not a digital signature.
+
+The Giant Fiber leg/wing path is a literature schematic, not a BANC or FANC reconstruction. The simulation is a deterministic, hand-authored, uncalibrated reduced-order model. It is not FlyGym, connectome execution, neural dynamics, biomechanics, aerodynamics, or a wet-lab result. Purple indicates selected model targets, never measured neural activity.
+
+Supported demonstration runtime: [CHATGPT_DESKTOP_SOL_OR_TERRA_OR_CHROME_149_PLUS]
+Verified target, client version, and timestamp: [RUNTIME_EVIDENCE]
 
 Chapters:
 [CHAPTERS_FROM_FINAL_DELIVERY]
@@ -67,10 +77,12 @@ Chapters:
 
 ## Publication verification
 
-- Match the runtime and chapter starts to the final delivery report; do not estimate them from the draft cue sheet.
-- Upload the generated `.srt` and verify the embedded and platform captions both preserve MDN, LBL40, BANC, FlyGym, and WebMCP.
+- Match runtime and chapters to the passing delivery report.
+- Confirm the video shows the exact eight-tool inventory and native invocation history.
+- Confirm session/revision guards, approval hashes, operation replay, formal metrics, per-run inspection, and mission v3 export are legible.
+- Confirm the runtime line identifies the actually recorded supported client, version, URL, and timestamp.
+- Upload the `.srt` and verify technical terms in both embedded and platform captions.
 - Confirm public playback with audio in a signed-out browser.
-- Confirm the app, source, DOI, and challenge-entry links work.
-- Confirm the description includes the BANC CC BY 4.0 attribution and derivative changes.
-- Confirm the video contains no unauthorized music, system voice, trademark, or protected media.
-- Replace `[YOUTUBE_DEMO_URL]` in the submission record only after every check passes.
+- Confirm the app, source, scientific, and challenge-entry links work.
+- Confirm no unauthorized music, voice, trademark, or protected media is present.
+- Replace `[YOUTUBE_DEMO_URL]` in submission materials only after every check passes.

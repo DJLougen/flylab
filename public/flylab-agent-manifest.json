@@ -1,5 +1,5 @@
 {
-  "schema_version": "flylab.agent-manifest.v2",
+  "schema_version": "flylab.agent-manifest.v3",
   "name": "FlyLab",
   "description": "Agent-first WebMCP virtual Drosophila neuroethology lab with a visible supervisor audit surface.",
   "site": "https://flylab-neuroethology.d-lougen.chatgpt.site/",
@@ -7,8 +7,8 @@
   "transport": {
     "api": "WebMCP document.modelContext.registerTool",
     "scope": "current_open_page",
-    "state_contract": "flylab.agent-context.v2",
-    "result_contract": "flylab.tool-result.v2",
+    "state_contract": "flylab.agent-context.v3",
+    "result_contract": "flylab.tool-result.v3",
     "provenance_manifest_contract": "flylab.provenance-manifest.v1",
     "required_first_call": "inspect_flylab_state",
     "tool_contract_document": "/flylab-tool-contracts.json"
@@ -43,23 +43,23 @@
     { "name": "find_fly_circuits", "effect": "writes_shared_selection", "purpose": "Search source-backed adult circuits by neuron, behavior, or body part and return their typed motor maps." },
     { "name": "draft_fly_hypothesis", "effect": "writes_hypothesis", "purpose": "Create a falsifiable agent_hypothesized claim from eligible evidence." },
     { "name": "design_stimulation_trial", "effect": "writes_protocol", "purpose": "Create controlled conditions, timing, seeds, and model assumptions." },
-    { "name": "run_fly_simulation", "effect": "writes_simulation_batch", "purpose": "Run the exact approved deterministic virtual experiment." },
-    { "name": "analyze_fly_behavior", "effect": "writes_analysis", "purpose": "Compute the selected motor map's complete five-metric behavior panel." },
+    { "name": "run_fly_simulation", "effect": "writes_simulation_batch", "purpose": "Run only the exact protocol hash and seed manifest committed by visible human approval." },
+    { "name": "analyze_fly_behavior", "effect": "writes_analysis", "purpose": "Compute the selected motor map's complete five-metric panel with formal definitions and per-run traceability." },
     { "name": "compare_fly_trials", "effect": "writes_comparison_and_proposal", "purpose": "Rank conditions and propose, but never execute, one bounded follow-up." },
     { "name": "save_fly_evidence", "effect": "writes_evidence_bundle", "purpose": "Commit the exact source-to-result lineage and portable JSON envelope." }
   ],
   "output_contracts": {
     "inspect_flylab_state": {
-      "required_data_fields": ["agent_context"],
+      "required_data_fields": ["page_session_id", "agent_context"],
       "produced_artifacts": [],
       "scientific_paths": ["/agent_context/artifact_manifest"],
-      "operational_paths": ["/agent_context/state", "/agent_context/next_action", "/agent_context/human_gate", "/agent_context/pipeline"]
+      "operational_paths": ["/page_session_id", "/agent_context/state", "/agent_context/next_action", "/agent_context/human_gate", "/agent_context/pipeline"]
     },
     "find_fly_circuits": {
-      "required_data_fields": ["candidate_circuits", "selection_status", "disambiguation", "circuits", "evidence", "connectome_records", "dataset_versions", "embodiment_coverage", "selected_circuit_id", "candidate_match_count", "hypothesis_eligible_evidence_ids", "causal_evidence_ids_by_perturbation", "evidence_role_policy", "coverage_warning", "next_action"],
-      "produced_artifacts": ["circuit_selection", "evidence_record", "connectome_record", "embodied_motor_map"],
-      "scientific_paths": ["/circuits", "/evidence", "/connectome_records", "/dataset_versions", "/embodiment_coverage"],
-      "operational_paths": ["/candidate_circuits", "/selection_status", "/disambiguation", "/selected_circuit_id", "/candidate_match_count", "/hypothesis_eligible_evidence_ids", "/causal_evidence_ids_by_perturbation", "/evidence_role_policy", "/coverage_warning", "/next_action"]
+      "required_data_fields": ["discovery_decision", "candidate_circuit_records", "candidate_circuits", "selection_status", "disambiguation", "circuits", "evidence", "connectome_records", "dataset_versions", "embodiment_coverage", "selected_circuit_id", "candidate_match_count", "hypothesis_eligible_evidence_ids", "causal_evidence_ids_by_perturbation", "evidence_role_policy", "coverage_warning", "next_action"],
+      "produced_artifacts": ["discovery_decision", "circuit_selection", "evidence_record", "connectome_record", "embodied_motor_map"],
+      "scientific_paths": ["/discovery_decision", "/candidate_circuit_records", "/circuits", "/evidence", "/connectome_records", "/dataset_versions", "/embodiment_coverage"],
+      "operational_paths": ["/discovery_decision/missionGoal", "/discovery_decision/search", "/candidate_circuits", "/selection_status", "/disambiguation", "/selected_circuit_id", "/candidate_match_count", "/hypothesis_eligible_evidence_ids", "/causal_evidence_ids_by_perturbation", "/evidence_role_policy", "/coverage_warning", "/next_action"]
     },
     "draft_fly_hypothesis": {
       "required_data_fields": ["hypothesis", "next_action"],
@@ -74,15 +74,15 @@
       "operational_paths": ["/experiment/approved", "/approval_required", "/agent_status", "/blocked_by", "/agent_actionable", "/human_gate", "/next_action"]
     },
     "run_fly_simulation": {
-      "required_data_fields": ["id", "experimentId", "targetCircuitId", "behavior", "motorMap", "status", "conditionRuns", "runHash", "protocol", "model", "provenance", "boundary", "next_action"],
-      "produced_artifacts": ["simulation_batch", "simulation_run", "illustrative_trajectory", "embodied_motor_map"],
-      "scientific_paths": ["", "/motorMap", "/conditionRuns", "/protocol", "/model", "/model/controllerMapping", "/boundary"],
-      "operational_paths": ["/status", "/next_action"]
+      "required_data_fields": ["id", "experimentId", "targetCircuitId", "behavior", "motorMap", "status", "conditionRuns", "runHash", "protocol", "approval", "model", "provenance", "boundary", "next_action"],
+      "produced_artifacts": ["simulation_batch", "simulation_run", "per_run_trajectory", "illustrative_trajectory", "experiment_approval", "embodied_motor_map"],
+      "scientific_paths": ["", "/motorMap", "/conditionRuns", "/protocol", "/approval/protocol", "/approval/seed_manifest", "/model", "/model/controllerMapping", "/boundary"],
+      "operational_paths": ["/status", "/approval/approved_at", "/approval/protocol_hash", "/approval/seed_manifest_hash", "/next_action"]
     },
     "analyze_fly_behavior": {
-      "required_data_fields": ["analysis", "metric_definitions", "unit_boundary", "next_action"],
-      "produced_artifacts": ["behavior_analysis"],
-      "scientific_paths": ["/analysis", "/metric_definitions", "/unit_boundary"],
+      "required_data_fields": ["analysis", "metric_definitions", "response_initiation_summary_definition", "per_run_results", "unit_boundary", "next_action"],
+      "produced_artifacts": ["behavior_analysis", "simulation_run_summary"],
+      "scientific_paths": ["/analysis", "/metric_definitions", "/response_initiation_summary_definition", "/per_run_results", "/unit_boundary"],
       "operational_paths": ["/next_action"]
     },
     "compare_fly_trials": {
@@ -107,7 +107,7 @@
   },
   "recovery": {
     "rule": "Call inspect_flylab_state after interruption, edit, cancellation, stale-state failure, or navigation.",
-    "mutation_guard": "Every successful tool call returns a shared state revision; prepared long-running work cannot commit against a changed revision."
+    "mutation_guard": "Every mutation requires the inspected page_session_id and expected_state_revision. Simulation also requires the exact approved_protocol_hash. Simulation and evidence save require a caller operation_id; identical retries replay without another mutation."
   },
   "hypothesis_evidence_gate": {
     "required_role": "hypothesis_support",

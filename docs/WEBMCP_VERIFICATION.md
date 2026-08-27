@@ -1,90 +1,177 @@
 # WebMCP verification
 
-FlyLab registers eight site tools through `document.modelContext.registerTool(...)`: one read-only state inspector plus seven structured scientific workflow actions. When that experimental browser API is absent, the page explicitly reports that calls are unavailable while retaining a read-only machine manifest, exact contract document, and inline runtime/state JSON. Those references never masquerade as a fallback transport.
+FlyLab defines eight native site tools through `document.modelContext.registerTool(...)`: one read-only inspector plus seven scientific workflow mutations. This document distinguishes source-level checks, page registration, browser-mediated invocation, and a completed supported-runtime workflow. They are different evidence levels.
 
-## Automated contract checks
+No retained report in this repository currently proves that the candidate public URL is reachable or that a supported ChatGPT/Chrome runtime completed the current release candidate. Do not infer those claims from code, a configured URL, or static documentation.
+
+## Evidence levels
+
+| Level | What it can establish | What it cannot establish |
+|---|---|---|
+| Source tests | Contract definitions, validation, deterministic state/model behavior, and diagnostic logic. | Browser support, deployment reachability, or client rollout. |
+| Page registration | The current page accepted all eight `registerTool` calls. | That a compatible client can discover or invoke them. |
+| Observed callback | A browser-mediated WebMCP tool callback occurred in this page session. | That the caller was a ChatGPT agent. |
+| Completed supported-runtime workflow | The recorded target/runtime exercised the specified calls and assertions. | Other accounts, workspaces, deployments, or future builds. |
+
+## Automated source checks
 
 Run:
 
 ```bash
 npm test
+npm run lint
+npm run build
 ```
 
-The current suite contains 74 tests. It supplies a compatible `modelContext`, verifies that exactly eight tools register, checks their closed schemas and current annotations, invokes registered tools through the shared handler, rejects unexpected inspector fields, confirms that an absent API produces zero registrations, and confirms that aborting the registration signal disposes all tools. It also proves that the public contract document is derived from those exact runtime definitions and exposes every input schema, annotation, domain error code, result field, and recovery rule. In addition to the MDN path, the suite verifies ranked/ambiguous discovery, the GF causal-evidence gate, typed jump-leg and wing branches, deterministic short-mode escape/lift outputs, silencing replay semantics, complete protocol snapshots, motor-map-specific metrics, exact edge-source attribution, 3D middle-leg/wing routing, and the required warning that the GF path is a literature schematic rather than a bundled reconstruction.
+The source suite covers, among other contracts:
 
-The cancellation regression test exercises the same prepare/check/commit helper used by `run_fly_simulation` and `save_fly_evidence`. It waits until preparation has started, aborts the invocation, then releases the prepared artifact. The promise rejects with `AbortError`, the commit callback is called zero times, and no prepared state is published. A companion success case proves that an active invocation commits exactly once. Another regression proves that a cancellation arriving only after a synchronous mutation committed cannot relabel that mutation as canceled. The stale-revision test proves that prepared work publishes nothing when the shared page revision changes before commit and returns `STALE_STATE` recovery data.
+- exactly eight closed tool schemas and synchronized output contracts;
+- `flylab.tool-result.v3` and `flylab.agent-context.v3`;
+- required `page_session_id` and `expected_state_revision` on every mutation;
+- non-mutating `STALE_STATE` failures for wrong session/revision;
+- exact protocol/seed-manifest approval hashing and current-experiment verification;
+- `operation_id` replay for simulation/save and conflicting-input rejection;
+- prepare/check/commit cancellation and stale-commit boundaries;
+- ranked discovery decisions, candidate records, rejected alternatives, evidence filters, and coverage gaps;
+- GF causal-evidence/laterality gates and the MDN secondary motor map;
+- complete per-run trajectories, separate illustrative replays, and common-random-number seed policy;
+- `flylab.behavior-metrics.v4` definitions and per-run analysis traceability;
+- experiment/mission v3 bundle formats and evidence-export schema version 3;
+- field-addressed provenance, source closure, and model/scientific interpretation boundaries;
+- exact capability diagnostics when the API is absent, incomplete, or registration fails.
 
-These checks prove the registration code and tool contracts. They do not prove that a particular browser account has received the WebMCP rollout.
+A passing source suite proves those local assertions. It does not prove a particular browser/account rollout or deployment.
 
-## Unsupported-browser discovery
+## Native browser verifier
 
-The root HTML advertises two FlyLab-specific JSON reference documents with `rel="alternate"`:
-
-- `/flylab-agent-manifest.json` describes the workflow, evidence gates, supervisor boundary, provenance vocabulary, and scientific scope.
-- `/flylab-tool-contracts.json` is generated from the registered contract source and contains every tool's full input schema and annotations plus the common result, error, cancellation, and recovery contracts.
-
-The live page embeds `#flylab-agent-context` for current `flylab.agent-context.v2` workflow state, `#flylab-agent-runtime` for transport availability, and `#flylab-agent-handoff` for a combined versioned recovery packet. Successful calls use `flylab.tool-result.v2`. A runtime with no `document.modelContext` reports `agent_invocation_available: false`, keeps the next workflow recommendation separate from the locally invocable next tool, and exposes a visible selectable recovery packet. Successful page registration reports `agent_invocation_available: null` until a WebMCP callback is actually observed; the page cannot infer model, account, workspace, permission, rollout, or current client availability from registration alone. The callback proves WebMCP invocation, not that its caller was a ChatGPT agent. The capability diagnostic separates `document_model_context_absent`, `register_tool_missing`, and `registration_failed`; it also records the detected runtime capabilities, whether registration was attempted, accepted registrations before rollback, the failed tool name, and the browser exception name and message without a stack trace. The `/agent` HTML guide mirrors the static references for browser clients that block top-level JSON navigation. `/Use` and `/use` redirect to the laboratory, while unrelated unknown routes remain 404s. These surfaces are for inspection and recovery only; they do not emulate WebMCP. Static manifests, the HTML guide, and `rel="alternate"` are not WebMCP discovery mechanisms; `document.modelContext.registerTool` is the page-side registration surface, while actual discovery and use remain client-dependent.
-
-## Automated live-browser check
-
-With Chrome 149 or newer installed, run:
+Use Chrome 149 or newer. Start FlyLab locally, then run the verifier against the exact printed URL:
 
 ```bash
+FLYLAB_URL=http://localhost:3000/ npm run verify:webmcp
+```
+
+Use the actual port if it differs. The script creates an isolated temporary Chrome profile, enables WebMCP testing for that process, loads the supplied URL, and uses Chrome's WebMCP debugging protocol. On a successful basic exit it has asserted:
+
+- the page exposes `document.modelContext.registerTool`;
+- the page is not opted out of origin-keyed clustering;
+- all eight exact tool names are registered;
+- inline runtime/handoff packets report registration accurately;
+- client availability remains `unknown_to_page` before a callback;
+- `inspect_flylab_state` returns v3 session/revision data;
+- a native discovery invocation is observed in this page session.
+
+Run the full workflow with:
+
+```bash
+FLYLAB_URL=http://localhost:3000/ \
+FLYLAB_VERIFY_WORKFLOW=1 \
 npm run verify:webmcp
 ```
 
-The command creates an isolated temporary Chrome profile, enables Chrome's official `WebMCPTesting` feature for that process, loads the public deployment, and checks that the real page exposes `document.modelContext.registerTool`, is origin-keyed, and registers all eight tools. Before any call it requires the inline transport and handoff packets to report `active`, `page_registration_status: registered`, eight accepted registrations with no exception, `webmcp_client_availability: unknown_to_page`, and no claimed invocable next tool. It then uses Chrome's WebMCP debugging protocol to enumerate the exact eight tool names, invoke `inspect_flylab_state`, verify that the initial workflow recommendation is `find_fly_circuits`, complete that discovery call, and require `webmcp_invocation_observed: true`. This deliberately distinguishes page-side registration from a browser-mediated WebMCP callback; it does not call the DevTools client a ChatGPT agent. If the runtime fails before registration, the verifier exits early with the embedded capability diagnostic rather than timing out. It closes the isolated browser and removes the temporary profile afterward. Set `CHROME_BIN` to override the Chrome executable or `FLYLAB_URL` to check another deployment.
+On successful exit, the full verifier is designed to assert all eight contracts, the visible non-tool approval boundary, cancellation behavior, post-edit invalidation, and both motor-map lifecycles. Its v3 checks include:
 
-For an end-to-end verification of all eight tools and the approval boundary, run `FLYLAB_VERIFY_WORKFLOW=1 npm run verify:webmcp`. This invokes all eight registered contracts through Chrome's real WebMCP protocol; it does not use the guided-example button. The isolated test verifies the inspector before discovery, at the blocked non-WebMCP review gate, after visible approval, after workflow completion, and again after the exact protocol is edited through the UI. It confirms that simulation is blocked with `APPROVAL_REQUIRED` and clicks the approval control colocated with the complete visible protocol through the DOM. This demonstrates the tool-surface boundary, not identity authentication against browser automation. Before the successful run, it exercises two post-start simulation-cancellation paths:
+- wrong-session and wrong-revision failures that leave state unchanged;
+- the inspector's persisted discovery-decision and approval references;
+- an `APPROVAL_REQUIRED` preapproval failure;
+- a visible approval click followed by valid SHA-256 protocol/seed-manifest commitments;
+- rejection of a wrong `approved_protocol_hash`;
+- exact approved protocol snapshots and complete seed manifests in simulation output;
+- formal metric-definition fields and per-run result/trajectory audit parity;
+- a complete mission-scope v3 export, including discovery alternatives and coverage gaps;
+- mutation-free completed run/save replays under identical operation IDs;
+- `operation_id_input_mismatch` on conflicting reuse;
+- cancellation before commit publishing no batch/bundle;
+- a visible protocol edit clearing approval and every downstream artifact.
 
-1. It invokes `run_fly_simulation`, waits until the visible activity is **Simulation batch running**, calls Chrome's `WebMCP.cancelInvocation`, requires protocol status `Canceled`, and verifies that the primary action returns to **Run MDN drive**, playback remains disabled, all five conditions remain `approved`, and no results panel or completed batch appears.
-2. It starts another run, waits for the same visible running state, clicks **Cancel running simulation**, requires a non-completed invocation response, and verifies the same no-batch state.
+The current verifier also covers the MDN reverse-walking slice and a separate GF short-mode lifecycle. The judge-facing competition prompt is GF-first; MDN remains a secondary implemented capability rather than the hero story.
 
-After comparison, it starts `save_fly_evidence`, waits for the visible **Evidence bundle preparing** state, cancels it through Chrome's WebMCP protocol, requires status `Canceled`, and proves that no bundle, local-storage record, or ledger entry was created while the comparison remains intact and `next_tool` returns to `save_fly_evidence`.
+Set `FLYLAB_CAPTURE_DIR` only when captures are required. A screenshot directory or command invocation is not itself proof of a pass; retain the exit report, Chrome version, target URL, timestamp, and relevant captures together.
 
-The test then saves a complete evidence bundle and verifies that the tool result includes both `data.bundle` metadata and the complete portable envelope at `data.evidence_export`, including its payload. It repeats all seven state-changing calls, intentionally reverses hypothesis evidence and analysis metric order to verify canonical identity, requires every repeated response to retain a `complete` next action, and confirms that the inspector stays at `saved` with one analysis plus the same bundle ID, manifest hash, and saved timestamp. After recording the bundle, it edits the visible protocol and verifies a new experiment ID, `waiting_for_human`, `next_tool: null`, and cleared batch, analysis, comparison, and bundle references in both the UI and inspector.
+## v3 result and mutation contract
 
-The same workflow run then performs a separate GF silencing lifecycle. It proves that a broad `middle leg` search remains explicitly ambiguous even with `limit: 1`, that `middle leg jump` plus `short_mode_escape` ranks GF first, and that a measured-only filter remains source-closed while the inspector advertises only filter-matching hypothesis IDs. It rejects unilateral GF design, visibly approves the bilateral three-arm protocol, verifies the complete protocol snapshot in the batch, checks reference-drive movement without perturbation glow, analyzes the exact five-metric short-mode panel, compares conditions, and saves the GF lineage. Every successful call also passes an RFC 6901 resolver over all provenance and operational pointers, including container-type checks and exact scientific/operational overlap rejection.
-
-Set `FLYLAB_CAPTURE_DIR` alongside the workflow flag to save ordered public-site captures, including bilateral and left-only Three.js circuit states plus the final protocol-edit invalidation state. Cancellation captures are excluded from that canonical sequence; opt into the two extra negative-state captures with `FLYLAB_CAPTURE_CANCELLATION=1`.
-
-## Cancellation architecture and Chrome 151 compatibility
-
-Registration lifetime and invocation lifetime are separate. The signal passed to `registerTool(..., { signal })` owns tool registration. Simulation and evidence-save invocations each combine the invocation signal with their own page-owned controller using `AbortSignal.any(...)`. Work is prepared without publishing it, the combined signal and captured page revision are checked, and the artifact is committed synchronously. Because JavaScript does not yield between that final check and the synchronous commit, cancellation or a stale revision observed before the boundary cannot publish a completed artifact.
-
-The current WebMCP draft and [Chrome imperative API guide](https://developer.chrome.com/docs/ai/webmcp/imperative-api) describe an invocation `AbortSignal` in the execute callback's second argument. Chrome 151's checked implementation predates that path for browser-driven calls: it invokes the JavaScript tool with the input alone and dispatches a synchronous `toolcancel` event from `CancelTool`. FlyLab handles `toolcancel` for `run_fly_simulation` and `save_fly_evidence`, also listens for the draft's future `toolcanceled` spelling, and removes both listeners on unmount. The Chrome 151 fallback records the cancellation request synchronously, then defers its page-owned abort by one browser task so Chrome can finish removing its pending invocation without re-entrant promise settlement changing the protocol response. Both the synchronous request flag and the future native execution signal feed the same tested commit boundary, so a fast preparation cannot commit in the deferral window. Chrome 151 exposes only the tool name on this compatibility event; FlyLab therefore disallows overlapping work for each long-running tool and conservatively targets that tool's sole active controller. See the [Chrome 151 ModelContext implementation](https://chromium.googlesource.com/chromium/src/+/refs/branch-heads/7922/third_party/blink/renderer/core/script_tools/model_context.cc) and [DevTools WebMCP protocol](https://chromedevtools.github.io/devtools-protocol/tot/WebMCP/).
-
-## Live discovery check
-
-Open the [public FlyLab deployment](https://flylab-neuroethology.d-lougen.chatgpt.site) in the ChatGPT desktop app's built-in browser, then:
-
-1. Use GPT-5.6 Sol or GPT-5.6 Terra and update the desktop app to the latest version.
-2. Confirm **Enable site tools** is on under **Settings → Browser → Permissions**.
-3. Select **Site tools** in the browser address bar.
-4. Open **Available site tools** and confirm these eight names:
-   - `inspect_flylab_state`
-   - `find_fly_circuits`
-   - `draft_fly_hypothesis`
-   - `design_stimulation_trial`
-   - `run_fly_simulation`
-   - `analyze_fly_behavior`
-   - `compare_fly_trials`
-   - `save_fly_evidence`
-5. Call `inspect_flylab_state` before discovery and again after approval, a person edit, or any interruption. Run the two prompts in [DEMO.md](DEMO.md) and inspect **Recently used** after the calls.
-
-OpenAI notes that site tools are unavailable with GPT-5.6 Luna and in Enterprise or Edu workspaces, and that availability can also depend on rollout. Therefore an absent `document.modelContext` in an otherwise compatible page is recorded as an environment limitation, not replaced with a browser polyfill.
-
-References: [OpenAI Site tools documentation](https://learn.chatgpt.com/docs/webmcp) and [Chrome's WebMCP developer guide](https://developer.chrome.com/docs/ai/webmcp).
-
-## Deployment checks
-
-The public response must remain HTTPS, must not opt out of origin-keyed agent clustering with `Origin-Agent-Cluster: ?0`, and must return:
+Every success uses `flylab.tool-result.v3` and includes:
 
 ```text
-Permissions-Policy: tools=(self)
-Referrer-Policy: strict-origin-when-cross-origin
+page_session_id
+previous_state_revision
+state_revision
+created_artifact_ids
+operation_id
+idempotent_replay
+next_action
+verification
+provenance_manifest
+data
 ```
 
-FlyLab requests `Origin-Agent-Cluster: ?1` in its application and local-development configuration. A hosting edge may omit that redundant opt-in header; the disabling value `?0` must not be present.
+Every failure includes the current page session/revision when available plus a semantic recovery action. Stale session/revision and uncertain lineage failures direct the caller to `inspect_flylab_state`; validation, discovery, approval, and operation-ID conflicts instead identify the exact field, visible gate, new operation ID, or tool call needed next.
 
-The registration code performs a feature check before calling the API, so unsupported browsers continue to receive the ordinary laboratory interface without an error.
+All seven mutations require the inspected `page_session_id` and `expected_state_revision`. The two expensive commit operations have an additional contract:
+
+- `run_fly_simulation`: exact `approved_protocol_hash` plus `operation_id`;
+- `save_fly_evidence`: explicit `experiment | mission` scope plus `operation_id`.
+
+An identical completed operation retry may use the newer inspected revision because the expected revision is excluded from logical operation identity. It must return `idempotent_replay: true`, no created artifacts, and no state advance. The same operation ID with different logical input fails closed.
+
+## Approval verification
+
+Visible approval creates a detached, deeply frozen `flylab.experiment-approval` record. Its SHA-256 `protocol_hash` binds the complete experiment protocol, model version, seed policy, and metric method. Its separate `seed_manifest_hash` binds every condition, illustrative trajectory seed, replicate seed, and per-run trajectory seed. The timestamp is metadata outside both hashes.
+
+The run caller must echo the protocol hash. Before simulation, FlyLab recomputes and compares both stored commitments with the current experiment. Any protocol, model, method, or seed change invalidates authorization. Approval is deliberately absent from WebMCP and requires the visible page control; it is not an identity-authentication claim against general browser automation.
+
+## Metric and bundle verification
+
+`analyze_fly_behavior` must return `flylab.behavior-metrics.v4`. For each metric, verify formula, unit, sign convention, aggregation, null rule, full-trial window semantics, method version, provenance, and boundary. Verify the separate response-initiation summary definition and the `per_run_results` mapping. The run response contains full per-run trajectories; the analysis response carries their IDs, seeds, roles, status, and point counts. The illustrative condition replay must never be treated as a raw run trace.
+
+`save_fly_evidence` must return the exact portable `flylab.evidence-export` schema-version-`3` envelope:
+
+- `scope: experiment` → `flylab.experiment-evidence-bundle.v3`;
+- `scope: mission` → `flylab.mission-evidence-bundle.v3`, including goal, discovery decision, considered/rejected alternatives, exclusions, and coverage gaps.
+
+The payload checksum detects change. It is not a digital signature, proof of authorship, or guarantee of immutability. Browser-local storage is best-effort convenience only.
+
+## Honest capability diagnostics
+
+The page exposes `flylab.webmcp-capability-diagnostic.v1` with:
+
+- document ready state and secure-context status;
+- origin-agent-cluster and tools permissions-policy observations when available;
+- `document.modelContext` presence and `registerTool` type;
+- whether registration was attempted;
+- registrations accepted before rollback;
+- failed tool name;
+- sanitized exception name/message;
+- an explicit availability reason.
+
+The runtime packet separately records page registration and whether a callback was observed in this page session. Interpret it literally:
+
+- no `document.modelContext` or no callable `registerTool` means no WebMCP invocation;
+- a registration failure rolls back accepted registrations;
+- eight accepted registrations still leave client availability unknown until a callback;
+- a callback does not identify its caller as ChatGPT.
+
+When WebMCP is unavailable, `/agent`, `/flylab-agent-manifest.json`, `/flylab-tool-contracts.json`, and inline `#flylab-agent-context`, `#flylab-agent-runtime`, and `#flylab-agent-handoff` remain read-only diagnostic/recovery surfaces. They do not emulate WebMCP, mutate laboratory state, or make a tool callable.
+
+## Supported client inspection
+
+For agent-driven judging, use ChatGPT desktop with GPT-5.6 Sol or GPT-5.6 Terra, current app, Site Tools enabled, and an eligible account/workspace rollout. For direct protocol inspection, use Chrome 149+ as described above. In both cases, first confirm the exact eight-tool inventory and call `inspect_flylab_state`.
+
+The supported label is a prerequisite, not a verification result. If a compatible-looking session lacks Site Tools or `document.modelContext`, record the diagnostic rather than claiming registration or silently switching to a non-WebMCP transport.
+
+## Cancellation compatibility
+
+Registration lifetime and invocation lifetime are separate. The registration signal owns all eight registrations. Simulation and evidence-save preparation combine the invocation signal with a page-owned controller, check cancellation and the captured revision immediately before one synchronous commit, and publish nothing when cancellation or staleness is observed before that boundary.
+
+The code accepts the draft callback `AbortSignal` and Chrome's `toolcancel` compatibility event (plus the evolving `toolcanceled` spelling). This compatibility handling feeds the same tested commit boundary; it is not a substitute transport.
+
+## Deployment checks before making a public claim
+
+For any candidate deployment, verify and retain evidence that:
+
+- the target is reachable over HTTPS without private-site authentication;
+- `Permissions-Policy: tools=(self)` and `Referrer-Policy: strict-origin-when-cross-origin` are present;
+- `Origin-Agent-Cluster: ?0` is absent;
+- the exact release being described is deployed;
+- the native eight-tool inventory and required workflow pass on a supported runtime.
+
+Until those checks exist for the current release, describe the URL as a candidate target rather than a verified public deployment.

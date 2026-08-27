@@ -1544,6 +1544,19 @@ dd {
 .metric-grid strong { margin: 7px 0 5px; display: block; color: var(--predicted); font-family: Georgia, "Times New Roman", serif; font-size: 1.25rem; font-weight: 500; font-variant-numeric: tabular-nums; }
 .metric-grid strong i { font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 0.58rem; font-style: normal; }
 .analysis-warning { margin-top: 9px; color: var(--muted); font-size: 0.62rem; line-height: 1.45; }
+.analysis-warning strong { color: var(--predicted); }
+
+.results-panel > .inspector-disclosure { margin-top: 10px; }
+.per-run-table-wrap { overflow-x: auto; }
+.per-run-table-wrap table { width: 100%; min-width: 860px; border-collapse: collapse; font-size: 0.6rem; }
+.per-run-table-wrap th,
+.per-run-table-wrap td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; text-align: left; }
+.per-run-table-wrap th { color: var(--muted); font-size: 0.54rem; letter-spacing: 0.06em; text-transform: uppercase; }
+.per-run-table-wrap td { color: var(--muted-2); font-variant-numeric: tabular-nums; }
+.per-run-table-wrap td code,
+.per-run-table-wrap td small { display: block; max-width: 220px; overflow-wrap: anywhere; }
+.per-run-table-wrap td code { color: var(--agent); }
+.per-run-table-wrap td small { margin-top: 3px; color: var(--muted); line-height: 1.35; }
 
 .hypothesis-card,
 .target-card,

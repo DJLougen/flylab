@@ -1,27 +1,35 @@
 # Judge testing instructions
 
-FlyLab is public, requires no account, and exposes exactly eight imperative WebMCP tools on one shared page. The release candidate was created during the challenge period and is available at:
+FlyLab exposes exactly eight native WebMCP tools on one shared page. The competition workflow leads with the adult Giant Fiber/DNp01 rapid-escape slice and pauses once for a visible human approval that is intentionally absent from the tool surface.
 
-- Live application: <https://flylab-neuroethology.d-lougen.chatgpt.site/>
-- Public source: <https://github.com/DJLougen/flylab>
-- Challenge-period source proof: [first public commit, August 26, 2026](https://github.com/DJLougen/flylab/commit/a45eb82ad29d62a1bf7afc0aff89f71a70384db9)
-- Deployed application release: [`104846997773c6905ed4c6da26fea67e0676c148`](https://github.com/DJLougen/flylab/commit/104846997773c6905ed4c6da26fea67e0676c148)
-- Prior public release verification: [successful CI run from the earlier 59-test milestone](https://github.com/DJLougen/flylab/actions/runs/33017176540); the current source contains 78 tests and should be checked with the commands below.
+Repository contents and automated tests establish the source contract. They do not establish that the candidate deployment is currently public/reachable or that a supported ChatGPT or Chrome runtime has completed this build. Verify the chosen URL and retain the current run report before making either claim.
 
-The complete path takes about three minutes. It intentionally pauses once at a visible approval control that is absent from the WebMCP tool surface.
+## Start the release candidate
 
-## Compatible browser
+For a local evaluation:
 
-Use either of the challenge-supported paths:
+```bash
+npm ci
+npm run dev
+```
 
-1. For an agent-driven run, use the ChatGPT desktop app with GPT-5.6 Sol or GPT-5.6 Terra, update the app, enable **Settings → Browser → Permissions → Enable site tools**, and open the live URL in the built-in browser. Open **Site tools → Available site tools** in the address bar.
-2. For a Chrome-only run, use Chrome 149 or newer, enable `chrome://flags/#enable-webmcp-testing` and `chrome://flags/#devtools-webmcp-support`, relaunch, and open **DevTools → Application → WebMCP**. Follow the complete [manual Chrome tool sequence](CHROME_MANUAL_TEST.md), including its dynamic-ID handoffs. Vanilla Chrome provides manual WebMCP invocation, not a conversational agent.
+Open the URL printed by the development server. The configured submission targets are:
 
-OpenAI notes that site-tool availability can depend on model, app version, workspace type, permissions, and rollout. ChatGPT discovery is therefore useful rollout-dependent QA, not a prerequisite for judging this deployment. The independently verified Chrome 149+ path is the baseline when an otherwise compatible ChatGPT session does not show the site-tool surface. Do not install an MCP server or use a page polyfill.
+- candidate application: <https://flylab-neuroethology.d-lougen.chatgpt.site/>
+- candidate source repository: <https://github.com/DJLougen/flylab>
 
-References: [OpenAI Site tools](https://learn.chatgpt.com/docs/webmcp), [Chrome WebMCP](https://developer.chrome.com/docs/ai/webmcp), and [Chrome WebMCP debugging](https://developer.chrome.com/docs/devtools/application/webmcp).
+Treat those as links to verify, not proof of publication or availability.
 
-## Expected tool inventory
+## Supported execution surfaces
+
+Use either:
+
+1. **ChatGPT desktop:** GPT-5.6 Sol or GPT-5.6 Terra, current app, **Settings → Browser → Permissions → Enable site tools** enabled, and an eligible account/workspace rollout. Open FlyLab in the built-in browser, then inspect **Site tools → Available site tools**.
+2. **Chrome:** Chrome 149 or newer with `chrome://flags/#enable-webmcp-testing` and `chrome://flags/#devtools-webmcp-support` enabled. Relaunch, open **DevTools → Application → WebMCP**, and follow the [native Chrome protocol sequence](CHROME_MANUAL_TEST.md).
+
+These are the supported paths; Chrome is not described as a fallback for ChatGPT. Availability can still depend on the actual client build, permissions, workspace, and rollout. Do not install a remote MCP server, inject a polyfill, or treat static JSON/DOM recovery data as a successful WebMCP invocation.
+
+## Native tool inventory
 
 Confirm these eight names:
 
@@ -34,84 +42,123 @@ Confirm these eight names:
 7. `compare_fly_trials`
 8. `save_fly_evidence`
 
-`inspect_flylab_state` is the sole read-only tool. Human approval is deliberately not a ninth tool.
+`inspect_flylab_state` is the sole read-only tool. Human approval is not a ninth tool.
 
-## Expected v2 agent contracts
+## Expected v3 contracts
 
-- Every successful tool call returns `structuredContent.result_version: flylab.tool-result.v2` and a field-level `structuredContent.provenance_manifest`. The top-level provenance list is only the union summary; the manifest is authoritative for the scientific scope of individual result fields.
-- `inspect_flylab_state` returns `structuredContent.data.agent_context.schema_version: flylab.agent-context.v2`. Its `structuredContent.data.agent_context.artifact_manifest` recovers the current scientific artifacts and lineage independently of the operational artifact-ID fields, and `structuredContent.data.agent_context.provenance_policy` states the inheritance, operational-metadata, and untrusted-annotation boundaries.
-- `save_fly_evidence` returns the exact envelope at `structuredContent.data.evidence_export`, prepared and committed for the reported bundle, together with the bundle metadata, media type, and filename. The returned envelope—not a reconstructed approximation—is the portable evidence artifact available from the ledger.
+- Every successful call uses `flylab.tool-result.v3` and returns `page_session_id`, `previous_state_revision`, `state_revision`, `created_artifact_ids`, `operation_id`, `idempotent_replay`, `next_action`, `verification`, and field-addressed `flylab.provenance-manifest.v1` data.
+- `inspect_flylab_state` returns `flylab.agent-context.v3`, fixed nullable artifact fields, the approval binding, current blocker, and exactly one next action.
+- Every state-changing tool requires the inspected `page_session_id` and `expected_state_revision`. A mismatch returns non-retryable `STALE_STATE` and points back to the inspector.
+- `run_fly_simulation` additionally requires the exact `approved_protocol_hash` and a caller-generated `operation_id`.
+- `save_fly_evidence` requires `scope: experiment | mission` and a caller-generated `operation_id`.
+- Completed run/save retries with the same operation ID and logical input return `idempotent_replay: true`, create no artifacts, and do not advance revision. Conflicting reuse fails with `operation_id_input_mismatch`.
+- `analyze_fly_behavior` uses `flylab.behavior-metrics.v4` and returns formal metric definitions, the response-initiation summary definition, and per-run audit rows.
+- `save_fly_evidence` returns the exact `flylab.evidence-export` schema-version-`3` envelope. Its payload format is `flylab.experiment-evidence-bundle.v3` or `flylab.mission-evidence-bundle.v3` according to scope.
 
-## Optional rollout-dependent ChatGPT agent-driven workflow test
+The top-level provenance list is only the union summary. The JSON-Pointer manifest is authoritative for individual scientific fields. Operational paths and caller-authored goals, titles, and notes do not inherit scientific provenance.
 
-Run this section only when the current ChatGPT model, account, workspace, and app expose Site Tools. Otherwise use the complete Chrome sequence above; an unavailable ChatGPT rollout does not imply that FlyLab registered a fallback transport or failed the verified Chrome path.
+## Exact competition prompt
 
-Ask the agent to call `inspect_flylab_state`. A fresh page should report:
+In a supported ChatGPT desktop session, ask the agent to call `inspect_flylab_state`, then use exactly:
 
-- `structuredContent.data.agent_context.schema_version: flylab.agent-context.v2`
-- `structuredContent.data.agent_context.agent_status: ready`
-- `structuredContent.data.agent_context.next_tool: find_fly_circuits`
-- one monotonic page revision at `structuredContent.data.agent_context.state.revision`
-- an empty `structuredContent.data.agent_context.artifact_manifest` plus the explicit `structuredContent.data.agent_context.provenance_policy`; subsequent inspections populate the manifest as scientific artifacts are created
-- fixed, nullable artifact fields rather than omitted keys
+> Investigate how the adult fruit-fly brain coordinates leg and wing output during rapid escape. Separate measured findings from connectome inference and simulation assumptions, draft a falsifiable hypothesis, and design a controlled experiment. Stop for my approval, then continue, analyze every metric, compare conditions, and save the complete evidence bundle.
 
-Then use this prompt:
+The expected first phase is native tool invocation, not guided UI clicks:
 
-> Find source-backed adult fruit-fly circuits associated with backward walking. Draft a falsifiable MDN activation hypothesis and design a controlled MDN-inspired model-drive experiment with baseline, model-sham, bilateral, left-only, and right-only comparisons. Use unitless model drive 0.65, onset 1000 ms, duration 2000 ms, trial duration 5000 ms, eight replicates per arm, and seed 73142. Stop before running anything so I can inspect and approve the protocol.
+```text
+inspect_flylab_state
+→ find_fly_circuits
+→ draft_fly_hypothesis
+→ design_stimulation_trial
+→ waiting_for_human
+```
 
-Expected behavior:
+Expected evidence and design behavior:
 
-- The agent invokes discovery, hypothesis, and design tools rather than clicking through the interface.
-- The page shows linked adult MDN evidence and labels the new claim `agent_hypothesized`.
-- The exact protocol visibly includes baseline, model-sham, bilateral, left-only, and right-only conditions.
-- The agent cannot run the experiment. The inspector reports `waiting_for_human`, `blocked_by: human_approval`, and `next_tool: null`.
-- A direct preapproval run attempt returns structured `APPROVAL_REQUIRED` recovery data.
+- Discovery ranks `circuit_gf_adult` for rapid/short-mode leg-and-wing escape and persists a stable discovery decision with candidates, alternatives, exclusions, and coverage gaps.
+- The GF path is labeled as a literature schematic, not a BANC/FANC reconstruction.
+- The hypothesis declares `short_mode_escape_probability` as its primary outcome, expected direction, baseline/model-sham controls, compatible perturbation-effect evidence, explicit limitations, and falsification criterion.
+- The GF protocol is bilateral-only and contains baseline, model-sham, and bilateral perturbation arms. It does not invent unilateral GF routing.
+- The inspector reports `waiting_for_human`, `blocked_by: human_approval`, and no callable next tool.
+- A preapproval run returns `APPROVAL_REQUIRED` and creates no batch.
 
-Review the visible protocol and click **Approve this exact experiment**. Set the visible **Next-trial budget** to `5`. These are person-owned controls. Ask the agent to inspect the state again, then use:
+## Person-owned approval checkpoint
 
-> Run the exact approved experiment. Analyze backward distance, signed speed, response latency, heading change, and stance stability. Rank the conditions by backward distance using my visible next-trial budget, do not execute the proposed follow-up, and save the exact supporting evidence and comparison lineage.
+Review the visible protocol and click **Approve this exact experiment**. Then have the agent inspect again.
 
-Expected behavior:
+Confirm the inspector exposes:
 
-- The simulation, analysis, comparison, and save tools mutate the same page the person is viewing.
-- The activity rail identifies `webmcp agent · r#` separately from `human ui · r#`.
-- The arena replay is labeled `simulation_predicted`; the metric panel is labeled both `derived` and `simulation_predicted`.
-- The Three.js circuit view exposes six pinned BANC v888 reconstruction-derived cells. Purple is selected unitless model drive, cyan is connectome-inferred structure, and neither is presented as measured activity.
-- All five metrics remain visible. A condition with no responses uses JSON `null` and UI `n/a`, reports `0/n responsive`, and never substitutes the trial duration as a latency value. Responsive-condition latency is averaged over responsive runs and displays `responsiveN/n` separately.
-- The proposed follow-up uses the visible five-replicate budget and is not executed.
-- The evidence ledger shows an evidence-bundle ID and `sha256:` manifest hash.
-- The save result contains the exact `evidence_export` envelope for that bundle, and its tool result remains `flylab.tool-result.v2` with a field-level `provenance_manifest`.
+- the same experiment ID as `approval_experiment_id`;
+- `approval_binding_complete: true`;
+- a lowercase 64-hex SHA-256 `approved_protocol_hash`;
+- `approved_seed_manifest_hash` and an approval timestamp;
+- `run_fly_simulation` as the next action with the protocol hash in `input_refs`.
+
+The approval record is a detached, deeply frozen snapshot of the exact protocol, model, metric method, seed policy, and complete per-condition/per-replicate seed manifest. The timestamp is outside both hashes. The run must echo the protocol hash and verify both commitments against the current experiment. Approval is visible authorization for this virtual experiment; it is not identity authentication or wet-lab approval.
+
+## Continue through evidence
+
+After approval, tell the agent:
+
+> Continue with the exact approved protocol. Analyze every available metric, compare the conditions, do not execute the proposed follow-up, and save the complete mission evidence bundle.
+
+Expected sequence:
+
+```text
+inspect_flylab_state
+→ run_fly_simulation
+→ analyze_fly_behavior
+→ compare_fly_trials
+→ save_fly_evidence
+```
+
+Expected output:
+
+- The simulation response carries the exact approval record, complete protocol snapshot, seed policy, run seeds, per-run trajectory seeds/IDs/full trajectories, and separate illustrative condition replays.
+- Each run and trajectory is complete. The illustrative condition replay is explicitly excluded from analysis.
+- The GF analysis contains short-mode escape probability, response latency, vertical displacement, wing recruitment, and leg recruitment.
+- Every metric definition states formula, unit, sign convention, aggregation, null rule, full-trial window semantics, method version, provenance, and interpretation boundary.
+- `per_run_results` maps each aggregate back to exact runs and trajectory audit fields. No-response latency is JSON `null`, never trial duration.
+- The comparison ranks conditions but returns `execution_authorized: false` for its proposal.
+- A `scope: mission` save returns `flylab.mission-evidence-bundle.v3` with the discovery decision, candidate alternatives, exclusions, coverage gaps, exact selected lineage, approval, formal analysis, and proposal.
+- The evidence-export hash is described as a payload-change checksum, not a signature or immutability guarantee.
 - A final inspection reports `agent_status: complete`, `state.stage: saved`, `next_tool: null`, and `next_action.kind: complete`.
 
-## Recovery test
+## Guard and recovery checks
 
-After the bundle is saved, change one protocol field in the visible interface and inspect again.
+Perform these negative checks when time permits:
 
-Expected behavior:
+1. Send a mutation with a wrong `page_session_id`: expect `STALE_STATE` and no mutation.
+2. Send a mutation with an outdated `expected_state_revision`: expect `STALE_STATE` and re-inspect recovery.
+3. Send the current run with a wrong `approved_protocol_hash`: expect `EVIDENCE_MISMATCH` and unchanged state.
+4. Retry a completed run/save with the same operation ID and logical input: expect a mutation-free idempotent replay.
+5. Reuse either operation ID with changed logical input: expect `INVALID_INPUT`, `operation_id_input_mismatch`, and unchanged state.
+6. Edit one visible protocol field after saving: expect a new experiment/revision, cleared approval hashes and downstream artifacts, and `waiting_for_human`.
 
-- the page revision and experiment ID change;
-- approval clears;
-- batch, analysis, comparison, and evidence-bundle references clear;
-- the state returns to `waiting_for_human` with `next_tool: null`.
+These checks distinguish an exact same-page contract from best-effort retry behavior.
 
-This proves that visible human edits are authoritative and that the agent recovers through the state inspector instead of continuing from stale hidden state.
+## Runtime diagnostic interpretation
 
-## Reproducibility and scope
+The visible diagnostic records secure context, origin-agent-cluster state, permissions policy, whether `document.modelContext` exists, whether `registerTool` is callable, whether registration was attempted, how many tools were accepted before rollback, the failed tool, and sanitized exception details.
 
-Repeating the exact workflow preserves canonical experiment and analysis identity. Repeating completed state-changing calls reuses the saved bundle ID, manifest hash, and saved timestamp. Changing the seed changes the generated runs.
+Interpret status narrowly:
 
-FlyLab runs its deterministic, hand-authored mapped-motor model `0.2.0`; it does not run FlyGym, infer biological neural activity, execute a connectome or synapse model, simulate muscle mechanics or aerodynamics, or report a wet-lab result. Model distances, lift, recruitment, and speeds are uncalibrated model outputs. The five evidence labels are `measured`, `derived`, `connectome_inferred`, `simulation_predicted`, and `agent_hypothesized`.
+- `api_unavailable` or `document_model_context_absent`: no page tool invocation is available.
+- `registration_failed`: accepted registrations were rolled back; tool inventory is not usable.
+- `registered` with `webmcp_client_availability: unknown_to_page`: the page registered tools, but no callback has proved client invocation in this page session.
+- `invocation_observed_this_page_session`: at least one browser-mediated callback occurred; this does not identify the caller as a ChatGPT agent.
 
-The current pinned BANC boundary is four directed MDN→LBL40 rows totaling 153 **v3-predicted synaptic links** after the released postsynapse-size ≥10-voxel filter. This is the Dataverse v3 future-work product; the Bates et al. paper analyses use v2 with a ≥5-voxel filter. These specimen-level structural counts are not physiological weights, connection probabilities, activity measurements, or causal efficacy, and FlyLab does not assign the retained `norm` field a biological interpretation.
+The `/agent` page, static manifest/contracts, and inline recovery packet remain useful for diagnosis but are read-only. They never count as WebMCP registration or invocation.
 
-The current source contains 74 automated tests. For local verification, run:
+## Local verification commands
 
 ```bash
-npm ci
 npm test
 npm run lint
 npm run build
-FLYLAB_VERIFY_WORKFLOW=1 npm run verify:webmcp
+FLYLAB_URL=http://localhost:3000/ FLYLAB_VERIFY_WORKFLOW=1 npm run verify:webmcp
 ```
 
-The automated workflow exercises all eight real browser registrations, the non-WebMCP review gate, two simulation-cancellation paths, evidence-save cancellation, exact-lineage saving, completed-call idempotency, and protocol-edit invalidation. See [WebMCP verification](WEBMCP_VERIFICATION.md) for the full evidence boundary.
+Use the actual local URL if the development server selected another port. A command listed here is not a pass claim. Retain its successful report, browser version, target URL, timestamp, and relevant captures before citing it as supported-runtime evidence.
+
+See [WebMCP verification](WEBMCP_VERIFICATION.md) for the automated evidence boundary and [scientific boundaries](SCIENTIFIC_BOUNDARIES.md) for interpretation limits.

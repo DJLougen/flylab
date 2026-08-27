@@ -5,9 +5,9 @@ import { copyFile, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 
-const framesDirectory = resolve(process.env.FLYLAB_DEMO_FRAMES ?? 'outputs/demo/v7/frames');
-const finalOutputDirectory = resolve(process.env.FLYLAB_DEMO_OUTPUT ?? 'outputs/demo/v7');
-const narrationDirectory = resolve(process.env.FLYLAB_NARRATION_DIR ?? 'outputs/demo/v7/narration');
+const framesDirectory = resolve(process.env.FLYLAB_DEMO_FRAMES ?? 'outputs/demo/v24/frames');
+const finalOutputDirectory = resolve(process.env.FLYLAB_DEMO_OUTPUT ?? 'outputs/demo/v24');
+const narrationDirectory = resolve(process.env.FLYLAB_NARRATION_DIR ?? 'outputs/demo/v24/narration');
 const ffmpeg = process.env.FFMPEG_BIN ?? '/opt/homebrew/bin/ffmpeg';
 const ffprobe = process.env.FFPROBE_BIN ?? '/opt/homebrew/bin/ffprobe';
 const uiApproved = process.env.FLYLAB_UI_APPROVED === '1';
@@ -20,66 +20,106 @@ const finalOutputReport = join(finalOutputDirectory, 'FlyLab-WebMCP-Demo-report.
 const finalOutputContactSheet = join(finalOutputDirectory, 'FlyLab-WebMCP-Demo-contact-sheet.png');
 const finalGalleryDirectory = join(finalOutputDirectory, 'gallery');
 
+const demoMetadata = {
+  schema_version: 'flylab.demo-release.v24',
+  release: 'v24',
+  workflow: 'native-webmcp-client-gf-rapid-escape',
+  hero_goal: 'Investigate how the adult fruit-fly brain coordinates leg and wing output during rapid escape. Separate measured findings from connectome inference and simulation assumptions, draft a falsifiable hypothesis, and design a controlled experiment. Stop for my approval, then continue, analyze every metric, compare conditions, and save the complete evidence bundle.',
+  webmcp: {
+    transport: 'document.modelContext.registerTool',
+    registered_tools: 8,
+    native_invocation_proof_required: true,
+    proof_capture_kind: 'automated_flag_enabled_chrome_protocol_capture',
+    ordinary_chrome_support: 'unsupported_without_testing_capability',
+  },
+  discovery: {
+    selected_circuit_id: 'circuit_gf_adult',
+    rejected_alternative_circuit_id: 'circuit_mdn_adult',
+    decision_artifact_required: true,
+  },
+  protocol: {
+    experiment_arms: 3,
+    condition_ids: ['condition_baseline', 'condition_sham', 'condition_bilateral'],
+    replicates_per_arm: 12,
+    total_seeded_runs: 36,
+    approval: 'visible-human-only exact protocol hash plus seed-manifest hash',
+  },
+  visualization: {
+    subject: 'literature-schematic giant-fiber leg-and-wing branches',
+    invented_connectome_ids: false,
+    boundary: 'The 3D view is a literature-backed schematic and model-selection display, not a specimen reconstruction, connectome import, or measured neural activity.',
+  },
+  analysis: {
+    metric_method_version: 'flylab.behavior-metrics.v4',
+    exact_per_run_records_required: true,
+    biological_measurement: false,
+  },
+  export: {
+    format: 'flylab.mission-evidence-bundle.v3',
+    source_closed: true,
+  },
+};
+
 const segments = [
   {
     frame: 'proof-webmcp-tools.png',
-    narration: 'The browser\'s WebMCP panel sees eight FlyLab site tools: one read-only inspector and seven scientific actions. They are page-registered, not screen-scraping shortcuts.',
+    narration: 'In the flag-enabled automated Chrome protocol capture, the runtime diagnostic confirms eight native FlyLab WebMCP tools: one read-only inspector and seven page-registered scientific actions.',
   },
   {
     frame: '00-eight-tools-live.png',
-    narration: 'The agent inspects the shared revision, artifact IDs, supervisor review gate, blocker, and one valid next action. The supervisor sees the same state.',
+    narration: 'The automated WebMCP client reads the rapid-escape goal, page session, shared revision, artifact IDs, blocker, and one valid next action. The visible page exposes the same state.',
   },
   {
     frame: '01-circuit-found.png',
-    narration: 'A site tool finds the adult Moonwalker descending-neuron circuit. The ledger shows a measured claim, its assay boundary, and linked primary sources.',
+    narration: 'Goal-aware discovery selects the adult giant-fiber pathway for coordinated leg-and-wing escape, preserves MDN as a rejected alternative, and records the reason and coverage gaps.',
   },
   {
     frame: '02-hypothesis-drafted.png',
-    narration: 'It drafts a falsifiable claim labeled agent-hypothesized, so plausible language never silently becomes biological evidence.',
+    narration: 'The client drafts a falsifiable giant-fiber hypothesis with a primary outcome, expected direction, baseline and sham controls, evidence limitations, and an explicit failure criterion.',
   },
   {
     frame: '03-protocol-locked.png',
-    narration: 'The agent designs five controlled arms. The review card shows exact identifiers, controls, timing, unitless model drive, replicates, seed, and controller version.',
+    narration: 'It designs exactly three arms: baseline, model sham, and bilateral giant-fiber perturbation. Twelve replicates per arm produce a complete thirty-six-run seed manifest.',
   },
   {
     frame: '04-human-approved.png',
-    narration: 'A supervisor reviews and approves the exact protocol. Approval is absent from the WebMCP tool surface, and the agent re-inspects before continuing.',
+    narration: 'Approval is absent from the WebMCP tool surface. For this automated capture, the harness activates the visible control, committing the exact protocol hash and seed-manifest hash; in a judged run, the person reviews and clicks it.',
+  },
+  {
+    frame: 'proof-approval-hash-guard.png',
+    narration: 'A deliberately wrong protocol hash returns EVIDENCE MISMATCH. The revision does not move and no batch appears, proving the simulation remains bound to the exact visible commitment.',
   },
   {
     frame: '05-simulation-replay.png',
-    narration: 'After approval, FlyLab produces seeded deterministic trajectories in a reduced-order model, not FlyGym execution, neural dynamics, or wet-lab data.',
+    narration: 'The client echoes the approved protocol hash and runs thirty-six deterministic virtual trials. Every run has its own seed and trajectory ID in the reduced-order model.',
   },
   {
     frame: '06-circuit-bilateral-active.png',
-    narration: 'The 3D circuit renders six BANC version eight eighty-eight L two skeleton reconstructions: four M D Ns and two L B L forties. Purple marks model targets; cyan marks four v three edge rows totaling one hundred fifty-three predicted synaptic links, not physiology.',
+    narration: 'The 3D literature-schematic view traces giant-fiber descent into established jump-leg and wing branches. It invents no connectome neuron IDs and imports no specimen reconstruction.',
   },
   {
-    frame: '07-circuit-left-active.png',
-    narration: 'Left-only selects two metadata-left M D Ns and the connectome-inferred right L B L forty target, totaling one hundred three v three predicted links. The shell is schematic; glow is model selection, not measured activity.',
+    frame: '07-behavior-analysis.png',
+    narration: 'FlyLab returns formal versioned metric definitions and the exact per-run records behind every aggregate. Highlighting is model selection, and all values are simulation predictions rather than biological measurements.',
   },
   {
-    frame: '08-behavior-analysis.png',
-    narration: 'The agent calculates the predefined required behavior metrics. Results carry derived and simulation-predicted labels, separating arithmetic on a model from measurements of flies.',
+    frame: '08-bounded-follow-up.png',
+    narration: 'The client compares all conditions and proposes one bounded follow-up, but receives no authority to execute it. Another experiment requires another exact visible approval.',
   },
   {
-    frame: '09-bounded-follow-up.png',
-    narration: 'FlyLab ranks the visible conditions and proposes one bounded follow-up, but that proposal has no execution authority. A new or edited experiment requires another supervisor review.',
+    frame: '09-evidence-saved.png',
+    narration: 'The save tool creates a source-closed mission version-three bundle containing the discovery decision, rejected alternative, dataset catalog, approval commitments, thirty-six runs, analysis, comparison, and manifest hash.',
   },
   {
-    frame: '10-evidence-saved.png',
-    narration: 'The save tool returns the exact portable evidence export. Its identifier, manifest hash, field-level provenance, source closure, seeds, runs, analysis, comparison, and bounded proposal remain recoverable by the agent.',
+    frame: 'proof-idempotent-retry.png',
+    narration: 'Repeating run and save with their original operation IDs returns idempotent replay, creates zero artifacts, and keeps each revision unchanged. Conflicting operation reuse fails closed.',
   },
   {
-    frame: '11-evidence-ledger.png',
-    narration: 'Selecting the pinned connectome record shows its connectome-inferred label, v three prediction boundary, and source support role, separate from measured findings and derived model context.',
-  },
-  {
-    frame: '12-protocol-edit-invalidates-results.png',
-    narration: 'A supervisor edit advances the revision, clears approval and downstream artifacts, and returns the agent to the supervisor review gate with no callable next tool.',
+    frame: '10-protocol-edit-invalidates-results.png',
+    narration: 'Editing the protocol advances the revision, revokes both approval hashes, clears downstream artifacts, and returns the client to a fail-closed review gate. Old operation IDs cannot revive the cleared lineage.',
   },
   {
     frame: 'proof-webmcp-invocations.png',
-    narration: 'The browser records completed WebMCP calls and structured results. FlyLab makes research agent-operable while keeping execution and scientific interpretation supervisor-auditable.',
+    narration: 'Finally, the flag-enabled automated Chrome protocol capture confirms native WebMCP invocation and structured results. It is runtime evidence, not a DevTools screenshot; ordinary Chrome without that test capability remains unsupported.',
   },
 ];
 
@@ -97,7 +137,8 @@ const narrationPlan = segments.map((segment, index) => ({
 
 if (process.argv.includes('--print-plan')) {
   console.log(JSON.stringify({
-    schema_version: 'flylab.demo-narration-plan.v1',
+    schema_version: 'flylab.demo-narration-plan.v2',
+    demo: demoMetadata,
     segment_count: narrationPlan.length,
     segments: narrationPlan,
   }, null, 2));
@@ -117,7 +158,8 @@ if (process.argv.includes('--check')) {
     && missingNarration.length === 0;
 
   console.log(JSON.stringify({
-    schema_version: 'flylab.demo-preflight.v1',
+    schema_version: 'flylab.demo-preflight.v2',
+    demo: demoMetadata,
     ready_to_build: readyToBuild,
     ui_approved: uiApproved,
     narration_rights_confirmed: narrationRightsConfirmed,
@@ -263,9 +305,9 @@ try {
     ['06-circuit-bilateral-active.png', outputThumbnail],
     ['proof-webmcp-tools.png', join(galleryDirectory, '01-eight-webmcp-tools.png')],
     ['03-protocol-locked.png', join(galleryDirectory, '02-human-approval-gate.png')],
-    ['06-circuit-bilateral-active.png', join(galleryDirectory, '03-banc-circuit-bilateral.png')],
-    ['08-behavior-analysis.png', join(galleryDirectory, '04-behavior-analysis.png')],
-    ['11-evidence-ledger.png', join(galleryDirectory, '05-evidence-ledger.png')],
+    ['06-circuit-bilateral-active.png', join(galleryDirectory, '03-gf-literature-schematic.png')],
+    ['07-behavior-analysis.png', join(galleryDirectory, '04-behavior-analysis.png')],
+    ['09-evidence-saved.png', join(galleryDirectory, '05-evidence-ledger.png')],
   ];
   for (const [frame, output] of media) {
     const imageFilter = output === outputThumbnail
@@ -353,6 +395,7 @@ try {
   }
   const deliveryReport = {
     ok: true,
+    demo: demoMetadata,
     video: finalOutputVideo,
     captions: finalOutputCaptions,
     narration: finalOutputNarration,

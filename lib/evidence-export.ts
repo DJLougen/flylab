@@ -1,8 +1,10 @@
 import type { ProvenanceLabel } from './flylab.js';
 
 export const EVIDENCE_EXPORT_SCHEMA = 'flylab.evidence-export';
-export const EVIDENCE_EXPORT_SCHEMA_VERSION = 2 as const;
+export const EVIDENCE_EXPORT_SCHEMA_VERSION = 3 as const;
 export const EVIDENCE_EXPORT_MEDIA_TYPE = 'application/vnd.flylab.evidence+json';
+
+export type EvidenceBundleScope = 'experiment' | 'mission';
 
 export interface EvidenceBundleAnnotation {
   id: string;
@@ -16,6 +18,7 @@ export interface EvidenceBundleAnnotation {
 
 export interface EvidenceBundleMetadata {
   id: string;
+  scope: EvidenceBundleScope;
   title: string;
   manifestHash: string;
   savedAt: string;
@@ -26,6 +29,7 @@ export interface EvidenceBundleMetadata {
   contextSourceIds: string[];
   methodEvidenceIds: string[];
   methodSourceIds: string[];
+  catalogSourceIds: string[];
   provenanceCounts: Record<ProvenanceLabel, number>;
   provenanceIndex: Record<ProvenanceLabel, string[]>;
   lineageEdges: Array<{

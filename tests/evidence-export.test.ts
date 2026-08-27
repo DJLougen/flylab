@@ -46,7 +46,7 @@ const lineageEdges = [
 describe('FlyLab portable evidence export', () => {
   test('preserves the exact saved metadata and full payload in a versioned envelope', async () => {
     const payload = {
-      format: 'flylab.evidence-bundle.v2',
+      format: 'flylab.experiment-evidence-bundle.v3',
       annotation,
       experiment: { id: 'exp_123', seed: 73142 },
       runs: [{ id: 'run_123', trajectory: [0, -1.2, -2.4] }],
@@ -54,6 +54,7 @@ describe('FlyLab portable evidence export', () => {
     const manifestHash = await sha256(payload);
     const bundle: EvidenceBundleMetadata = {
       id: 'evidence_123',
+      scope: 'experiment',
       title: payload.annotation.title,
       manifestHash,
       savedAt: '2026-08-26T12:34:56.000Z',
@@ -64,6 +65,7 @@ describe('FlyLab portable evidence export', () => {
       contextSourceIds: ['context_source_123'],
       methodEvidenceIds: ['method_evidence_123'],
       methodSourceIds: ['method_source_123'],
+      catalogSourceIds: ['catalog_source_123'],
       provenanceCounts,
       provenanceIndex,
       lineageEdges,
@@ -90,13 +92,14 @@ describe('FlyLab portable evidence export', () => {
 
   test('serializes deterministically and retains the existing payload manifest hash', async () => {
     const payload = {
-      format: 'flylab.evidence-bundle.v2',
+      format: 'flylab.mission-evidence-bundle.v3',
       sources: [{ id: 'source_1', title: 'Pinned source' }],
       analysis: { id: 'analysis_1', values: [1.25, 2.5] },
     };
     const manifestHash = await sha256(payload);
     const bundle: EvidenceBundleMetadata = {
       id: 'evidence_hash_round_trip',
+      scope: 'mission',
       title: 'Hash round trip',
       manifestHash,
       savedAt: '2026-08-26T12:34:56.000Z',
@@ -107,6 +110,7 @@ describe('FlyLab portable evidence export', () => {
       contextSourceIds: ['context_source_1'],
       methodEvidenceIds: ['method_evidence_1'],
       methodSourceIds: ['method_source_1'],
+      catalogSourceIds: ['catalog_source_1'],
       provenanceCounts,
       provenanceIndex: {
         measured: ['evidence_1'],

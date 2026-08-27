@@ -3,9 +3,10 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, join, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 
 const defaultUrl = 'https://flylab-neuroethology.d-lougen.chatgpt.site/';
+const competitionHeroPrompt = 'Investigate how the adult fruit-fly brain coordinates leg and wing output during rapid escape. Separate measured findings from connectome inference and simulation assumptions, draft a falsifiable hypothesis, and design a controlled experiment. Stop for my approval, then continue, analyze every metric, compare conditions, and save the complete evidence bundle.';
 const expectedToolNames = [
   'analyze_fly_behavior',
   'compare_fly_trials',
@@ -15,6 +16,33 @@ const expectedToolNames = [
   'inspect_flylab_state',
   'run_fly_simulation',
   'save_fly_evidence',
+];
+const workflowToolOrder = [
+  'inspect_flylab_state',
+  'find_fly_circuits',
+  'draft_fly_hypothesis',
+  'design_stimulation_trial',
+  'run_fly_simulation',
+  'analyze_fly_behavior',
+  'compare_fly_trials',
+  'save_fly_evidence',
+];
+const expectedDemoFrameNames = [
+  'proof-webmcp-tools.png',
+  '00-eight-tools-live.png',
+  '01-circuit-found.png',
+  '02-hypothesis-drafted.png',
+  '03-protocol-locked.png',
+  '04-human-approved.png',
+  'proof-approval-hash-guard.png',
+  '05-simulation-replay.png',
+  '06-circuit-bilateral-active.png',
+  '07-behavior-analysis.png',
+  '08-bounded-follow-up.png',
+  '09-evidence-saved.png',
+  'proof-idempotent-retry.png',
+  '10-protocol-edit-invalidates-results.png',
+  'proof-webmcp-invocations.png',
 ];
 const chromeCandidates = process.platform === 'darwin'
   ? ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome']
@@ -37,8 +65,12 @@ let chrome;
 let socket;
 let captureIndex = 0;
 const capturedFrames = [];
+const protocolInvocationLog = [];
 const captureDirectory = process.env.FLYLAB_CAPTURE_DIR
   ? resolve(process.env.FLYLAB_CAPTURE_DIR)
+  : null;
+const reportFile = process.env.FLYLAB_REPORT_FILE
+  ? resolve(process.env.FLYLAB_REPORT_FILE)
   : null;
 const cleanDemoCapture = process.env.FLYLAB_DEMO_CAPTURE === '1';
 
@@ -154,7 +186,7 @@ async function readRuntimeStatus() {
   return JSON.parse(value);
 }
 
-async function captureStage(label, options = {}) {
+async function captureFrame(filename, options = {}) {
   if (!captureDirectory) return;
   if (options.selector) {
     const focus = await sendCommand('Runtime.evaluate', {
@@ -172,7 +204,7 @@ async function captureStage(label, options = {}) {
       returnByValue: true,
     });
     if (focus?.result?.value !== true) {
-      throw new Error(`Capture target was unavailable: ${JSON.stringify({ label, selector: options.selector })}`);
+      throw new Error(`Capture target was unavailable: ${JSON.stringify({ filename, selector: options.selector })}`);
     }
     await new Promise((resolve) => setTimeout(resolve, 120));
   }
@@ -182,20 +214,347 @@ async function captureStage(label, options = {}) {
     fromSurface: true,
     captureBeyondViewport: false,
   });
-  const safeLabel = label.replace(/[^a-z0-9-]+/gi, '-').toLowerCase();
-  const filename = `${String(captureIndex).padStart(2, '0')}-${safeLabel}.png`;
   const filepath = join(captureDirectory, filename);
-  captureIndex += 1;
   await writeFile(filepath, Buffer.from(screenshot.data, 'base64'));
   capturedFrames.push(filepath);
 }
 
-async function captureCircuitEvidence() {
+async function captureStage(label, options = {}) {
+  if (!captureDirectory) return;
+  const safeLabel = label.replace(/[^a-z0-9-]+/gi, '-').toLowerCase();
+  const filename = `${String(captureIndex).padStart(2, '0')}-${safeLabel}.png`;
+  captureIndex += 1;
+  await captureFrame(filename, options);
+}
+
+async function captureRuntimeDiagnosticProof(filename, {
+  requireInvocation = false,
+  tools,
+  phase = 'registration',
+  workflow = null,
+} = {}) {
+  if (!captureDirectory) return;
+  const actualToolNames = tools?.map((tool) => tool.name).sort() ?? [];
+  const runtime = await readRuntimeStatus();
+  const liveContext = await inspectAgentContext(tools);
+  if (JSON.stringify(actualToolNames) !== JSON.stringify(expectedToolNames)
+    || runtime?.agentRuntime?.registered_tool_count !== expectedToolNames.length
+    || runtime?.agentRuntime?.page_registration_status !== 'registered'
+    || (requireInvocation && runtime?.agentRuntime?.webmcp_invocation_observed !== true)) {
+    throw new Error(`Runtime diagnostic was not proof-ready: ${JSON.stringify({ filename, actualToolNames, runtime: runtime?.agentRuntime })}`);
+  }
+
+  const toolRows = (phase === 'workflow_complete' ? workflowToolOrder : actualToolNames).map((toolName) => {
+    const responses = protocolInvocationLog.filter((record) => record.tool_name === toolName);
+    const completed = responses.filter((record) => record.status === 'Completed').length;
+    const nonCompleted = responses.length - completed;
+    return {
+      name: toolName,
+      status: phase === 'workflow_complete' ? completed > 0 ? 'Completed' : 'Missing' : 'Registered',
+      response_count: responses.length,
+      non_completed_guards: nonCompleted,
+    };
+  });
+  if (phase === 'workflow_complete' && toolRows.some((row) => row.status !== 'Completed')) {
+    throw new Error(`Final protocol proof did not observe a completed response for every tool: ${JSON.stringify(toolRows)}`);
+  }
+
+  const proof = {
+    title: 'Automated Chrome protocol evidence',
+    boundary: 'Generated from the flag-enabled Chrome WebMCP protocol events and live FlyLab inspector state. This is an automated protocol evidence view, not a DevTools screenshot.',
+    phase,
+    registered_count: runtime.agentRuntime.registered_tool_count,
+    declared_count: expectedToolNames.length,
+    page_session_id: runtime.agentRuntime.page_session_id,
+    live_revision: liveContext.state.revision,
+    live_stage: liveContext.state.stage,
+    live_agent_status: liveContext.agent_status,
+    invocation_observed: runtime.agentRuntime.webmcp_invocation_observed,
+    tools: toolRows,
+    completed_result: workflow ? {
+      result: 'Completed',
+      stage: workflow.completed_stage,
+      revision: workflow.completed_state_revision,
+      bundle_id: workflow.evidence_bundle_id,
+      selected_circuit_id: workflow.selected_circuit_id,
+      total_seeded_runs: workflow.total_seeded_runs,
+    } : null,
+  };
+  const installed = await sendCommand('Runtime.evaluate', {
+    expression: `(() => {
+      const proof = ${JSON.stringify(proof)};
+      document.querySelector('#flylab-automated-protocol-evidence')?.remove();
+      const root = document.createElement('section');
+      root.id = 'flylab-automated-protocol-evidence';
+      root.setAttribute('role', 'region');
+      root.setAttribute('aria-label', proof.title);
+      const style = document.createElement('style');
+      style.textContent = \`
+        #flylab-automated-protocol-evidence { position: fixed; inset: 0; z-index: 2147483647; box-sizing: border-box; padding: 28px; background: #061113; color: #eef8f5; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif; }
+        #flylab-automated-protocol-evidence * { box-sizing: border-box; }
+        #flylab-automated-protocol-evidence .proof-shell { height: 100%; border: 1px solid #2b5757; border-radius: 18px; background: radial-gradient(circle at 86% 6%, rgba(94, 234, 212, .1), transparent 28%), #0a181b; padding: 30px 34px; display: flex; flex-direction: column; gap: 20px; box-shadow: 0 24px 90px rgba(0,0,0,.45); }
+        #flylab-automated-protocol-evidence .proof-kicker { color: #65ead4; font: 700 13px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; }
+        #flylab-automated-protocol-evidence h1 { margin: 5px 0 8px; font-size: 34px; line-height: 1.05; letter-spacing: -.03em; }
+        #flylab-automated-protocol-evidence .proof-boundary { margin: 0; max-width: 1120px; color: #a8c0bd; font-size: 15px; line-height: 1.45; }
+        #flylab-automated-protocol-evidence .proof-facts { display: grid; grid-template-columns: 1.15fr .75fr .7fr .8fr 1fr; gap: 10px; }
+        #flylab-automated-protocol-evidence .proof-fact { min-height: 72px; border: 1px solid #244447; border-radius: 10px; padding: 12px 14px; background: #0d2225; }
+        #flylab-automated-protocol-evidence .proof-fact span { display: block; color: #779490; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+        #flylab-automated-protocol-evidence .proof-fact strong { display: block; margin-top: 7px; color: #f4fbf9; font: 700 15px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+        #flylab-automated-protocol-evidence .proof-section-title { display: flex; align-items: end; justify-content: space-between; gap: 16px; }
+        #flylab-automated-protocol-evidence .proof-section-title h2 { margin: 0; font-size: 18px; }
+        #flylab-automated-protocol-evidence .proof-section-title p { margin: 0; color: #8da6a2; font-size: 12px; }
+        #flylab-automated-protocol-evidence .proof-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px 12px; }
+        #flylab-automated-protocol-evidence .proof-tool { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 16px; min-height: 57px; border: 1px solid #244447; border-radius: 10px; padding: 10px 14px; background: #0b1e21; }
+        #flylab-automated-protocol-evidence .proof-tool code { color: #e4f2ef; font: 700 16px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; }
+        #flylab-automated-protocol-evidence .proof-tool b { color: #66ead4; font: 800 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .07em; text-transform: uppercase; }
+        #flylab-automated-protocol-evidence .proof-tool small { grid-column: 1 / -1; color: #779490; font-size: 11px; }
+        #flylab-automated-protocol-evidence .proof-result { display: grid; grid-template-columns: .7fr .7fr .8fr 1.8fr 1fr .8fr; gap: 9px; padding: 13px; border: 1px solid #7658a8; border-radius: 12px; background: rgba(113, 78, 165, .13); }
+        #flylab-automated-protocol-evidence .proof-result div span { display: block; color: #a899bd; font-size: 9px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+        #flylab-automated-protocol-evidence .proof-result div strong { display: block; margin-top: 5px; color: #f2eafe; font: 700 13px/1.25 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+        #flylab-automated-protocol-evidence .proof-footer { margin-top: auto; display: flex; justify-content: space-between; gap: 20px; border-top: 1px solid #244447; padding-top: 13px; color: #86a19d; font-size: 12px; }
+        #flylab-automated-protocol-evidence .proof-footer strong { color: #65ead4; }
+      \`;
+      root.append(style);
+      const shell = document.createElement('div');
+      shell.className = 'proof-shell';
+      root.append(shell);
+      const add = (parent, tag, text, className) => {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        node.textContent = String(text);
+        parent.append(node);
+        return node;
+      };
+      const head = document.createElement('header');
+      shell.append(head);
+      add(head, 'div', proof.phase === 'workflow_complete' ? 'Final native invocation proof' : 'Native registration proof', 'proof-kicker');
+      add(head, 'h1', proof.title);
+      add(head, 'p', proof.boundary, 'proof-boundary');
+      const facts = document.createElement('div');
+      facts.className = 'proof-facts';
+      shell.append(facts);
+      [
+        ['Page session', proof.page_session_id],
+        ['Registered', String(proof.registered_count) + '/' + String(proof.declared_count)],
+        ['Live revision', 'r' + String(proof.live_revision)],
+        ['Live stage', proof.live_stage],
+        ['Invocation observed', proof.invocation_observed ? 'yes' : 'no'],
+      ].forEach(([label, value]) => {
+        const card = document.createElement('div');
+        card.className = 'proof-fact';
+        add(card, 'span', label);
+        add(card, 'strong', value);
+        facts.append(card);
+      });
+      const sectionTitle = document.createElement('div');
+      sectionTitle.className = 'proof-section-title';
+      add(sectionTitle, 'h2', proof.phase === 'workflow_complete' ? 'Observed completed WebMCP sequence' : 'Exact WebMCP.toolsAdded inventory');
+      add(sectionTitle, 'p', proof.phase === 'workflow_complete' ? 'Statuses summarize actual WebMCP.toolResponded protocol events.' : 'Names come directly from the WebMCP.toolsAdded event.');
+      shell.append(sectionTitle);
+      const tools = document.createElement('div');
+      tools.className = 'proof-tools';
+      shell.append(tools);
+      proof.tools.forEach((tool) => {
+        const card = document.createElement('div');
+        card.className = 'proof-tool';
+        add(card, 'code', tool.name);
+        add(card, 'b', tool.status);
+        const detail = proof.phase === 'workflow_complete'
+          ? String(tool.response_count) + ' protocol response' + (tool.response_count === 1 ? '' : 's')
+            + (tool.non_completed_guards
+              ? ' · ' + String(tool.non_completed_guards) + ' expected guard/error response' + (tool.non_completed_guards === 1 ? '' : 's')
+              : '')
+          : 'Page registration accepted in this Chrome session';
+        add(card, 'small', detail);
+        tools.append(card);
+      });
+      if (proof.completed_result) {
+        const result = document.createElement('div');
+        result.className = 'proof-result';
+        [
+          ['Workflow result', proof.completed_result.result],
+          ['Completed stage', proof.completed_result.stage],
+          ['Completed revision', 'r' + String(proof.completed_result.revision)],
+          ['Mission bundle', proof.completed_result.bundle_id],
+          ['Selected circuit', proof.completed_result.selected_circuit_id],
+          ['Seeded runs', proof.completed_result.total_seeded_runs],
+        ].forEach(([label, value]) => {
+          const cell = document.createElement('div');
+          add(cell, 'span', label);
+          add(cell, 'strong', value);
+          result.append(cell);
+        });
+        shell.append(result);
+      }
+      const footer = document.createElement('footer');
+      footer.className = 'proof-footer';
+      add(footer, 'span', 'Live inspector after capture workflow: ' + proof.live_agent_status + ' · ' + proof.live_stage + ' · r' + String(proof.live_revision));
+      add(footer, 'strong', 'Automated flag-enabled Chrome protocol evidence · not DevTools');
+      shell.append(footer);
+      document.body.append(root);
+      const rect = root.getBoundingClientRect();
+      return {
+        title: root.querySelector('h1')?.textContent ?? null,
+        tool_names: [...root.querySelectorAll('.proof-tool code')].map((node) => node.textContent),
+        fully_visible: rect.top === 0 && rect.left === 0 && rect.width === window.innerWidth && rect.height === window.innerHeight,
+      };
+    })()`,
+    returnByValue: true,
+  });
+  const panelState = installed?.result?.value;
+  if (panelState?.title !== proof.title
+    || panelState?.fully_visible !== true
+    || JSON.stringify(panelState.tool_names) !== JSON.stringify(toolRows.map((row) => row.name))) {
+    throw new Error(`Automated Chrome protocol evidence panel was not capture-ready: ${JSON.stringify(panelState)}`);
+  }
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await captureFrame(filename);
+  } finally {
+    await sendCommand('Runtime.evaluate', {
+      expression: `document.querySelector('#flylab-automated-protocol-evidence')?.remove()`,
+      returnByValue: true,
+    });
+  }
+}
+
+async function captureIntegrityProof(filename, {
+  tools,
+  kicker,
+  title,
+  boundary,
+  facts,
+  checks,
+}) {
+  if (!captureDirectory) return;
+  const runtime = await readRuntimeStatus();
+  const context = await inspectAgentContext(tools);
+  if (runtime?.agentRuntime?.registered_tool_count !== expectedToolNames.length
+    || runtime?.agentRuntime?.webmcp_invocation_observed !== true
+    || !Array.isArray(facts)
+    || !facts.length
+    || !Array.isArray(checks)
+    || !checks.length
+    || checks.some((check) => check.pass !== true)) {
+    throw new Error(`Integrity proof was not capture-ready: ${JSON.stringify({ filename, runtime: runtime?.agentRuntime, facts, checks })}`);
+  }
+  const proof = {
+    kicker,
+    title,
+    boundary,
+    facts,
+    checks,
+    page_session_id: runtime.agentRuntime.page_session_id,
+    live_revision: context.state.revision,
+    live_stage: context.state.stage,
+  };
+  const installed = await sendCommand('Runtime.evaluate', {
+    expression: `(() => {
+      const proof = ${JSON.stringify(proof)};
+      document.querySelector('#flylab-automated-integrity-evidence')?.remove();
+      const root = document.createElement('section');
+      root.id = 'flylab-automated-integrity-evidence';
+      root.setAttribute('role', 'region');
+      root.setAttribute('aria-label', proof.title);
+      const style = document.createElement('style');
+      style.textContent = \`
+        #flylab-automated-integrity-evidence { position: fixed; inset: 0; z-index: 2147483647; box-sizing: border-box; padding: 28px; background: #061113; color: #eef8f5; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif; }
+        #flylab-automated-integrity-evidence * { box-sizing: border-box; }
+        #flylab-automated-integrity-evidence .proof-shell { height: 100%; border: 1px solid #2b5757; border-radius: 18px; background: radial-gradient(circle at 86% 6%, rgba(94,234,212,.1), transparent 28%), #0a181b; padding: 30px 34px; display: flex; flex-direction: column; gap: 20px; box-shadow: 0 24px 90px rgba(0,0,0,.45); }
+        #flylab-automated-integrity-evidence .proof-kicker { color: #65ead4; font: 700 13px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; }
+        #flylab-automated-integrity-evidence h1 { margin: 5px 0 8px; font-size: 38px; line-height: 1.05; letter-spacing: -.03em; }
+        #flylab-automated-integrity-evidence .proof-boundary { margin: 0; max-width: 1160px; color: #a8c0bd; font-size: 15px; line-height: 1.45; }
+        #flylab-automated-integrity-evidence .proof-facts { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; }
+        #flylab-automated-integrity-evidence .proof-fact { min-height: 80px; border: 1px solid #244447; border-radius: 10px; padding: 12px 14px; background: #0d2225; }
+        #flylab-automated-integrity-evidence .proof-fact span { display: block; color: #779490; font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+        #flylab-automated-integrity-evidence .proof-fact strong { display: block; margin-top: 7px; color: #f4fbf9; font: 700 14px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+        #flylab-automated-integrity-evidence .proof-checks { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+        #flylab-automated-integrity-evidence .proof-check { min-height: 92px; border: 1px solid #2b5757; border-radius: 12px; padding: 15px 17px; background: #0b1e21; }
+        #flylab-automated-integrity-evidence .proof-check b { color: #65ead4; font: 800 12px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; text-transform: uppercase; }
+        #flylab-automated-integrity-evidence .proof-check h2 { margin: 7px 0 5px; font-size: 18px; }
+        #flylab-automated-integrity-evidence .proof-check p { margin: 0; color: #91aaa6; font-size: 13px; line-height: 1.4; }
+        #flylab-automated-integrity-evidence .proof-footer { margin-top: auto; display: flex; justify-content: space-between; gap: 20px; border-top: 1px solid #244447; padding-top: 13px; color: #86a19d; font-size: 12px; }
+        #flylab-automated-integrity-evidence .proof-footer strong { color: #65ead4; }
+      \`;
+      root.append(style);
+      const shell = document.createElement('div');
+      shell.className = 'proof-shell';
+      root.append(shell);
+      const add = (parent, tag, text, className) => {
+        const node = document.createElement(tag);
+        if (className) node.className = className;
+        node.textContent = String(text);
+        parent.append(node);
+        return node;
+      };
+      const head = document.createElement('header');
+      shell.append(head);
+      add(head, 'div', proof.kicker, 'proof-kicker');
+      add(head, 'h1', proof.title);
+      add(head, 'p', proof.boundary, 'proof-boundary');
+      const factGrid = document.createElement('div');
+      factGrid.className = 'proof-facts';
+      shell.append(factGrid);
+      proof.facts.forEach((fact) => {
+        const card = document.createElement('div');
+        card.className = 'proof-fact';
+        add(card, 'span', fact.label);
+        add(card, 'strong', fact.value);
+        factGrid.append(card);
+      });
+      const checkGrid = document.createElement('div');
+      checkGrid.className = 'proof-checks';
+      shell.append(checkGrid);
+      proof.checks.forEach((check) => {
+        const card = document.createElement('div');
+        card.className = 'proof-check';
+        add(card, 'b', 'verified');
+        add(card, 'h2', check.label);
+        add(card, 'p', check.detail);
+        checkGrid.append(card);
+      });
+      const footer = document.createElement('footer');
+      footer.className = 'proof-footer';
+      add(footer, 'span', 'Live page: ' + proof.page_session_id + ' · ' + proof.live_stage + ' · r' + String(proof.live_revision));
+      add(footer, 'strong', 'Automated WebMCP client evidence · not a ChatGPT agent transcript · not DevTools');
+      shell.append(footer);
+      document.body.append(root);
+      const rect = root.getBoundingClientRect();
+      return {
+        title: root.querySelector('h1')?.textContent ?? null,
+        fact_count: root.querySelectorAll('.proof-fact').length,
+        check_count: root.querySelectorAll('.proof-check').length,
+        fully_visible: rect.top === 0 && rect.left === 0 && rect.width === window.innerWidth && rect.height === window.innerHeight,
+      };
+    })()`,
+    returnByValue: true,
+  });
+  const state = installed?.result?.value;
+  if (state?.title !== title
+    || state?.fact_count !== facts.length
+    || state?.check_count !== checks.length
+    || state?.fully_visible !== true) {
+    throw new Error(`Integrity proof panel was not fully visible: ${JSON.stringify(state)}`);
+  }
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    await captureFrame(filename);
+  } finally {
+    await sendCommand('Runtime.evaluate', {
+      expression: `document.querySelector('#flylab-automated-integrity-evidence')?.remove()`,
+      returnByValue: true,
+    });
+  }
+}
+
+async function captureCircuitEvidence(expectedSelection = 'MDN activation and backward locomotion') {
   if (!captureDirectory) return;
   await clickButton({ text: 'Evidence ledger' });
   await new Promise((resolve) => setTimeout(resolve, 160));
+  await clickButton({ text: expectedSelection });
+  await new Promise((resolve) => setTimeout(resolve, 80));
   await prepareEvidenceModalCapture({
-    expectedSelection: 'MDN activation and backward locomotion',
+    expectedSelection,
     navPosition: 'start',
   });
   await captureStage('circuit-found');
@@ -292,16 +651,41 @@ async function prepareEvidenceModalCapture({ expectedSelection, navPosition = 's
   return state;
 }
 
-async function waitForViewer() {
+async function waitForViewer(expectedLabel = 'BANC v888 reconstructions') {
   for (let attempt = 0; attempt < 40; attempt += 1) {
     const response = await sendCommand('Runtime.evaluate', {
       expression: `document.querySelector('.viewer-load.ready')?.textContent?.trim() ?? null`,
       returnByValue: true,
     });
-    if (response?.result?.value === 'BANC v888 reconstructions') return;
+    if (response?.result?.value === expectedLabel) return;
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
-  throw new Error('The Three.js reconstruction viewer did not finish loading.');
+  throw new Error(`The Three.js circuit viewer did not reach ${expectedLabel}.`);
+}
+
+async function selectCondition(conditionId) {
+  const response = await sendCommand('Runtime.evaluate', {
+    expression: `(() => {
+      const conditionId = ${JSON.stringify(conditionId)};
+      const button = [...document.querySelectorAll('.condition-tabs button')]
+        .find((candidate) => candidate.querySelector('span')?.textContent?.trim()
+          && candidate.getAttribute('aria-pressed') !== null
+          && candidate.textContent?.includes(conditionId === 'condition_bilateral' ? 'Bilateral' : conditionId));
+      if (!button && conditionId === 'condition_bilateral') {
+        const fallback = [...document.querySelectorAll('.condition-tabs button')].at(-1);
+        fallback?.click();
+        return { clicked: Boolean(fallback), label: fallback?.querySelector('span')?.textContent?.trim() ?? null };
+      }
+      button?.click();
+      return { clicked: Boolean(button), label: button?.querySelector('span')?.textContent?.trim() ?? null };
+    })()`,
+    returnByValue: true,
+  });
+  if (response?.result?.value?.clicked !== true) {
+    throw new Error(`Condition ${conditionId} was not available for capture: ${JSON.stringify(response)}`);
+  }
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  return response.result.value;
 }
 
 async function captureCircuitPlayback() {
@@ -324,6 +708,21 @@ async function captureCircuitPlayback() {
   await captureStage('circuit-left-active', { selector: '.main-stage', block: 'start' });
   await clickButton({ ariaLabel: 'Pause replay' });
   await clickButton({ text: 'Bilateral MDN model drive' });
+  await clickButton({ text: '3D fly', exact: true });
+}
+
+async function captureGfCircuitPlayback() {
+  if (!captureDirectory) return;
+  await selectCondition('condition_bilateral');
+  await clickButton({ text: '3D brain', exact: true });
+  await waitForViewer('GF literature schematic · no bundled reconstruction');
+  await clickButton({ text: 'whole', exact: true });
+  await clickButton({ ariaLabel: 'Restart replay' });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  await clickButton({ ariaLabel: 'Play replay' });
+  await new Promise((resolve) => setTimeout(resolve, 900));
+  await captureStage('circuit-bilateral-active', { selector: '.main-stage', block: 'start' });
+  await clickButton({ ariaLabel: 'Pause replay' });
   await clickButton({ text: '3D fly', exact: true });
 }
 
@@ -362,8 +761,12 @@ async function verifyVisibleProtocol(experiment) {
     }
   }
   const expectedStimulus = {
-    left: `${(experiment.onsetMs / experiment.trialDurationMs) * 100}%`,
-    width: `${(experiment.durationMs / experiment.trialDurationMs) * 100}%`,
+    left: (experiment.onsetMs / experiment.trialDurationMs) * 100,
+    width: (experiment.durationMs / experiment.trialDurationMs) * 100,
+  };
+  const visibleStimulus = {
+    left: Number.parseFloat(visible?.stimulus_window?.left ?? ''),
+    width: Number.parseFloat(visible?.stimulus_window?.width ?? ''),
   };
   if (!visible?.metadata?.['Trial duration']?.includes(experiment.trialDurationMs.toLocaleString())
     || !visible?.metadata?.['Required controls']?.includes('baseline')
@@ -374,7 +777,10 @@ async function verifyVisibleProtocol(experiment) {
     || !visible?.slider_labels?.some((label) => label.includes(String(experiment.replicates)))
     || !visible?.approval_text?.includes(experiment.id)
     || JSON.stringify(visible?.ranges?.map(({ min, max }) => [min, max])) !== JSON.stringify([['0', '1'], ['50', String(Math.min(5000, experiment.trialDurationMs - experiment.onsetMs))], ['1', '20']])
-    || JSON.stringify(visible?.stimulus_window) !== JSON.stringify(expectedStimulus)) {
+    || !Number.isFinite(visibleStimulus.left)
+    || !Number.isFinite(visibleStimulus.width)
+    || Math.abs(visibleStimulus.left - expectedStimulus.left) > 0.001
+    || Math.abs(visibleStimulus.width - expectedStimulus.width) > 0.001) {
     throw new Error(`Visible exact protocol was incomplete: ${JSON.stringify(visible)}`);
   }
   return visible;
@@ -394,19 +800,24 @@ async function verifyVisibleAnalysis(analysis, primaryConditionId) {
   });
   const visible = response?.result?.value;
   const primary = analysis.conditions.find((condition) => condition.conditionId === primaryConditionId);
-  const expectedLabels = ['Response initiation', 'Backward distance', 'Signed speed', 'Response latency', 'Heading change', 'Stance stability'];
+  const expectedLabels = [
+    'Response initiation',
+    ...Object.values(analysis.metricDefinitions ?? {}).map((definition) => definition.label),
+  ];
   const initiationCard = visible?.cards?.find((card) => card.label === 'Response initiation');
   const responseCard = visible?.cards?.find((card) => card.label === 'Response latency');
   const headingCard = visible?.cards?.find((card) => card.label === 'Heading change');
-  const roundedHeading = Math.round(primary?.headingChangeDeg * 100) / 100;
+  const roundedHeading = typeof primary?.headingChangeDeg === 'number'
+    ? Math.round(primary.headingChangeDeg * 100) / 100
+    : null;
   if (!primary
     || visible?.title !== primary.label
     || visible?.cards?.length !== expectedLabels.length
     || !expectedLabels.every((label) => visible.cards.some((card) => card.label === label))
     || initiationCard?.value !== `${Math.round(primary.responseInitiationProbability * 100)}%`
     || !initiationCard?.detail?.includes(`${primary.responsiveN}/${primary.n}`)
-    || headingCard?.value !== `${roundedHeading} °`
-    || (primary.responseLatencyMs === null && responseCard.value !== 'n/a')) {
+    || (headingCard && headingCard.value !== `${roundedHeading} °`)
+    || (primary.responseLatencyMs === null && responseCard?.value !== 'n/a')) {
     throw new Error(`Visible analysis did not match the returned primary condition: ${JSON.stringify({ visible, primary })}`);
   }
   return visible;
@@ -499,13 +910,14 @@ async function verifyVisibleBundle(bundle) {
     || !bundle.supportingSourceIds.every((id) => metadata['Supporting sources']?.includes(id))
     || !bundle.methodEvidenceIds.every((id) => metadata['Model-method evidence']?.includes(id))
     || !bundle.methodSourceIds.every((id) => metadata['Model-method sources']?.includes(id))
+    || !bundle.catalogSourceIds.every((id) => metadata['Dataset catalog sources']?.includes(id))
     || !expectedCounts.every((value) => metadata['Provenance counts']?.includes(value))) {
     throw new Error(`Visible evidence lineage did not match the saved bundle: ${JSON.stringify({ metadata, bundle })}`);
   }
   return metadata;
 }
 
-async function verifyProtocolEditInvalidation(tools, previousExperimentId) {
+async function verifyProtocolEditInvalidation(tools, previousExperimentId, expectedConditionCount = 5, staleOperations = null) {
   await clickButton({ ariaLabel: 'Close evidence ledger' });
   const response = await sendCommand('Runtime.evaluate', {
     expression: `(() => {
@@ -545,7 +957,7 @@ async function verifyProtocolEditInvalidation(tools, previousExperimentId) {
     && value?.resultPanelPresent === false
     && value?.proposalPresent === false
     && value?.playbackDisabled === true
-    && value?.conditionStates?.length === 5
+    && value?.conditionStates?.length === expectedConditionCount
     && value.conditionStates.every((condition) => condition === 'draft');
   if (!verified) {
     throw new Error(`Editing did not clear approval and downstream results: ${JSON.stringify(value)}`);
@@ -558,12 +970,46 @@ async function verifyProtocolEditInvalidation(tools, previousExperimentId) {
     && context.artifacts?.experiment_id
     && context.artifacts.experiment_id !== previousExperimentId
     && context.artifacts.experiment_approved === false
+    && context.artifact_manifest?.approval === null
+    && context.next_action?.input_refs?.approved_protocol_hash === undefined
     && context.artifacts.batch_id === null
     && context.artifacts.analysis_ids?.length === 0
     && context.artifacts.comparison_id === null
     && context.artifacts.evidence_bundle_id === null;
   if (!inspectorVerified) {
     throw new Error(`Inspector did not recover the edited protocol boundary: ${JSON.stringify(context)}`);
+  }
+  let staleOperationReplayGuard = null;
+  if (staleOperations) {
+    const rejectedRun = failedEnvelope(
+      await invokeRegisteredTool(tools, 'run_fly_simulation', staleOperations.run),
+      'run_fly_simulation',
+      'INVALID_INPUT',
+      'run_fly_simulation',
+    );
+    const rejectedSave = failedEnvelope(
+      await invokeRegisteredTool(tools, 'save_fly_evidence', staleOperations.save),
+      'save_fly_evidence',
+      'INVALID_INPUT',
+      'save_fly_evidence',
+    );
+    const afterRejectedReplays = await inspectAgentContext(tools);
+    if (rejectedRun.error.details?.lineage_status !== 'invalidated_or_replaced'
+      || rejectedSave.error.details?.lineage_status !== 'invalidated_or_replaced'
+      || rejectedRun.state_revision !== context.state.revision
+      || rejectedSave.state_revision !== context.state.revision
+      || afterRejectedReplays.state.revision !== context.state.revision
+      || afterRejectedReplays.artifacts.batch_id !== null
+      || afterRejectedReplays.artifacts.evidence_bundle_id !== null) {
+      throw new Error(`Invalidated operation IDs revived or changed cleared lineage: ${JSON.stringify({ rejectedRun, rejectedSave, context, afterRejectedReplays })}`);
+    }
+    staleOperationReplayGuard = {
+      run_error: rejectedRun.error.code,
+      save_error: rejectedSave.error.code,
+      lineage_status: rejectedRun.error.details.lineage_status,
+      state_revision: context.state.revision,
+      state_unchanged: true,
+    };
   }
   await captureStage('protocol-edit-invalidates-results', { selector: '.protocol-controls', block: 'start' });
   return {
@@ -572,10 +1018,11 @@ async function verifyProtocolEditInvalidation(tools, previousExperimentId) {
     next_tool: context.next_tool,
     human_gate: context.human_gate.status,
     revised_experiment_id: context.artifacts.experiment_id,
+    stale_operation_replay_guard: staleOperationReplayGuard,
   };
 }
 
-async function beginRegisteredToolInvocation(tools, toolName, input) {
+async function beginRegisteredToolInvocationRaw(tools, toolName, input) {
   const tool = tools.find((candidate) => candidate.name === toolName);
   if (!tool?.frameId) throw new Error(`Chrome did not return a frame for ${toolName}.`);
   return sendCommand('WebMCP.invokeTool', {
@@ -585,12 +1032,65 @@ async function beginRegisteredToolInvocation(tools, toolName, input) {
   });
 }
 
-async function invokeRegisteredTool(tools, toolName, input) {
-  const invocation = await beginRegisteredToolInvocation(tools, toolName, input);
-  return waitForEvent(
+async function waitForRegisteredToolResponse(toolName, invocation) {
+  const response = await waitForEvent(
     'WebMCP.toolResponded',
     (event) => event.invocationId === invocation.invocationId,
   );
+  protocolInvocationLog.push({
+    tool_name: toolName,
+    status: response.status ?? 'Unknown',
+    invocation_id: invocation.invocationId,
+  });
+  return response;
+}
+
+async function invokeRegisteredToolRaw(tools, toolName, input) {
+  const invocation = await beginRegisteredToolInvocationRaw(tools, toolName, input);
+  return waitForRegisteredToolResponse(toolName, invocation);
+}
+
+const mutationToolNames = new Set(expectedToolNames.filter((name) => name !== 'inspect_flylab_state'));
+let generatedOperationId = 0;
+
+async function prepareRegisteredToolInput(tools, toolName, input) {
+  if (!mutationToolNames.has(toolName)) return input;
+  const inspectionResponse = await invokeRegisteredToolRaw(tools, 'inspect_flylab_state', {});
+  const inspection = successfulEnvelope(inspectionResponse, 'inspect_flylab_state');
+  const pageSessionId = inspection.data?.page_session_id;
+  if (typeof pageSessionId !== 'string' || !pageSessionId || !Number.isInteger(inspection.state_revision)) {
+    throw new Error(`Inspector did not return mutation preconditions: ${JSON.stringify(inspection)}`);
+  }
+  const operationInput = (toolName === 'run_fly_simulation' || toolName === 'save_fly_evidence')
+    ? { operation_id: input.operation_id ?? `verify_${toolName}_${++generatedOperationId}` }
+    : {};
+  const approvedProtocolHash = inspection.data?.agent_context?.next_action?.input_refs?.approved_protocol_hash;
+  const approvalInput = toolName === 'run_fly_simulation'
+    && input.approved_protocol_hash === undefined
+    && typeof approvedProtocolHash === 'string'
+    && approvedProtocolHash.startsWith('sha256:')
+    ? { approved_protocol_hash: approvedProtocolHash }
+    : {};
+  return {
+    ...input,
+    page_session_id: pageSessionId,
+    expected_state_revision: inspection.state_revision,
+    ...operationInput,
+    ...approvalInput,
+  };
+}
+
+async function beginRegisteredToolInvocation(tools, toolName, input) {
+  return beginRegisteredToolInvocationRaw(
+    tools,
+    toolName,
+    await prepareRegisteredToolInput(tools, toolName, input),
+  );
+}
+
+async function invokeRegisteredTool(tools, toolName, input) {
+  const invocation = await beginRegisteredToolInvocation(tools, toolName, input);
+  return waitForRegisteredToolResponse(toolName, invocation);
 }
 
 async function readSimulationCancellationState() {
@@ -779,6 +1279,305 @@ function assertSameStringSet(actual, expected, label) {
   }
 }
 
+function assertDiscoveryDecisionAndCandidateRecords(discovery, label) {
+  const data = discovery?.data;
+  const decision = data?.discovery_decision;
+  const candidateSummaries = data?.candidate_circuits;
+  const candidateRecords = data?.candidate_circuit_records;
+  if (decision?.schema !== 'flylab.discovery-decision'
+    || decision?.schemaVersion !== 1
+    || typeof decision.id !== 'string'
+    || !decision.id.startsWith('discovery_')
+    || typeof decision.missionGoal !== 'string'
+    || !decision.missionGoal
+    || typeof decision.search?.query !== 'string'
+    || !Array.isArray(decision.candidates)
+    || !Array.isArray(decision.rejectedAlternatives)
+    || !Array.isArray(decision.excludedEvidence)
+    || !Array.isArray(decision.excludedEvidenceIds)
+    || decision.provenance?.join(',') !== 'derived'
+    || !['partial', 'undetermined', 'none'].includes(decision.overallCoverage)
+    || typeof decision.coverageWarning !== 'string'
+    || !decision.coverageWarning
+    || !Array.isArray(candidateSummaries)
+    || !Array.isArray(candidateRecords)) {
+    throw new Error(`${label} did not expose the persisted discovery-decision contract: ${JSON.stringify(data)}`);
+  }
+  if (decision.selectionStatus !== data.selection_status
+    || decision.selectedCircuitId !== data.selected_circuit_id
+    || candidateRecords.length !== decision.candidates.length
+    || candidateSummaries.length !== decision.candidates.length) {
+    throw new Error(`${label} discovery decision diverged from returned candidates: ${JSON.stringify(data)}`);
+  }
+  assertSameStringSet(
+    decision.candidates.map((candidate) => candidate.circuitId),
+    candidateSummaries.map((candidate) => candidate.id),
+    `${label} decision-to-summary candidates`,
+  );
+  assertSameStringSet(
+    decision.candidates.map((candidate) => candidate.circuitId),
+    candidateRecords.map((candidate) => candidate.circuit?.id),
+    `${label} decision-to-full candidate records`,
+  );
+  assertSameStringSet(
+    decision.excludedEvidence.map((record) => record.evidenceId),
+    decision.excludedEvidenceIds,
+    `${label} excluded evidence index`,
+  );
+  if (decision.selectedCircuitId !== null) {
+    if (decision.recommendation?.circuitId !== decision.selectedCircuitId
+      || !decision.candidates.some((candidate) => candidate.circuitId === decision.selectedCircuitId && candidate.selected === true)
+      || decision.candidates.some((candidate) => candidate.circuitId !== decision.selectedCircuitId && candidate.selected === true)
+      || !data.circuits?.some((circuit) => circuit.id === decision.selectedCircuitId)) {
+      throw new Error(`${label} selected recommendation was not internally consistent: ${JSON.stringify(decision)}`);
+    }
+  }
+  const rejectedIds = decision.rejectedAlternatives.map((record) => record.circuitId);
+  if (rejectedIds.includes(decision.selectedCircuitId)
+    || rejectedIds.some((id) => !decision.candidates.some((candidate) => candidate.circuitId === id))) {
+    throw new Error(`${label} rejected-alternative ledger was inconsistent: ${JSON.stringify(decision.rejectedAlternatives)}`);
+  }
+  for (const candidateRecord of candidateRecords) {
+    const circuit = candidateRecord?.circuit;
+    const motorMap = candidateRecord?.motor_map;
+    const evidence = candidateRecord?.evidence;
+    const decisionCandidate = decision.candidates.find((candidate) => candidate.circuitId === circuit?.id);
+    if (!circuit?.id
+      || !decisionCandidate
+      || motorMap?.circuitId !== circuit.id
+      || motorMap?.id !== circuit.motorMapId
+      || !Array.isArray(motorMap.nodes)
+      || !Array.isArray(motorMap.edges)
+      || !Array.isArray(evidence)) {
+      throw new Error(`${label} candidate record was incomplete: ${JSON.stringify(candidateRecord)}`);
+    }
+    assertSameStringSet(evidence.map((record) => record.id), circuit.evidenceIds, `${label} ${circuit.id} evidence closure`);
+    assertSameStringSet(decisionCandidate.catalogEvidenceIds, circuit.evidenceIds, `${label} ${circuit.id} decision evidence closure`);
+    for (const record of evidence) {
+      if (!Array.isArray(record.sourceIds)
+        || !Array.isArray(record.sources)
+        || record.sources.some((source) => typeof source?.id !== 'string')) {
+        throw new Error(`${label} candidate evidence ${record?.id} omitted source records.`);
+      }
+      assertSameStringSet(record.sources.map((source) => source.id), record.sourceIds, `${label} ${record.id} source closure`);
+    }
+  }
+  return decision;
+}
+
+function meanNumbers(values) {
+  return values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
+}
+
+function assertApproximatelyEqual(actual, expected, label, tolerance = 1e-9) {
+  if (actual === null || expected === null) {
+    if (actual !== expected) throw new Error(`${label} null rule diverged: ${JSON.stringify({ actual, expected })}`);
+    return;
+  }
+  if (!Number.isFinite(actual) || !Number.isFinite(expected) || Math.abs(actual - expected) > tolerance) {
+    throw new Error(`${label} diverged: ${JSON.stringify({ actual, expected, tolerance })}`);
+  }
+}
+
+function assertFormalMetricDefinitions(analysisEnvelope) {
+  const analysis = analysisEnvelope.data?.analysis;
+  const definitions = analysisEnvelope.data?.metric_definitions;
+  const summaryDefinition = analysis?.responseInitiationSummaryDefinition;
+  const exportedSummaryDefinition = analysisEnvelope.data?.response_initiation_summary_definition;
+  const requiredTextFields = [
+    'label',
+    'formula',
+    'unit',
+    'signConvention',
+    'aggregation',
+    'nullRule',
+    'windowSemantics',
+    'boundary',
+  ];
+  if (!analysis
+    || !definitions
+    || typeof definitions !== 'object'
+    || Array.isArray(definitions)
+    || JSON.stringify(definitions) !== JSON.stringify(analysis.metricDefinitions)
+    || JSON.stringify(exportedSummaryDefinition) !== JSON.stringify(summaryDefinition)
+    || typeof analysis.methodVersion !== 'string'
+    || !analysis.methodVersion.startsWith('flylab.behavior-metrics.v')) {
+    throw new Error(`Analysis did not expose one canonical formal metric-definition map: ${JSON.stringify(analysisEnvelope.data)}`);
+  }
+  assertSameStringSet(Object.keys(definitions), analysis.metrics, 'formal metric-definition IDs');
+  for (const metric of analysis.metrics) {
+    const definition = definitions[metric];
+    if (definition?.id !== metric
+      || definition.methodVersion !== analysis.methodVersion
+      || definition.provenance?.join(',') !== 'derived,simulation_predicted'
+      || requiredTextFields.some((field) => typeof definition[field] !== 'string' || !definition[field])) {
+      throw new Error(`Metric ${metric} lacked a complete versioned definition: ${JSON.stringify(definition)}`);
+    }
+  }
+  if (summaryDefinition?.id !== 'response_initiation_probability'
+    || summaryDefinition.methodVersion !== analysis.methodVersion
+    || summaryDefinition.provenance?.join(',') !== 'derived,simulation_predicted'
+    || requiredTextFields.some((field) => typeof summaryDefinition[field] !== 'string' || !summaryDefinition[field])
+    || analysis.metrics.includes(summaryDefinition.id)) {
+    throw new Error(`Response initiation was not a separately declared result summary: ${JSON.stringify(summaryDefinition)}`);
+  }
+  if (typeof analysisEnvelope.data?.unit_boundary !== 'string'
+    || !analysisEnvelope.data.unit_boundary
+    || !/simulat/i.test(String(analysis.warning))) {
+    throw new Error(`Analysis omitted its simulator-unit or interpretation boundary: ${JSON.stringify(analysisEnvelope.data)}`);
+  }
+  return {
+    method_version: analysis.methodVersion,
+    objective_metric_definitions: analysis.metrics.length,
+    response_initiation_summary_separate: true,
+  };
+}
+
+function assertPerRunSimulationAndAnalysis(batch, analysis, exportedPerRunResults) {
+  const protocol = batch?.protocol;
+  if (!batch?.id
+    || batch.status !== 'complete'
+    || !Array.isArray(batch.conditionRuns)
+    || !batch.conditionRuns.length
+    || !Array.isArray(exportedPerRunResults)
+    || exportedPerRunResults.length !== batch.conditionRuns.length
+    || protocol?.metricMethodVersion !== analysis.methodVersion
+    || protocol?.seedPolicy?.version !== 'flylab.seed-policy.v2'
+    || protocol.seedPolicy.design !== 'common_random_numbers_by_replicate'
+    || !Number.isInteger(protocol.replicates)
+    || protocol.replicates < 1) {
+    throw new Error(`Simulation batch omitted its versioned per-run contract: ${JSON.stringify({ batch, analysis })}`);
+  }
+  const seedRows = Array.from({ length: protocol.replicates }, () => []);
+  const trajectorySeedRows = Array.from({ length: protocol.replicates }, () => []);
+  const allRunIds = [];
+  const allRunTrajectoryIds = [];
+  let totalRuns = 0;
+  for (const conditionRun of batch.conditionRuns) {
+    const exportedCondition = exportedPerRunResults.find((candidate) => candidate.condition_id === conditionRun.conditionId);
+    if (conditionRun.status !== 'complete'
+      || conditionRun.trajectoryStatus !== 'complete'
+      || conditionRun.trajectoryRole !== 'illustrative_condition_replay'
+      || !String(conditionRun.trajectoryBoundary).includes('must not be used')
+      || !Array.isArray(conditionRun.trajectory)
+      || conditionRun.trajectory.length < 2
+      || !Array.isArray(conditionRun.replicates)
+      || conditionRun.replicates.length !== protocol.replicates
+      || exportedCondition?.label !== conditionRun.label
+      || !Array.isArray(exportedCondition?.runs)
+      || exportedCondition.runs.length !== conditionRun.replicates.length) {
+      throw new Error(`Condition ${conditionRun?.conditionId} omitted its per-run or illustrative-replay boundary.`);
+    }
+    assertSameStringSet(
+      conditionRun.runIds,
+      conditionRun.replicates.map((replicate) => replicate.id),
+      `${conditionRun.conditionId} run ID closure`,
+    );
+    conditionRun.replicates.forEach((replicate, replicateIndex) => {
+      const exportedRun = exportedCondition.runs.find((candidate) => candidate.id === replicate.id);
+      const { trajectory: replicateTrajectory, ...replicateWithoutTrajectory } = replicate;
+      const expectedExportedRun = {
+        ...replicateWithoutTrajectory,
+        trajectory_point_count: replicateTrajectory.length,
+      };
+      totalRuns += 1;
+      allRunIds.push(replicate.id);
+      allRunTrajectoryIds.push(replicate.trajectoryId);
+      seedRows[replicateIndex].push(replicate.seed);
+      trajectorySeedRows[replicateIndex].push(replicate.trajectorySeed);
+      const numericFields = [
+        'effectiveMotorDrive',
+        'responseProbability',
+        'backwardDistanceMm',
+        'backwardDistanceScale',
+        'signedSpeedMmS',
+        'headingChangeDeg',
+        'stanceStability',
+        'verticalDisplacementMm',
+        'wingRecruitment',
+        'legRecruitment',
+      ];
+      if (!replicate.id
+        || replicate.status !== 'complete'
+        || replicate.conditionId !== conditionRun.conditionId
+        || !Number.isInteger(replicate.seed)
+        || replicate.trajectorySeed !== replicate.seed + protocol.seedPolicy.trajectoryOffset
+        || typeof replicate.trajectoryId !== 'string'
+        || replicate.trajectoryRole !== 'per_run_simulated_trajectory'
+        || !Array.isArray(replicate.trajectory)
+        || replicate.trajectory.length < 2
+        || replicate.provenance?.join(',') !== 'simulation_predicted'
+        || typeof replicate.responseInitiated !== 'boolean'
+        || typeof replicate.reverseInitiated !== 'boolean'
+        || typeof replicate.shortModeEscapeInitiated !== 'boolean'
+        || !exportedRun
+        || exportedRun.conditionId !== replicate.conditionId
+        || exportedRun.seed !== replicate.seed
+        || exportedRun.trajectoryId !== replicate.trajectoryId
+        || exportedRun.trajectory_point_count !== replicate.trajectory.length
+        || Object.prototype.hasOwnProperty.call(exportedRun, 'trajectory')
+        || JSON.stringify(exportedRun) !== JSON.stringify(expectedExportedRun)
+        || (replicate.responseInitiated !== (replicate.reverseInitiated || replicate.shortModeEscapeInitiated))
+        || (replicate.responseInitiated !== (replicate.responseLatencyMs !== null))
+        || (replicate.backwardDistanceMm > 0 && (!replicate.reverseInitiated || replicate.signedSpeedMmS >= 0))
+        || (replicate.verticalDisplacementMm > 0 && !replicate.shortModeEscapeInitiated)
+        || (replicate.responseLatencyMs !== null && !Number.isFinite(replicate.responseLatencyMs))
+        || numericFields.some((field) => !Number.isFinite(replicate[field]))) {
+        throw new Error(`Per-run record ${replicate?.id} was incomplete: ${JSON.stringify(replicate)}`);
+      }
+    });
+    if (conditionRun.replicates.some((replicate) => replicate.trajectoryId === conditionRun.trajectoryId)) {
+      throw new Error(`Condition ${conditionRun.conditionId} mislabeled a per-run trajectory as its illustrative replay.`);
+    }
+  }
+  if (new Set(allRunIds).size !== allRunIds.length
+    || new Set(allRunTrajectoryIds).size !== allRunTrajectoryIds.length) {
+    throw new Error('Per-run IDs or per-run trajectory IDs were not globally unique within the batch.');
+  }
+  for (let replicateIndex = 0; replicateIndex < protocol.replicates; replicateIndex += 1) {
+    if (new Set(seedRows[replicateIndex]).size !== 1
+      || new Set(trajectorySeedRows[replicateIndex]).size !== 1
+      || seedRows[replicateIndex][0] !== protocol.seed + replicateIndex * protocol.seedPolicy.replicateStride) {
+      throw new Error(`Common-random-number pairing diverged at replicate ${replicateIndex}: ${JSON.stringify({ seeds: seedRows[replicateIndex], trajectorySeeds: trajectorySeedRows[replicateIndex] })}`);
+    }
+  }
+  for (const condition of analysis.conditions) {
+    const run = batch.conditionRuns.find((candidate) => candidate.conditionId === condition.conditionId);
+    if (!run || condition.n !== run.replicates.length) {
+      throw new Error(`Analysis condition ${condition.conditionId} did not close over its per-run records.`);
+    }
+    const responsive = run.replicates.filter((replicate) => replicate.responseInitiated && replicate.responseLatencyMs !== null);
+    const speedContributors = batch.motorMap.responseMode === 'takeoff'
+      ? run.replicates
+      : run.replicates.filter((replicate) => replicate.backwardDistanceMm > 0);
+    const expectedValues = {
+      reverseInitiationProbability: meanNumbers(run.replicates.map((replicate) => replicate.reverseInitiated ? 1 : 0)),
+      responseInitiationProbability: meanNumbers(run.replicates.map((replicate) => replicate.responseInitiated ? 1 : 0)),
+      shortModeEscapeProbability: meanNumbers(run.replicates.map((replicate) => replicate.shortModeEscapeInitiated ? 1 : 0)),
+      backwardDistanceMm: meanNumbers(run.replicates.map((replicate) => replicate.backwardDistanceMm)),
+      signedSpeedMmS: speedContributors.length ? meanNumbers(speedContributors.map((replicate) => replicate.signedSpeedMmS)) : 0,
+      responseLatencyMs: responsive.length ? meanNumbers(responsive.map((replicate) => replicate.responseLatencyMs)) : null,
+      headingChangeDeg: Math.abs(meanNumbers(run.replicates.map((replicate) => replicate.headingChangeDeg))),
+      stanceStability: meanNumbers(run.replicates.map((replicate) => replicate.stanceStability)),
+      verticalDisplacementMm: meanNumbers(run.replicates.map((replicate) => replicate.verticalDisplacementMm)),
+      wingRecruitment: meanNumbers(run.replicates.map((replicate) => replicate.wingRecruitment)),
+      legRecruitment: meanNumbers(run.replicates.map((replicate) => replicate.legRecruitment)),
+    };
+    if (condition.responsiveN !== responsive.length) {
+      throw new Error(`Analysis responsive_n diverged for ${condition.conditionId}.`);
+    }
+    for (const [field, expectedValue] of Object.entries(expectedValues)) {
+      assertApproximatelyEqual(condition[field], expectedValue, `${condition.conditionId}.${field}`);
+    }
+  }
+  return {
+    condition_count: batch.conditionRuns.length,
+    per_run_records: totalRuns,
+    common_random_number_pairing: true,
+    illustrative_replay_excluded_from_metrics: true,
+  };
+}
+
 function sha256Json(value) {
   return `sha256:${createHash('sha256').update(JSON.stringify(value)).digest('hex')}`;
 }
@@ -803,13 +1602,13 @@ function assertProvenanceManifest(envelope, toolName) {
   const manifest = envelope?.provenance_manifest;
   const entries = manifest?.entries;
   const summary = envelope?.provenance;
-  if (envelope?.result_version !== 'flylab.tool-result.v2'
+  if (envelope?.result_version !== 'flylab.tool-result.v3'
     || manifest?.schema_version !== 'flylab.provenance-manifest.v1'
     || !Array.isArray(entries)
     || !Array.isArray(manifest.operational_paths)
     || !Array.isArray(summary)
     || !String(envelope?.provenance_scope ?? '').includes('Union summary only')) {
-    throw new Error(`${toolName} did not return the FlyLab v2 provenance contract: ${JSON.stringify(envelope)}`);
+    throw new Error(`${toolName} did not return the FlyLab v3 provenance contract: ${JSON.stringify(envelope)}`);
   }
   if (summary.length !== new Set(summary).size || summary.some((label) => !provenanceLabels.includes(label))) {
     throw new Error(`${toolName} returned an invalid top-level provenance summary: ${JSON.stringify(summary)}`);
@@ -863,8 +1662,90 @@ function successfulEnvelope(response, toolName) {
   if (response?.status !== 'Completed' || envelope?.ok !== true || envelope?.tool !== toolName) {
     throw new Error(`${toolName} did not complete successfully: ${JSON.stringify(response)}`);
   }
+  if (typeof envelope.page_session_id !== 'string'
+    || !Number.isInteger(envelope.previous_state_revision)
+    || !Number.isInteger(envelope.state_revision)
+    || !Array.isArray(envelope.created_artifact_ids)
+    || typeof envelope.idempotent_replay !== 'boolean'
+    || typeof envelope.verification?.selector !== 'string'
+    || typeof envelope.verification?.description !== 'string'
+    || JSON.stringify(envelope.next_action) !== JSON.stringify(envelope.data?.next_action ?? null)) {
+    throw new Error(`${toolName} did not return the FlyLab v3 transition envelope: ${JSON.stringify(envelope)}`);
+  }
+  const expectsOperationId = toolName === 'run_fly_simulation' || toolName === 'save_fly_evidence';
+  if (envelope.state_revision < envelope.previous_state_revision
+    || (toolName === 'inspect_flylab_state'
+      && (envelope.state_revision !== envelope.previous_state_revision
+        || envelope.created_artifact_ids.length !== 0
+        || envelope.operation_id !== null))
+    || (expectsOperationId ? typeof envelope.operation_id !== 'string' : envelope.operation_id !== null)
+    || (envelope.idempotent_replay
+      && (envelope.previous_state_revision !== envelope.state_revision
+        || envelope.created_artifact_ids.length !== 0))) {
+    throw new Error(`${toolName} returned inconsistent transition or retry metadata: ${JSON.stringify(envelope)}`);
+  }
   assertProvenanceManifest(envelope, toolName);
   return envelope;
+}
+
+function failedEnvelope(response, toolName, errorCode, expectedRecoveryTool = 'inspect_flylab_state') {
+  const envelope = decodedOutput(response)?.structuredContent;
+  if (!['Completed', 'Error'].includes(response?.status)
+    || envelope?.ok !== false
+    || envelope?.result_version !== 'flylab.tool-result.v3'
+    || envelope?.tool !== toolName
+    || envelope?.error?.code !== errorCode
+    || typeof envelope.page_session_id !== 'string'
+    || !Number.isInteger(envelope.state_revision)
+    || envelope?.recovery?.tool !== expectedRecoveryTool) {
+    throw new Error(`${toolName} did not return the expected ${errorCode} failure envelope: ${JSON.stringify(response)}`);
+  }
+  return envelope;
+}
+
+async function verifyMutationContextGuards(tools) {
+  const beforeResponse = await invokeRegisteredToolRaw(tools, 'inspect_flylab_state', {});
+  const before = successfulEnvelope(beforeResponse, 'inspect_flylab_state');
+  const pageSessionId = before.data.page_session_id;
+  const baseInput = { query: 'MDN', behavior: 'backward_walking' };
+
+  const wrongSession = failedEnvelope(await invokeRegisteredToolRaw(tools, 'find_fly_circuits', {
+    ...baseInput,
+    page_session_id: `${pageSessionId}_wrong`,
+    expected_state_revision: before.state_revision,
+  }), 'find_fly_circuits', 'STALE_STATE');
+  const afterWrongSession = successfulEnvelope(
+    await invokeRegisteredToolRaw(tools, 'inspect_flylab_state', {}),
+    'inspect_flylab_state',
+  );
+  if (wrongSession.state_revision !== before.state_revision
+    || afterWrongSession.state_revision !== before.state_revision
+    || afterWrongSession.data.agent_context?.artifacts?.selected_circuit_id !== null) {
+    throw new Error(`Wrong-session mutation changed FlyLab state: ${JSON.stringify({ before, wrongSession, afterWrongSession })}`);
+  }
+
+  const staleRevision = failedEnvelope(await invokeRegisteredToolRaw(tools, 'find_fly_circuits', {
+    ...baseInput,
+    page_session_id: pageSessionId,
+    expected_state_revision: before.state_revision + 1,
+  }), 'find_fly_circuits', 'STALE_STATE');
+  const afterStaleRevision = successfulEnvelope(
+    await invokeRegisteredToolRaw(tools, 'inspect_flylab_state', {}),
+    'inspect_flylab_state',
+  );
+  if (staleRevision.state_revision !== before.state_revision
+    || afterStaleRevision.state_revision !== before.state_revision
+    || afterStaleRevision.data.agent_context?.artifacts?.selected_circuit_id !== null) {
+    throw new Error(`Stale-revision mutation changed FlyLab state: ${JSON.stringify({ before, staleRevision, afterStaleRevision })}`);
+  }
+
+  return {
+    page_session_id: pageSessionId,
+    preserved_state_revision: before.state_revision,
+    wrong_session_error: wrongSession.error.code,
+    stale_revision_error: staleRevision.error.code,
+    mutation_committed: false,
+  };
 }
 
 async function inspectAgentContext(tools) {
@@ -873,16 +1754,18 @@ async function inspectAgentContext(tools) {
   const context = envelope.data?.agent_context;
   const artifactManifest = context?.artifact_manifest;
   const requiredArtifactFields = [
+    'discovery_decision',
     'selected_circuit',
     'discovered_evidence',
     'hypothesis',
     'experiment',
+    'approval',
     'batch',
     'analyses',
     'comparison',
     'evidence_bundle',
   ];
-  if (context?.schema_version !== 'flylab.agent-context.v2'
+  if (context?.schema_version !== 'flylab.agent-context.v3'
     || !artifactManifest
     || typeof artifactManifest !== 'object'
     || Array.isArray(artifactManifest)
@@ -894,12 +1777,139 @@ async function inspectAgentContext(tools) {
     || !String(context.provenance_policy?.inheritance ?? '').includes('more specific nested record')
     || !String(context.provenance_policy?.operational_boundary ?? '').includes('operational metadata')
     || !String(context.provenance_policy?.untrusted_annotation ?? '').includes('never counted as scientific provenance')) {
-    throw new Error(`Inspector did not expose the FlyLab agent-context v2 audit contract: ${JSON.stringify(context)}`);
+    throw new Error(`Inspector did not expose the FlyLab agent-context v3 audit contract: ${JSON.stringify(context)}`);
   }
   if (envelope.provenance_manifest.entries.some((entry) => !entry.path.startsWith('/agent_context/artifact_manifest'))) {
     throw new Error(`Inspector provenance entries escaped artifact_manifest: ${JSON.stringify(envelope.provenance_manifest.entries)}`);
   }
   return context;
+}
+
+function assertApprovedProtocolContext(context, experiment) {
+  const approval = context?.artifact_manifest?.approval;
+  const runRefs = context?.next_action?.input_refs;
+  if (approval?.schema !== 'flylab.experiment-approval'
+    || approval?.schema_version !== 1
+    || approval.experiment_id !== experiment.id
+    || approval.protocol?.experimentId !== experiment.id
+    || approval.protocol?.modelVersion !== approval.model_version
+    || approval.protocol?.metricMethodVersion !== approval.metric_method_version
+    || approval.protocol?.seedPolicy?.version !== approval.seed_policy_version
+    || JSON.stringify(approval.seed_policy) !== JSON.stringify(experiment.seedPolicy)
+    || typeof approval.approved_at !== 'string'
+    || Number.isNaN(Date.parse(approval.approved_at))
+    || typeof approval.protocol_hash !== 'string'
+    || !/^sha256:[a-f0-9]{64}$/.test(approval.protocol_hash)
+    || typeof approval.seed_manifest_hash !== 'string'
+    || !/^sha256:[a-f0-9]{64}$/.test(approval.seed_manifest_hash)
+    || approval.seed_manifest?.base_seed !== experiment.seed
+    || approval.seed_manifest?.condition_count !== experiment.conditions.length
+    || approval.seed_manifest?.replicates_per_condition !== experiment.replicates
+    || approval.seed_manifest?.conditions?.length !== experiment.conditions.length
+    || runRefs?.experiment_id !== experiment.id
+    || runRefs?.approved_protocol_hash !== approval.protocol_hash) {
+    throw new Error(`Inspector did not bind execution to the exact approved protocol and seed manifest: ${JSON.stringify({ approval, runRefs, experiment })}`);
+  }
+  assertSameStringSet(
+    approval.seed_manifest.conditions.map((condition) => condition.condition_id),
+    experiment.conditions.map((condition) => condition.id),
+    'approval seed-manifest conditions',
+  );
+  for (const [conditionIndex, condition] of approval.seed_manifest.conditions.entries()) {
+    if (condition.replicates.length !== experiment.replicates
+      || condition.condition_index !== conditionIndex
+      || condition.trajectory_seed !== experiment.seed + approval.seed_policy.illustrativeTrajectoryOffset
+      || condition.replicates.some((replicate, index) => (
+        replicate.replicate_index !== index
+        || replicate.seed !== experiment.seed + index * approval.seed_policy.replicateStride
+        || replicate.trajectory_seed !== replicate.seed + approval.seed_policy.trajectoryOffset
+      ))) {
+      throw new Error(`Approval seed manifest was not fully materialized for ${condition.condition_id}: ${JSON.stringify(condition)}`);
+    }
+  }
+  return approval;
+}
+
+function approvalCommitment(approval) {
+  return {
+    schema: approval.schema,
+    schema_version: approval.schema_version,
+    experiment_id: approval.experiment_id,
+    approved_at: approval.approved_at,
+    model_version: approval.model_version,
+    metric_method_version: approval.metric_method_version,
+    seed_policy_version: approval.seed_policy_version,
+    seed_policy: approval.seed_policy,
+    protocol: approval.protocol,
+    protocol_hash: approval.protocol_hash,
+    seed_manifest: approval.seed_manifest,
+    seed_manifest_hash: approval.seed_manifest_hash,
+  };
+}
+
+async function waitForApprovedProtocolContext(tools, experiment) {
+  let context = null;
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    context = await inspectAgentContext(tools);
+    if (context.next_tool === 'run_fly_simulation'
+      && context.human_gate?.status === 'satisfied'
+      && typeof context.next_action?.input_refs?.approved_protocol_hash === 'string') {
+      return { context, approval: assertApprovedProtocolContext(context, experiment) };
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error(`Inspector did not publish the immutable approval after the visible human action: ${JSON.stringify(context)}`);
+}
+
+async function verifyApprovedProtocolHashGuard(tools, experiment, approval) {
+  const before = successfulEnvelope(
+    await invokeRegisteredTool(tools, 'inspect_flylab_state', {}),
+    'inspect_flylab_state',
+  );
+  const wrongHash = approval.protocol_hash === `sha256:${'0'.repeat(64)}`
+    ? `sha256:${'1'.repeat(64)}`
+    : `sha256:${'0'.repeat(64)}`;
+  const rejected = failedEnvelope(await invokeRegisteredTool(tools, 'run_fly_simulation', {
+    experiment_id: experiment.id,
+    approved_protocol_hash: wrongHash,
+  }), 'run_fly_simulation', 'EVIDENCE_MISMATCH');
+  const after = successfulEnvelope(
+    await invokeRegisteredTool(tools, 'inspect_flylab_state', {}),
+    'inspect_flylab_state',
+  );
+  if (rejected.state_revision !== before.state_revision
+    || after.state_revision !== before.state_revision
+    || after.data.agent_context?.artifacts?.batch_id !== null
+    || after.data.agent_context?.next_action?.input_refs?.approved_protocol_hash !== approval.protocol_hash) {
+    throw new Error(`Wrong approval hash changed or unlocked the experiment: ${JSON.stringify({ before, rejected, after })}`);
+  }
+  return {
+    error: rejected.error.code,
+    expected_protocol_hash: approval.protocol_hash,
+    rejected_protocol_hash: wrongHash,
+    before_state_revision: before.state_revision,
+    rejected_state_revision: rejected.state_revision,
+    after_state_revision: after.state_revision,
+    resulting_batch_id: after.data.agent_context?.artifacts?.batch_id ?? null,
+    state_unchanged: true,
+  };
+}
+
+function assertRunApprovalBinding(batch, approval) {
+  const { modelVersion, ...approvedProtocolSnapshot } = approval.protocol;
+  if (JSON.stringify(batch.approval) !== JSON.stringify(approvalCommitment(approval))
+    || JSON.stringify(batch.protocol) !== JSON.stringify(approvedProtocolSnapshot)
+    || modelVersion !== batch.model?.version
+    || batch.experimentId !== approval.experiment_id
+    || batch.protocol.seedPolicy?.version !== approval.seed_policy_version
+    || batch.protocol.metricMethodVersion !== approval.metric_method_version) {
+    throw new Error(`Simulation did not carry the exact approved protocol binding: ${JSON.stringify({ batchApproval: batch.approval, batchProtocol: batch.protocol, approval })}`);
+  }
+  return {
+    protocol_hash: approval.protocol_hash,
+    seed_manifest_hash: approval.seed_manifest_hash,
+    exact_protocol_snapshot: true,
+  };
 }
 
 function verifySavedEvidenceExport(saved, expected) {
@@ -908,12 +1918,20 @@ function verifySavedEvidenceExport(saved, expected) {
   const payload = evidenceExport?.payload;
   if (!bundle
     || evidenceExport?.schema !== 'flylab.evidence-export'
-    || evidenceExport?.schemaVersion !== 2
+    || evidenceExport?.schemaVersion !== 3
     || evidenceExport?.integrity?.scope !== 'payload'
     || evidenceExport?.integrity?.serialization !== 'JSON.stringify(payload)'
     || !payload
     || JSON.stringify(evidenceExport.bundle) !== JSON.stringify(bundle)) {
-    throw new Error(`save_fly_evidence did not expose the exact v2 evidence export: ${JSON.stringify(saved.data)}`);
+    throw new Error(`save_fly_evidence did not expose the exact v3 evidence export: ${JSON.stringify(saved.data)}`);
+  }
+  if (!['experiment', 'mission'].includes(bundle.scope)
+    || payload.scope !== bundle.scope
+    || (expected.scope && bundle.scope !== expected.scope)
+    || payload.format !== (bundle.scope === 'mission'
+      ? 'flylab.mission-evidence-bundle.v3'
+      : 'flylab.experiment-evidence-bundle.v3')) {
+    throw new Error(`Evidence-export scope and payload format diverged: ${JSON.stringify({ bundle, payload })}`);
   }
 
   const computedManifestHash = sha256Json(payload);
@@ -975,6 +1993,35 @@ function verifySavedEvidenceExport(saved, expected) {
       );
     }
   }
+  if (!Array.isArray(payload.catalogSources) || !Array.isArray(bundle.catalogSourceIds)) {
+    throw new Error('Evidence export omitted the dataset-catalog source closure.');
+  }
+  assertSameStringSet(
+    payload.catalogSources.map((source) => source.id),
+    bundle.catalogSourceIds,
+    'dataset catalog source IDs',
+  );
+  const sourceRecordIds = new Set([
+    ...groups.flatMap((group) => group.sources.map((source) => source.id)),
+    ...payload.catalogSources.map((source) => source.id),
+    ...(Array.isArray(payload.mission?.sources) ? payload.mission.sources.map((source) => source.id) : []),
+  ]);
+  const payloadManifestSourceIds = uniqueSortedStrings(
+    payload.provenanceManifest?.entries?.flatMap((entry) => entry.source_ids ?? []) ?? [],
+  );
+  const unresolvedManifestSources = payloadManifestSourceIds.filter((id) => !sourceRecordIds.has(id));
+  const manifestSourcesMissingFromBundle = payloadManifestSourceIds.filter((id) => !bundle.includedIds.includes(id));
+  const datasetManifestEntry = payload.provenanceManifest?.entries?.find((entry) => entry.path === '/datasets');
+  if (unresolvedManifestSources.length
+    || manifestSourcesMissingFromBundle.length
+    || !datasetManifestEntry?.artifact_id
+    || !bundle.includedIds.includes(datasetManifestEntry.artifact_id)) {
+    throw new Error(`Portable provenance manifest is not globally source-closed: ${JSON.stringify({
+      unresolvedManifestSources,
+      manifestSourcesMissingFromBundle,
+      datasetManifestEntry,
+    })}`);
+  }
   assertSameStringSet(payload.hypothesis?.evidenceIds ?? [], bundle.supportingEvidenceIds, 'hypothesis supporting evidence closure');
   assertSameStringSet(
     groups.flatMap((group) => group.evidenceIds),
@@ -989,10 +2036,82 @@ function verifySavedEvidenceExport(saved, expected) {
     || payload.comparison?.id !== expected.comparison.id) {
     throw new Error(`Evidence export did not preserve the executed artifact chain: ${JSON.stringify({ payload, expected })}`);
   }
+  if (expected.approval
+    && (payload.approval?.protocol_hash !== expected.approval.protocol_hash
+      || payload.approval?.seed_manifest_hash !== expected.approval.seed_manifest_hash
+      || payload.approval?.experiment_id !== expected.experiment.id)) {
+    throw new Error(`Evidence export did not preserve the exact immutable approval: ${JSON.stringify({ approval: payload.approval, expected: expected.approval })}`);
+  }
 
+  let missionAudit = null;
+  if (bundle.scope === 'mission') {
+    const mission = payload.mission;
+    const decision = mission?.discoveryDecision;
+    const candidateCircuits = mission?.candidateCircuits;
+    const missionEvidence = mission?.evidence;
+    const missionSources = mission?.sources;
+    if (!mission
+      || typeof mission.goal !== 'string'
+      || !mission.goal
+      || typeof mission.boundary !== 'string'
+      || !mission.boundary
+      || decision?.schema !== 'flylab.discovery-decision'
+      || decision?.schemaVersion !== 1
+      || (expected.discoveryDecision && decision.id !== expected.discoveryDecision.id)
+      || !Array.isArray(candidateCircuits)
+      || !Array.isArray(missionEvidence)
+      || !Array.isArray(missionSources)) {
+      throw new Error(`Mission export omitted its persisted discovery decision or source-closed candidate catalog: ${JSON.stringify(mission)}`);
+    }
+    assertSameStringSet(
+      candidateCircuits.map((candidate) => candidate.id),
+      decision.candidates.map((candidate) => candidate.circuitId),
+      'mission candidate-circuit decision closure',
+    );
+    const requiredMissionEvidenceIds = uniqueSortedStrings(candidateCircuits.flatMap((candidate) => candidate.evidenceIds ?? []));
+    const requiredMissionSourceIds = uniqueSortedStrings(missionEvidence.flatMap((record) => record.sourceIds ?? []));
+    assertSameStringSet(missionEvidence.map((record) => record.id), requiredMissionEvidenceIds, 'mission candidate evidence closure');
+    assertSameStringSet(missionSources.map((source) => source.id), requiredMissionSourceIds, 'mission candidate source closure');
+    for (const candidate of candidateCircuits) {
+      if (!candidate.motor_map
+        || candidate.motor_map.circuitId !== candidate.id
+        || candidate.motor_map.id !== candidate.motorMapId
+        || !Array.isArray(candidate.motor_map.nodes)
+        || !Array.isArray(candidate.motor_map.edges)) {
+        throw new Error(`Mission candidate ${candidate?.id} omitted its full motor map: ${JSON.stringify(candidate)}`);
+      }
+    }
+    const requiredMissionIncludedIds = uniqueSortedStrings([
+      decision.id,
+      ...candidateCircuits.flatMap((candidate) => [
+        candidate.id,
+        candidate.motor_map.id,
+        ...candidate.motor_map.nodes.map((node) => node.id),
+        ...candidate.motor_map.edges.map((edge) => edge.id),
+      ]),
+      ...requiredMissionEvidenceIds,
+      ...requiredMissionSourceIds,
+    ]);
+    const missionMissingFromBundle = requiredMissionIncludedIds.filter((id) => !bundle.includedIds.includes(id));
+    if (missionMissingFromBundle.length) {
+      throw new Error(`Mission bundle includedIds omitted discovery artifacts: ${JSON.stringify(missionMissingFromBundle)}`);
+    }
+    missionAudit = {
+      discovery_decision_id: decision.id,
+      candidate_circuits: candidateCircuits.length,
+      rejected_alternatives: decision.rejectedAlternatives.length,
+      evidence_records: missionEvidence.length,
+      source_records: missionSources.length,
+      source_closed: true,
+    };
+  } else if (payload.mission !== null) {
+    throw new Error(`Experiment-scope export unexpectedly included mission contents: ${JSON.stringify(payload.mission)}`);
+  }
   const conditionIds = payload.experiment.conditions.map((condition) => condition.id);
   const runIds = payload.batch.conditionRuns.flatMap((conditionRun) => conditionRun.runIds);
   const replicateIds = payload.batch.conditionRuns.flatMap((conditionRun) => conditionRun.replicates.map((replicate) => replicate.id));
+  const perRunTrajectoryIds = payload.batch.conditionRuns.flatMap((conditionRun) => conditionRun.replicates.map((replicate) => replicate.trajectoryId));
+  const illustrativeTrajectoryIds = payload.batch.conditionRuns.map((conditionRun) => conditionRun.trajectoryId);
   const proposalId = payload.comparison?.proposal?.id;
   assertSameStringSet(conditionIds, expected.experiment.conditions.map((condition) => condition.id), 'saved condition IDs');
   assertSameStringSet(runIds, replicateIds, 'saved run and replicate IDs');
@@ -1000,7 +2119,14 @@ function verifySavedEvidenceExport(saved, expected) {
     throw new Error(`Evidence export omitted the compared follow-up proposal: ${JSON.stringify({ proposalId, expected: expected.comparison.proposal.id })}`);
   }
   const includedIds = new Set(bundle.includedIds);
-  const requiredIncludedIds = [...conditionIds, ...runIds, proposalId];
+  const requiredIncludedIds = [
+    ...conditionIds,
+    ...runIds,
+    ...perRunTrajectoryIds,
+    ...illustrativeTrajectoryIds,
+    proposalId,
+    ...(expected.approval ? [expected.approval.protocol_hash, expected.approval.seed_manifest_hash] : []),
+  ];
   if (requiredIncludedIds.some((id) => !includedIds.has(id))) {
     throw new Error(`Bundle includedIds omitted conditions, runs, or the proposal: ${JSON.stringify({ requiredIncludedIds, includedIds: bundle.includedIds })}`);
   }
@@ -1023,9 +2149,15 @@ function verifySavedEvidenceExport(saved, expected) {
   const expectedIndexMembership = [
     ...conditionIds.map((id) => [id, 'agent_hypothesized']),
     ...runIds.map((id) => [id, 'simulation_predicted']),
+    ...perRunTrajectoryIds.map((id) => [id, 'simulation_predicted']),
+    ...illustrativeTrajectoryIds.map((id) => [id, 'simulation_predicted']),
     [proposalId, 'agent_hypothesized'],
     [payload.hypothesis.id, 'agent_hypothesized'],
     [payload.experiment.id, 'agent_hypothesized'],
+    ...(expected.approval ? [
+      [expected.approval.protocol_hash, 'agent_hypothesized'],
+      [expected.approval.seed_manifest_hash, 'agent_hypothesized'],
+    ] : []),
     [payload.batch.id, 'simulation_predicted'],
     [payload.analyses[0].id, 'derived'],
     [payload.analyses[0].id, 'simulation_predicted'],
@@ -1042,6 +2174,29 @@ function verifySavedEvidenceExport(saved, expected) {
     for (const evidence of group.evidence) {
       if (!provenanceIndex[evidence.provenance]?.includes(evidence.id)) {
         throw new Error(`Bundle provenance index omitted evidence record ${evidence.id} from ${evidence.provenance}.`);
+      }
+    }
+  }
+  if (bundle.scope === 'mission') {
+    const mission = payload.mission;
+    if (!provenanceIndex.derived.includes(mission.discoveryDecision.id)) {
+      throw new Error(`Bundle provenance index omitted discovery decision ${mission.discoveryDecision.id}.`);
+    }
+    for (const source of mission.sources) {
+      if (!provenanceIndex.derived.includes(source.id)) {
+        throw new Error(`Bundle provenance index omitted mission source ${source.id}.`);
+      }
+    }
+    for (const evidence of mission.evidence) {
+      if (!provenanceIndex[evidence.provenance]?.includes(evidence.id)) {
+        throw new Error(`Bundle provenance index omitted mission evidence ${evidence.id} from ${evidence.provenance}.`);
+      }
+    }
+    for (const candidate of mission.candidateCircuits) {
+      for (const label of candidate.provenance) {
+        if (!provenanceIndex[label]?.includes(candidate.id)) {
+          throw new Error(`Bundle provenance index omitted mission candidate ${candidate.id} from ${label}.`);
+        }
       }
     }
   }
@@ -1072,11 +2227,25 @@ function verifySavedEvidenceExport(saved, expected) {
   const hasEdge = (from, relation, to) => lineageEdges.some((edge) => (
     edge.from === from && edge.relation === relation && edge.to === to
   ));
+  for (const sourceId of bundle.catalogSourceIds) {
+    if (!hasEdge(datasetManifestEntry.artifact_id, 'catalogs_source', sourceId)) {
+      throw new Error(`Dataset manifest lineage omitted catalog source ${sourceId}.`);
+    }
+  }
   for (const group of groups) {
     for (const evidence of group.evidence) {
       for (const sourceId of evidence.sourceIds) {
         if (!hasEdge(evidence.id, 'supported_by', sourceId)) {
           throw new Error(`Lineage graph omitted ${evidence.id} -> ${sourceId}.`);
+        }
+      }
+    }
+  }
+  if (bundle.scope === 'mission') {
+    for (const evidence of payload.mission.evidence) {
+      for (const sourceId of evidence.sourceIds) {
+        if (!hasEdge(evidence.id, 'supported_by', sourceId)) {
+          throw new Error(`Mission lineage omitted ${evidence.id} -> ${sourceId}.`);
         }
       }
     }
@@ -1097,10 +2266,40 @@ function verifySavedEvidenceExport(saved, expected) {
         throw new Error(`Lineage graph omitted simulation run ${runId}.`);
       }
     }
+    for (const replicate of conditionRun.replicates) {
+      if (!hasEdge(replicate.id, 'has_per_run_trajectory', replicate.trajectoryId)) {
+        throw new Error(`Lineage graph omitted per-run trajectory ${replicate.trajectoryId}.`);
+      }
+    }
+    if (!hasEdge(payload.batch.id, `has_illustrative_replay_for:${conditionRun.conditionId}`, conditionRun.trajectoryId)) {
+      throw new Error(`Lineage graph omitted illustrative replay ${conditionRun.trajectoryId}.`);
+    }
   }
   if (!hasEdge(proposalId, 'proposed_from_comparison', payload.comparison.id)
     || lineageEdges.some((edge) => edge.from === annotation.id || edge.to === annotation.id)) {
     throw new Error(`Lineage graph mishandled the proposal or untrusted annotation: ${JSON.stringify(lineageEdges)}`);
+  }
+  if (expected.approval
+    && (!hasEdge(expected.approval.protocol_hash, 'authorizes_exact_experiment', payload.experiment.id)
+      || !hasEdge(expected.approval.protocol_hash, 'commits_seed_manifest', expected.approval.seed_manifest_hash))) {
+    throw new Error('Lineage graph omitted the exact human approval and seed-manifest commitments.');
+  }
+  if (bundle.scope === 'mission') {
+    const decision = payload.mission.discoveryDecision;
+    for (const candidate of decision.candidates) {
+      if (!hasEdge(decision.id, 'considered_circuit', candidate.circuitId)) {
+        throw new Error(`Mission lineage omitted considered circuit ${candidate.circuitId}.`);
+      }
+    }
+    if (decision.selectedCircuitId
+      && !hasEdge(decision.id, 'recommends', decision.selectedCircuitId)) {
+      throw new Error(`Mission lineage omitted selected recommendation ${decision.selectedCircuitId}.`);
+    }
+    for (const rejected of decision.rejectedAlternatives) {
+      if (!hasEdge(decision.id, 'rejected_alternative', rejected.circuitId)) {
+        throw new Error(`Mission lineage omitted rejected alternative ${rejected.circuitId}.`);
+      }
+    }
   }
 
   return {
@@ -1108,12 +2307,21 @@ function verifySavedEvidenceExport(saved, expected) {
     schema_version: evidenceExport.schemaVersion,
     manifest_hash: computedManifestHash,
     evidence_records: groups.reduce((count, group) => count + group.evidence.length, 0),
-    source_records: uniqueSortedStrings(groups.flatMap((group) => group.sourceIds)).length,
+    source_records: uniqueSortedStrings([
+      ...groups.flatMap((group) => group.sourceIds),
+      ...bundle.catalogSourceIds,
+    ]).length,
+    manifest_source_records: payloadManifestSourceIds.length,
+    globally_source_closed: true,
     condition_ids: conditionIds,
     run_ids: runIds.length,
+    per_run_trajectory_ids: perRunTrajectoryIds.length,
+    illustrative_trajectory_ids: illustrativeTrajectoryIds.length,
     proposal_id: proposalId,
     provenance_counts: provenanceCounts,
     lineage_edges: lineageEdges.length,
+    scope: bundle.scope,
+    mission: missionAudit,
     untrusted_annotation_excluded: true,
   };
 }
@@ -1130,6 +2338,7 @@ async function verifyCompletedLineageIdempotency(tools, inputs, savedBundle) {
   ];
   const verified = [];
   let repeatedBundle = null;
+  const operationReplays = {};
   for (const [toolName, input] of calls) {
     const response = await invokeRegisteredTool(tools, toolName, input);
     const envelope = successfulEnvelope(response, toolName);
@@ -1138,6 +2347,22 @@ async function verifyCompletedLineageIdempotency(tools, inputs, savedBundle) {
     }
     if (toolName === 'design_stimulation_trial' && envelope.data.experiment?.approved !== true) {
       throw new Error(`Idempotent design lost human approval: ${JSON.stringify(envelope.data.experiment)}`);
+    }
+    if ((toolName === 'run_fly_simulation' || toolName === 'save_fly_evidence')
+      && (envelope.idempotent_replay !== true
+        || envelope.operation_id !== input.operation_id
+        || envelope.previous_state_revision !== envelope.state_revision
+        || envelope.created_artifact_ids.length !== 0)) {
+      throw new Error(`${toolName} retry was not a mutation-free operation replay: ${JSON.stringify(envelope)}`);
+    }
+    if (toolName === 'run_fly_simulation' || toolName === 'save_fly_evidence') {
+      operationReplays[toolName] = {
+        operation_id: envelope.operation_id,
+        previous_state_revision: envelope.previous_state_revision,
+        state_revision: envelope.state_revision,
+        idempotent_replay: envelope.idempotent_replay,
+        created_artifact_ids: envelope.created_artifact_ids,
+      };
     }
     if (toolName === 'save_fly_evidence') repeatedBundle = envelope.data.bundle;
     verified.push(toolName);
@@ -1152,18 +2377,51 @@ async function verifyCompletedLineageIdempotency(tools, inputs, savedBundle) {
     || repeatedBundle?.savedAt !== savedBundle.savedAt) {
     throw new Error(`Idempotent calls changed the completed artifact lineage: ${JSON.stringify({ context, savedBundle, repeatedBundle })}`);
   }
+  const beforeConflict = successfulEnvelope(
+    await invokeRegisteredTool(tools, 'inspect_flylab_state', {}),
+    'inspect_flylab_state',
+  );
+  const runConflict = failedEnvelope(await invokeRegisteredTool(tools, 'run_fly_simulation', {
+    ...inputs.run,
+    approved_protocol_hash: `sha256:${'0'.repeat(64)}`,
+  }), 'run_fly_simulation', 'INVALID_INPUT', 'run_fly_simulation');
+  const saveConflict = failedEnvelope(await invokeRegisteredTool(tools, 'save_fly_evidence', {
+    ...inputs.save,
+    title: `${inputs.save.title} conflicting reuse`,
+  }), 'save_fly_evidence', 'INVALID_INPUT', 'save_fly_evidence');
+  const afterConflict = successfulEnvelope(
+    await invokeRegisteredTool(tools, 'inspect_flylab_state', {}),
+    'inspect_flylab_state',
+  );
+  if (runConflict.error.details?.conflict !== 'operation_id_input_mismatch'
+    || saveConflict.error.details?.conflict !== 'operation_id_input_mismatch'
+    || runConflict.recovery?.input?.operation_id !== '<new_operation_id>'
+    || saveConflict.recovery?.input?.operation_id !== '<new_operation_id>'
+    || runConflict.state_revision !== beforeConflict.state_revision
+    || saveConflict.state_revision !== beforeConflict.state_revision
+    || afterConflict.state_revision !== beforeConflict.state_revision
+    || afterConflict.data.agent_context?.artifacts?.batch_id !== context.artifacts.batch_id
+    || afterConflict.data.agent_context?.artifacts?.evidence_bundle_id !== savedBundle.id) {
+    throw new Error(`Conflicting operation-ID reuse changed the completed lineage: ${JSON.stringify({ beforeConflict, runConflict, saveConflict, afterConflict })}`);
+  }
   return {
     calls: verified,
     final_stage: context.state.stage,
     stable_bundle_id: repeatedBundle.id,
     stable_manifest_hash: repeatedBundle.manifestHash,
     stable_saved_at: repeatedBundle.savedAt,
+    replay_created_artifacts: 0,
+    operation_replays: operationReplays,
+    conflicting_run_operation_error: runConflict.error.code,
+    conflicting_save_operation_error: saveConflict.error.code,
+    conflict_state_unchanged: true,
   };
 }
 
 async function runFullWorkflow(tools, discoveryResponse, initialContext, options = {}) {
   const cleanCapture = options.cleanDemoCapture === true;
   const discovery = successfulEnvelope(discoveryResponse, 'find_fly_circuits');
+  const discoveryDecision = assertDiscoveryDecisionAndCandidateRecords(discovery, 'MDN discovery');
   const circuit = discovery.data.circuits[0];
   const contextOnlyEvidence = discovery.data.evidence.find((record) => record.role !== 'hypothesis_support');
   const structuralOnlyEvidence = discovery.data.evidence.find((record) => (
@@ -1190,7 +2448,14 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
     claim: 'Activating adult MDNs in the FlyLab model should increase backward displacement relative to baseline and model-sham controls.',
     predicted_behavior: 'backward_walking',
     perturbation: 'activate',
+    primary_outcome: 'backward_distance_mm',
+    expected_direction: 'increase',
+    controls: ['condition_baseline', 'condition_sham'],
     evidence_ids: evidenceIds,
+    evidence_limitations: [
+      'The cited assays do not calibrate the reduced-order FlyLab effect size.',
+      'The mapped brain-to-body controller remains a declared model assumption.',
+    ],
     falsification_criterion: 'The prediction fails if bilateral activation does not increase backward distance relative to the model-sham condition.',
   };
   const contextPromotionResponse = await invokeRegisteredTool(tools, 'draft_fly_hypothesis', {
@@ -1246,7 +2511,8 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
   if (lockedContext.agent_status !== 'waiting_for_human'
     || lockedContext.next_tool !== null
     || lockedContext.next_action?.kind !== 'human_gate'
-    || lockedContext.human_gate?.status !== 'required') {
+    || lockedContext.human_gate?.status !== 'required'
+    || lockedContext.artifact_manifest?.approval !== null) {
     throw new Error(`Inspector did not expose the non-WebMCP review gate: ${JSON.stringify(lockedContext)}`);
   }
 
@@ -1254,6 +2520,7 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
   if (!cleanCapture) {
     const lockedRun = await invokeRegisteredTool(tools, 'run_fly_simulation', {
       experiment_id: experimentId,
+      approved_protocol_hash: `sha256:${'0'.repeat(64)}`,
     });
     const lockEnvelope = decodedOutput(lockedRun)?.structuredContent;
     if (lockEnvelope?.error?.code !== 'APPROVAL_REQUIRED') {
@@ -1275,11 +2542,10 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
   if (approval?.result?.value?.clicked !== true) {
     throw new Error(`The visible approval control was not available: ${JSON.stringify(approval)}`);
   }
-  const approvedContext = await inspectAgentContext(tools);
-  if (approvedContext.next_tool !== 'run_fly_simulation'
-    || approvedContext.human_gate?.status !== 'satisfied') {
-    throw new Error(`Inspector did not expose the approved run transition: ${JSON.stringify(approvedContext)}`);
-  }
+  const approved = await waitForApprovedProtocolContext(tools, designed.data.experiment);
+  const approvedContext = approved.context;
+  const approvalRecord = approved.approval;
+  const approvalHashGuard = await verifyApprovedProtocolHashGuard(tools, designed.data.experiment, approvalRecord);
   await captureStage('human-approved', { selector: '.protocol-controls', block: 'start' });
 
   const webmcpCancellation = cleanCapture
@@ -1293,6 +2559,7 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
     experiment_id: experimentId,
   });
   const run = successfulEnvelope(runResponse, 'run_fly_simulation');
+  const runApprovalAudit = assertRunApprovalBinding(run.data, approvalRecord);
   await new Promise((resolve) => setTimeout(resolve, 1_200));
   await captureStage('simulation-replay', { selector: '.main-stage', block: 'start' });
   await captureCircuitPlayback();
@@ -1309,6 +2576,8 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
   };
   const analysisResponse = await invokeRegisteredTool(tools, 'analyze_fly_behavior', analysisInput);
   const analysis = successfulEnvelope(analysisResponse, 'analyze_fly_behavior');
+  const metricDefinitionAudit = assertFormalMetricDefinitions(analysis);
+  const perRunAudit = assertPerRunSimulationAndAnalysis(run.data, analysis.data.analysis, analysis.data.per_run_results);
   const visibleAnalysis = await verifyVisibleAnalysis(analysis.data.analysis, `condition_${designed.data.experiment.primaryLaterality}`);
   const conditionTabParity = await verifyConditionTabAnalysisParity(analysis.data.analysis, `condition_${designed.data.experiment.primaryLaterality}`);
   const humanBudget = await setHumanProposalBudget(tools, 5);
@@ -1328,6 +2597,7 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
   await captureStage('bounded-follow-up', { selector: '.comparison-ranking', block: 'center' });
 
   const saveInput = {
+    scope: 'mission',
     title: 'Adult MDN backward-walking verification run',
     hypothesis_id: drafted.data.hypothesis.id,
     experiment_id: experimentId,
@@ -1342,8 +2612,11 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
   const saveResponse = await invokeRegisteredTool(tools, 'save_fly_evidence', saveInput);
   const saved = successfulEnvelope(saveResponse, 'save_fly_evidence');
   const evidenceExportAudit = verifySavedEvidenceExport(saved, {
+    scope: 'mission',
+    discoveryDecision,
     hypothesis: drafted.data.hypothesis,
     experiment: designed.data.experiment,
+    approval: approvalRecord,
     batch: run.data,
     analysis: analysis.data.analysis,
     comparison: comparison.data.comparison,
@@ -1370,10 +2643,14 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
       discovery: { query: 'MDN', behavior: 'backward_walking' },
       hypothesis: hypothesisInput,
       design: designInput,
-      run: { experiment_id: experimentId },
+      run: {
+        experiment_id: experimentId,
+        approved_protocol_hash: approvalRecord.protocol_hash,
+        operation_id: run.operation_id,
+      },
       analysis: analysisInput,
       comparison: comparisonInput,
-      save: saveInput,
+      save: { ...saveInput, operation_id: saved.operation_id },
     }, saved.data.bundle);
   await sendCommand('Runtime.evaluate', {
     expression: `(() => {
@@ -1424,6 +2701,15 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
     visible_comparison_verified: Boolean(visibleComparison),
     visible_bundle_verified: Boolean(visibleBundle),
     evidence_export_audit: evidenceExportAudit,
+    metric_definition_audit: metricDefinitionAudit,
+    per_run_audit: perRunAudit,
+    run_approval_audit: runApprovalAudit,
+    approval: {
+      protocol_hash: approvalRecord.protocol_hash,
+      seed_manifest_hash: approvalRecord.seed_manifest_hash,
+      approved_at: approvalRecord.approved_at,
+      wrong_hash_guard: approvalHashGuard,
+    },
     inspector: {
       initial_next_tool: initialContext.next_tool,
       blocked_status: lockedContext.agent_status,
@@ -1486,37 +2772,56 @@ function assertGfMotorMapClosure(discovery) {
   return motorMap;
 }
 
-async function verifyGfShortModeWorkflow(tools) {
-  const ambiguousResponse = await invokeRegisteredTool(tools, 'find_fly_circuits', {
-    query: 'middle leg',
-    limit: 1,
-  });
-  const ambiguous = successfulEnvelope(ambiguousResponse, 'find_fly_circuits');
-  if (ambiguous.data.selection_status !== 'ambiguous'
-    || ambiguous.data.selected_circuit_id !== null
-    || ambiguous.data.candidate_match_count !== 2
-    || ambiguous.data.circuits.length !== 0
-    || ambiguous.data.next_action?.name !== 'find_fly_circuits') {
-    throw new Error(`Broad midleg discovery did not remain explicitly ambiguous: ${JSON.stringify(ambiguous.data)}`);
+async function verifyGfShortModeWorkflow(tools, options = {}) {
+  const cleanCapture = options.cleanDemoCapture === true;
+  if (!cleanCapture) {
+    const ambiguousResponse = await invokeRegisteredTool(tools, 'find_fly_circuits', {
+      query: 'middle leg',
+      limit: 1,
+    });
+    const ambiguous = successfulEnvelope(ambiguousResponse, 'find_fly_circuits');
+    assertDiscoveryDecisionAndCandidateRecords(ambiguous, 'ambiguous midleg discovery');
+    if (ambiguous.data.selection_status !== 'ambiguous'
+      || ambiguous.data.selected_circuit_id !== null
+      || ambiguous.data.candidate_match_count !== 2
+      || ambiguous.data.circuits.length !== 0
+      || ambiguous.data.next_action?.name !== 'find_fly_circuits') {
+      throw new Error(`Broad midleg discovery did not remain explicitly ambiguous: ${JSON.stringify(ambiguous.data)}`);
+    }
   }
 
   const discoveryInput = {
-    query: 'middle leg jump',
-    behavior: 'short_mode_escape',
-    evidence_labels: ['measured'],
+    query: competitionHeroPrompt,
+    behavior: 'any',
+    evidence_labels: ['measured', 'derived', 'connectome_inferred'],
+    limit: 5,
   };
-  const discoveryResponse = await invokeRegisteredTool(tools, 'find_fly_circuits', discoveryInput);
+  const discoveryResponse = options.discoveryResponse
+    ?? await invokeRegisteredTool(tools, 'find_fly_circuits', discoveryInput);
   const discovery = successfulEnvelope(discoveryResponse, 'find_fly_circuits');
+  const discoveryDecision = assertDiscoveryDecisionAndCandidateRecords(discovery, 'GF discovery');
   if (discovery.data.selection_status !== 'selected'
     || discovery.data.selected_circuit_id !== 'circuit_gf_adult'
-    || discovery.data.candidate_circuits[0]?.id !== 'circuit_gf_adult') {
-    throw new Error(`Specific jump-leg discovery did not select GF: ${JSON.stringify(discovery.data)}`);
+    || discovery.data.candidate_circuits[0]?.id !== 'circuit_gf_adult'
+    || discoveryDecision.candidates.length < 2
+    || !discoveryDecision.candidates.some((candidate) => candidate.circuitId === 'circuit_mdn_adult')
+    || !discoveryDecision.rejectedAlternatives.some((candidate) => candidate.circuitId === 'circuit_mdn_adult')) {
+    throw new Error(`Competition hero discovery did not select GF while preserving MDN as a reasoned alternative: ${JSON.stringify(discovery.data)}`);
+  }
+  if (cleanCapture
+    && (discoveryDecision.missionGoal !== competitionHeroPrompt
+      || discoveryDecision.search?.query !== competitionHeroPrompt.toLowerCase()
+      || discoveryDecision.search?.filters?.behavior !== 'any')) {
+    throw new Error(`Demo discovery did not preserve the exact competition hero goal and query: ${JSON.stringify(discoveryDecision)}`);
   }
   const motorMap = assertGfMotorMapClosure(discovery);
   if (!discovery.data.evidence.some((record) => (
-    record.id === 'E-FLYLAB-MODEL-004' && record.matches_requested_evidence_labels === false
+    record.id === 'E-FLYLAB-MODEL-004'
+      && record.provenance === 'derived'
+      && record.role === 'model_context'
+      && record.matches_requested_evidence_labels === true
   ))) {
-    throw new Error(`Measured GF discovery did not retain its separately marked model-method closure: ${JSON.stringify(discovery.data.evidence)}`);
+    throw new Error(`Competition hero discovery did not retain its separately marked model-method closure: ${JSON.stringify(discovery.data.evidence)}`);
   }
   const filteredContext = await inspectAgentContext(tools);
   assertSameStringSet(
@@ -1528,20 +2833,30 @@ async function verifyGfShortModeWorkflow(tools) {
   const causalEvidenceId = discovery.data.causal_evidence_ids_by_perturbation?.silence?.[0];
   const pathEvidenceId = discovery.data.hypothesis_eligible_evidence_ids.find((id) => id === 'E-GF-PATH-011');
   if (!causalEvidenceId || !pathEvidenceId) {
-    throw new Error(`GF measured discovery did not expose causal and pathway evidence: ${JSON.stringify(discovery.data)}`);
+    throw new Error(`GF hero discovery did not expose causal and pathway evidence: ${JSON.stringify(discovery.data)}`);
   }
   const hypothesisInput = {
     circuit_id: 'circuit_gf_adult',
     claim: 'Silencing the mapped adult giant-fiber pathway will reduce the simulated short-mode escape response relative to reference-drive baseline and sham controls.',
     predicted_behavior: 'short_mode_escape',
     perturbation: 'silence',
+    primary_outcome: 'short_mode_escape_probability',
+    expected_direction: 'decrease',
+    controls: ['condition_baseline', 'condition_sham'],
     evidence_ids: [causalEvidenceId, pathEvidenceId],
+    evidence_limitations: [
+      'The cited assays do not calibrate the reduced-order FlyLab effect size.',
+      'The literature-derived brain-to-leg-and-wing controller remains a declared model assumption.',
+    ],
     falsification_criterion: 'The prediction fails if the bilateral suppression arm does not reduce short-mode escape probability relative to both reference-drive controls.',
   };
   const drafted = successfulEnvelope(
     await invokeRegisteredTool(tools, 'draft_fly_hypothesis', hypothesisInput),
     'draft_fly_hypothesis',
   );
+  if (cleanCapture) {
+    await captureStage('hypothesis-drafted', { selector: '.hypothesis-card', block: 'start' });
+  }
   const baseDesignInput = {
     hypothesis_id: drafted.data.hypothesis.id,
     target_circuit_id: 'circuit_gf_adult',
@@ -1575,11 +2890,16 @@ async function verifyGfShortModeWorkflow(tools) {
     || experiment.conditions.some((condition) => condition.laterality === 'left' || condition.laterality === 'right')) {
     throw new Error(`GF bilateral-only design emitted unsupported unilateral arms: ${JSON.stringify(experiment.conditions)}`);
   }
+  const visibleProtocol = cleanCapture ? await verifyVisibleProtocol(experiment) : null;
   const preapproval = decodedOutput(await invokeRegisteredTool(tools, 'run_fly_simulation', {
     experiment_id: experiment.id,
+    approved_protocol_hash: `sha256:${'0'.repeat(64)}`,
   }))?.structuredContent;
   if (preapproval?.error?.code !== 'APPROVAL_REQUIRED') {
     throw new Error(`GF run bypassed visible approval: ${JSON.stringify(preapproval)}`);
+  }
+  if (cleanCapture) {
+    await captureStage('protocol-locked', { selector: '.protocol-controls', block: 'start' });
   }
   const approval = await sendCommand('Runtime.evaluate', {
     expression: `(() => {
@@ -1592,11 +2912,48 @@ async function verifyGfShortModeWorkflow(tools) {
   if (approval?.result?.value?.clicked !== true) {
     throw new Error(`GF approval control was not visible: ${JSON.stringify(approval)}`);
   }
+  const approved = await waitForApprovedProtocolContext(tools, experiment);
+  if (cleanCapture) {
+    await captureStage('human-approved', { selector: '.protocol-controls', block: 'start' });
+  }
+  const approvalHashGuard = await verifyApprovedProtocolHashGuard(tools, experiment, approved.approval);
+  if (cleanCapture) {
+    await captureIntegrityProof('proof-approval-hash-guard.png', {
+      tools,
+      kicker: 'Exact approval guard proof',
+      title: 'Wrong protocol hash rejected',
+      boundary: 'This panel summarizes actual WebMCP protocol results from the automated flag-enabled Chrome client. The rejected call created no batch and did not advance shared state.',
+      facts: [
+        { label: 'Error', value: approvalHashGuard.error },
+        { label: 'Before', value: `r${approvalHashGuard.before_state_revision}` },
+        { label: 'Rejected result', value: `r${approvalHashGuard.rejected_state_revision}` },
+        { label: 'After inspection', value: `r${approvalHashGuard.after_state_revision}` },
+        { label: 'Batch after', value: approvalHashGuard.resulting_batch_id ?? 'none' },
+      ],
+      checks: [
+        {
+          label: 'Exact commitment enforced',
+          detail: `Expected ${approvalHashGuard.expected_protocol_hash}; the deliberately wrong ${approvalHashGuard.rejected_protocol_hash} was refused.`,
+          pass: approvalHashGuard.error === 'EVIDENCE_MISMATCH',
+        },
+        {
+          label: 'No mutation on rejection',
+          detail: `Revision remained r${approvalHashGuard.before_state_revision} and no simulation batch appeared.`,
+          pass: approvalHashGuard.state_unchanged === true && approvalHashGuard.resulting_batch_id === null,
+        },
+      ],
+    });
+  }
 
   const run = successfulEnvelope(
     await invokeRegisteredTool(tools, 'run_fly_simulation', { experiment_id: experiment.id }),
     'run_fly_simulation',
   );
+  const runApprovalAudit = assertRunApprovalBinding(run.data, approved.approval);
+  const totalSeededRuns = run.data.conditionRuns.reduce((total, condition) => total + condition.replicates.length, 0);
+  if (totalSeededRuns !== 36 || run.data.conditionRuns.some((condition) => condition.replicates.length !== 12)) {
+    throw new Error(`GF demo batch was not exactly three arms by twelve seeded runs: ${JSON.stringify(run.data.conditionRuns.map((condition) => ({ id: condition.conditionId, runs: condition.replicates.length })))}`);
+  }
   const protocol = run.data.protocol;
   if (protocol.experimentId !== experiment.id
     || protocol.hypothesisId !== experiment.hypothesisId
@@ -1621,6 +2978,12 @@ async function verifyGfShortModeWorkflow(tools) {
       >= baseline.replicates.reduce((sum, replicate) => sum + replicate.wingRecruitment, 0)) {
     throw new Error(`GF silencing replay confused reference motion with perturbation targeting: ${JSON.stringify({ baseline, sham, primary })}`);
   }
+  if (cleanCapture) {
+    await selectCondition('condition_bilateral');
+    await new Promise((resolve) => setTimeout(resolve, 1_200));
+    await captureStage('simulation-replay', { selector: '.main-stage', block: 'start' });
+    await captureGfCircuitPlayback();
+  }
 
   const analysisInput = {
     batch_id: run.data.id,
@@ -1630,11 +2993,23 @@ async function verifyGfShortModeWorkflow(tools) {
     await invokeRegisteredTool(tools, 'analyze_fly_behavior', analysisInput),
     'analyze_fly_behavior',
   );
+  const metricDefinitionAudit = assertFormalMetricDefinitions(analysis);
+  const perRunAudit = assertPerRunSimulationAndAnalysis(run.data, analysis.data.analysis, analysis.data.per_run_results);
   assertSameStringSet(
     analysis.data.analysis.metrics,
     ['short_mode_escape_probability', 'response_latency_ms', 'vertical_displacement_mm', 'wing_recruitment', 'leg_recruitment'],
     'GF short-mode metric panel',
   );
+  const visibleAnalysis = cleanCapture
+    ? await verifyVisibleAnalysis(analysis.data.analysis, 'condition_bilateral')
+    : null;
+  const conditionTabParity = cleanCapture
+    ? await verifyConditionTabAnalysisParity(analysis.data.analysis, 'condition_bilateral')
+    : null;
+  const humanBudget = cleanCapture ? await setHumanProposalBudget(tools, 5) : null;
+  if (cleanCapture) {
+    await captureStage('behavior-analysis', { selector: '.results-panel', block: 'center' });
+  }
   const comparisonInput = {
     analysis_ids: [analysis.data.analysis.id],
     objective_metric: 'short_mode_escape_probability',
@@ -1644,7 +3019,17 @@ async function verifyGfShortModeWorkflow(tools) {
     await invokeRegisteredTool(tools, 'compare_fly_trials', comparisonInput),
     'compare_fly_trials',
   );
+  if (cleanCapture && comparison.data.comparison.proposal.replicateBudget !== humanBudget.budget) {
+    throw new Error(`GF comparison did not honor the visible follow-up budget: ${JSON.stringify(comparison.data.comparison)}`);
+  }
+  const visibleComparison = cleanCapture
+    ? await verifyVisibleComparison(comparison.data.comparison)
+    : null;
+  if (cleanCapture) {
+    await captureStage('bounded-follow-up', { selector: '.comparison-ranking', block: 'center' });
+  }
   const saveInput = {
+    scope: 'mission',
     title: 'Adult giant-fiber short-mode escape verification run',
     hypothesis_id: drafted.data.hypothesis.id,
     experiment_id: experiment.id,
@@ -1657,16 +3042,90 @@ async function verifyGfShortModeWorkflow(tools) {
     await invokeRegisteredTool(tools, 'save_fly_evidence', saveInput),
     'save_fly_evidence',
   );
+  const evidenceExportAudit = verifySavedEvidenceExport(saved, {
+    scope: 'mission',
+    discoveryDecision,
+    hypothesis: drafted.data.hypothesis,
+    experiment,
+    approval: approved.approval,
+    batch: run.data,
+    analysis: analysis.data.analysis,
+    comparison: comparison.data.comparison,
+  });
   const completed = await inspectAgentContext(tools);
   if (completed.agent_status !== 'complete'
     || completed.artifacts.selected_circuit_id !== 'circuit_gf_adult'
     || completed.artifacts.evidence_bundle_id !== saved.data.bundle.id) {
     throw new Error(`GF workflow did not complete its exact lineage: ${JSON.stringify(completed)}`);
   }
+  const idempotencyInputs = {
+    discovery: discoveryInput,
+    hypothesis: { ...hypothesisInput, evidence_ids: [...hypothesisInput.evidence_ids].reverse() },
+    design: designInput,
+    run: {
+      experiment_id: experiment.id,
+      approved_protocol_hash: approved.approval.protocol_hash,
+      operation_id: run.operation_id,
+    },
+    analysis: analysisInput,
+    comparison: comparisonInput,
+    save: { ...saveInput, operation_id: saved.operation_id },
+  };
+  let visibleBundle = null;
+  let editInvalidationVerified = null;
+  let idempotency = null;
+  if (cleanCapture) {
+    await clickButton({ text: 'Evidence ledger' });
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    visibleBundle = await verifyVisibleBundle(saved.data.bundle);
+    await prepareEvidenceModalCapture({
+      expectedSelection: saved.data.bundle.title,
+      navPosition: 'end',
+    });
+    await captureStage('evidence-saved');
+    idempotency = await verifyCompletedLineageIdempotency(tools, idempotencyInputs, saved.data.bundle);
+    const runReplay = idempotency.operation_replays.run_fly_simulation;
+    const saveReplay = idempotency.operation_replays.save_fly_evidence;
+    await captureIntegrityProof('proof-idempotent-retry.png', {
+      tools,
+      kicker: 'Operation replay proof',
+      title: 'Run and save retries made no mutation',
+      boundary: 'This panel summarizes actual repeated WebMCP calls from the automated flag-enabled Chrome client. Exact operation IDs replayed committed results; conflicting reuse failed closed.',
+      facts: [
+        { label: 'Run operation', value: runReplay.operation_id },
+        { label: 'Run revision', value: `r${runReplay.previous_state_revision} → r${runReplay.state_revision}` },
+        { label: 'Save operation', value: saveReplay.operation_id },
+        { label: 'Save revision', value: `r${saveReplay.previous_state_revision} → r${saveReplay.state_revision}` },
+        { label: 'Stable bundle', value: idempotency.stable_bundle_id },
+      ],
+      checks: [
+        {
+          label: 'Exact replays',
+          detail: 'Both expensive operations returned idempotent_replay true and zero created artifacts.',
+          pass: runReplay.idempotent_replay === true
+            && saveReplay.idempotent_replay === true
+            && idempotency.replay_created_artifacts === 0,
+        },
+        {
+          label: 'Conflicting reuse refused',
+          detail: `${idempotency.conflicting_run_operation_error} for run and ${idempotency.conflicting_save_operation_error} for save; shared state stayed unchanged.`,
+          pass: idempotency.conflicting_run_operation_error === 'INVALID_INPUT'
+            && idempotency.conflicting_save_operation_error === 'INVALID_INPUT'
+            && idempotency.conflict_state_unchanged === true,
+        },
+      ],
+    });
+    editInvalidationVerified = await verifyProtocolEditInvalidation(tools, experiment.id, 3, {
+      run: idempotencyInputs.run,
+      save: idempotencyInputs.save,
+    });
+  } else {
+    idempotency = await verifyCompletedLineageIdempotency(tools, idempotencyInputs, saved.data.bundle);
+  }
   return {
     sequence: [
-      'ambiguous_find',
-      'ranked_gf_find',
+      ...(!cleanCapture ? ['ambiguous_find'] : []),
+      'hero_multi_circuit_gf_find',
       'draft_silencing_hypothesis',
       'reject_unilateral_design',
       'design_bilateral_protocol',
@@ -1676,13 +3135,38 @@ async function verifyGfShortModeWorkflow(tools) {
       'compare',
       'save',
     ],
+    clean_demo_capture: cleanCapture,
+    selected_circuit_id: discovery.data.selected_circuit_id,
+    rejected_alternative_circuit_id: 'circuit_mdn_adult',
+    visible_protocol_verified: Boolean(visibleProtocol),
+    visible_analysis_verified: Boolean(visibleAnalysis),
+    condition_tab_analysis_parity: conditionTabParity,
+    visible_comparison_verified: Boolean(visibleComparison),
+    visible_bundle_verified: Boolean(visibleBundle),
+    experiment_arm_count: experiment.conditions.length,
+    replicates_per_arm: experiment.replicates,
+    total_seeded_runs: totalSeededRuns,
+    analyzed_metrics: analysis.data.analysis.metrics,
+    mission_bundle_format: 'flylab.mission-evidence-bundle.v3',
+    completed_stage: completed.state.stage,
+    completed_state_revision: completed.state.revision,
+    completed_agent_status: completed.agent_status,
+    protocol_edit_invalidation_verified: editInvalidationVerified,
     experiment_id: experiment.id,
     batch_id: run.data.id,
     analysis_id: analysis.data.analysis.id,
     evidence_bundle_id: saved.data.bundle.id,
     filter_to_inspector_parity: true,
     motor_map_source_closure: true,
+    hero_candidate_count: discoveryDecision.candidates.length,
+    hero_rejected_mdn: true,
     reference_motion_without_target_glow: true,
+    metric_definition_audit: metricDefinitionAudit,
+    per_run_audit: perRunAudit,
+    evidence_export_audit: evidenceExportAudit,
+    approval_hash_guard: approvalHashGuard,
+    idempotency_audit: idempotency,
+    run_approval_audit: runApprovalAudit,
   };
 }
 
@@ -1734,13 +3218,39 @@ try {
     || initialContext.agent_status !== 'ready') {
     throw new Error(`Inspector did not expose the initial agent action: ${JSON.stringify(initialContext)}`);
   }
-  await captureStage('eight-tools-live');
+  if (cleanDemoCapture && initialContext.state?.goal !== competitionHeroPrompt) {
+    throw new Error(`Clean demo did not start from the exact competition hero goal: ${JSON.stringify(initialContext.state)}`);
+  }
+  const mutationContextGuards = await verifyMutationContextGuards(registeredTools.tools);
+  if (cleanDemoCapture) {
+    await captureRuntimeDiagnosticProof('proof-webmcp-tools.png', {
+      requireInvocation: true,
+      tools: registeredTools.tools,
+      phase: 'registration',
+    });
+  }
+  await captureStage('eight-tools-live', { selector: '.agent-bridge', block: 'start' });
+  const initialDiscoveryInput = cleanDemoCapture
+    ? {
+        query: competitionHeroPrompt,
+        behavior: 'any',
+        evidence_labels: ['measured', 'derived', 'connectome_inferred'],
+        limit: 5,
+      }
+    : { query: 'MDN', behavior: 'backward_walking' };
   const response = await invokeRegisteredTool(
     registeredTools.tools,
     'find_fly_circuits',
-    { query: 'MDN', behavior: 'backward_walking' },
+    initialDiscoveryInput,
   );
-  await captureCircuitEvidence();
+  const initialDiscoveryEnvelope = successfulEnvelope(response, 'find_fly_circuits');
+  const initialDiscoveryDecision = assertDiscoveryDecisionAndCandidateRecords(
+    initialDiscoveryEnvelope,
+    cleanDemoCapture ? 'initial GF hero discovery' : 'initial MDN discovery',
+  );
+  await captureCircuitEvidence(cleanDemoCapture
+    ? 'Giant fibers causally bias short-mode escape'
+    : 'MDN activation and backward locomotion');
 
   let postInvocationStatus = status;
   for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -1782,18 +3292,54 @@ try {
   }
 
   const workflow = process.env.FLYLAB_VERIFY_WORKFLOW === '1'
-    ? await runFullWorkflow(registeredTools.tools, response, initialContext, { cleanDemoCapture })
+    ? cleanDemoCapture
+      ? await verifyGfShortModeWorkflow(registeredTools.tools, {
+          cleanDemoCapture: true,
+          discoveryResponse: response,
+        })
+      : await runFullWorkflow(registeredTools.tools, response, initialContext)
     : undefined;
   if (workflow && !cleanDemoCapture) {
     workflow.gf_short_mode_escape = await verifyGfShortModeWorkflow(registeredTools.tools);
   }
+  if (workflow && cleanDemoCapture) {
+    await captureRuntimeDiagnosticProof('proof-webmcp-invocations.png', {
+      requireInvocation: true,
+      tools: registeredTools.tools,
+      phase: 'workflow_complete',
+      workflow,
+    });
+  }
+
+  const capturedFrameNames = capturedFrames.map((filepath) => basename(filepath));
+  if (cleanDemoCapture && captureDirectory
+    && JSON.stringify(capturedFrameNames) !== JSON.stringify(expectedDemoFrameNames)) {
+    throw new Error(`Clean demo capture did not produce the exact 15-frame contract: ${JSON.stringify({ expectedDemoFrameNames, capturedFrameNames })}`);
+  }
+  const browserVersion = await sendCommand('Browser.getVersion');
+  const chromeFullVersion = browserVersion?.product?.match(/^Chrome\/([0-9.]+)$/)?.[1] ?? null;
+  const chromeMajorVersion = chromeFullVersion ? Number(chromeFullVersion.split('.')[0]) : null;
+  if (!chromeFullVersion || !Number.isInteger(chromeMajorVersion)) {
+    throw new Error(`Could not parse the Chrome client version from Browser.getVersion: ${JSON.stringify(browserVersion)}.`);
+  }
 
   const report = {
     ok: true,
+    verified_at: new Date().toISOString(),
     url: status.location,
     browser_api: 'document.modelContext.registerTool',
+    browser_client: {
+      chrome_full_version: chromeFullVersion,
+      chrome_major_version: chromeMajorVersion,
+      cdp_product: browserVersion.product,
+      cdp_protocol_version: browserVersion.protocolVersion,
+      cdp_revision: browserVersion.revision,
+      user_agent: status.userAgent,
+      webmcp_testing_flag_enabled: true,
+      proof_capture_kind: 'automated_flag_enabled_chrome_protocol_capture',
+    },
     registered_tools: actualToolNames,
-    invoked_tools: ['inspect_flylab_state', 'find_fly_circuits'],
+    invoked_tools: workflow ? expectedToolNames : ['inspect_flylab_state', 'find_fly_circuits'],
     invocation_status: response.status,
     agent_transport: {
       status: status.agentRuntime.status,
@@ -1811,13 +3357,35 @@ try {
     },
     origin_agent_cluster: true,
     browser_user_agent: status.userAgent,
+    mutation_context_guards: mutationContextGuards,
+    discovery_decision: {
+      id: initialDiscoveryDecision.id,
+      selected_circuit_id: initialDiscoveryDecision.selectedCircuitId,
+      candidate_count: initialDiscoveryDecision.candidates.length,
+      rejected_alternatives: initialDiscoveryDecision.rejectedAlternatives.length,
+    },
   };
   if (process.env.FLYLAB_VERIFY_VERBOSE === '1') {
     report.invocation_output = response.output;
   }
   if (workflow) report.workflow = workflow;
-  if (capturedFrames.length) report.captured_frames = capturedFrames;
-  console.log(JSON.stringify(report, null, 2));
+  if (capturedFrames.length) {
+    report.captured_frames = capturedFrames.map((filepath) => relative(process.cwd(), filepath));
+    report.capture_contract = {
+      mode: cleanDemoCapture ? 'gf_competition_hero' : 'verification',
+      frame_count: capturedFrames.length,
+      frame_names: capturedFrameNames,
+      exact_demo_frame_contract: cleanDemoCapture
+        ? JSON.stringify(capturedFrameNames) === JSON.stringify(expectedDemoFrameNames)
+        : null,
+    };
+  }
+  const serializedReport = `${JSON.stringify(report, null, 2)}\n`;
+  if (reportFile) {
+    await mkdir(dirname(reportFile), { recursive: true });
+    await writeFile(reportFile, serializedReport);
+  }
+  console.log(serializedReport.trimEnd());
 } catch (error) {
   if (stderrLines.length) console.error(stderrLines.join('\n'));
   throw error;

@@ -10,6 +10,7 @@ const initialSnapshot: FlyLabAgentSnapshot = {
   goal: 'Untrusted person-authored mission',
   simulationRunning: false,
   evidenceSaveRunning: false,
+  discoveryDecisionId: null,
   selectedCircuitId: null,
   discoveredEvidenceIds: [],
   hypothesisEligibleEvidenceIds: [],
@@ -20,6 +21,10 @@ const initialSnapshot: FlyLabAgentSnapshot = {
   hypothesisPerturbation: null,
   experimentId: null,
   experimentApproved: false,
+  approvalExperimentId: null,
+  approvedProtocolHash: null,
+  approvedSeedManifestHash: null,
+  approvalTimestamp: null,
   conditionIds: [],
   batchId: null,
   analysisIds: [],
@@ -64,7 +69,7 @@ describe('FlyLab inline agent handoff', () => {
     }
 
     const unsupported = buildFlyLabAgentHandoff(context, 'unsupported');
-    assert.equal(unsupported.agent_context.schema_version, 'flylab.agent-context.v2');
+    assert.equal(unsupported.agent_context.schema_version, 'flylab.agent-context.v3');
     assert.deepEqual(unsupported.agent_context.artifact_manifest, {});
     assert.match(unsupported.agent_context.provenance_policy.inheritance, /artifact_manifest/);
     assert.deepEqual(unsupported.trust.untrusted_human_fields, ['agent_context.state.goal']);

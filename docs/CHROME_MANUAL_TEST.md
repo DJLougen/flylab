@@ -1,167 +1,271 @@
-# Chrome-only manual WebMCP test
+# Chrome 149+ native WebMCP protocol test
 
-This path tests the complete FlyLab workflow without a conversational agent. It uses Chrome's WebMCP debugging panel to invoke the same page-registered contracts manually and makes every dynamic artifact-ID handoff explicit.
+This is the direct Chrome protocol path for judges who want to inspect every request and response without a conversational agent. It uses Chrome's WebMCP debugging panel to call the same eight page-registered tools. It is a supported WebMCP execution surface, not a DOM or manifest fallback.
+
+No successful supported-runtime run is asserted by this document. Record one only after the inventory, invocations, state transitions, and final report have been observed in the current build.
 
 ## Setup
 
-1. Use Chrome 149 or newer.
-2. Enable `chrome://flags/#enable-webmcp-testing` and `chrome://flags/#devtools-webmcp-support`, then relaunch Chrome.
-3. Open <https://flylab-neuroethology.d-lougen.chatgpt.site/> in a fresh tab.
-4. Open **DevTools → Application → WebMCP**.
-5. Confirm **Available Tools** contains the eight names in [Judge testing instructions](JUDGE_TESTING.md#expected-tool-inventory).
+1. Run FlyLab locally with `npm run dev`, or open a candidate deployment whose reachability you have verified separately.
+2. Use Chrome 149 or newer.
+3. Enable `chrome://flags/#enable-webmcp-testing` and `chrome://flags/#devtools-webmcp-support`, then relaunch Chrome.
+4. Open FlyLab in a fresh tab.
+5. Open **DevTools → Application → WebMCP**.
+6. Confirm **Available Tools** contains exactly the eight names in [Judge testing instructions](JUDGE_TESTING.md#native-tool-inventory). Human approval must not appear as a ninth tool.
 
-Every successful call returns a versioned envelope. In the output pane, expand `structuredContent.data` to find the fields named below. Copy returned IDs exactly; do not use the illustrative placeholder text.
+Every successful call returns `flylab.tool-result.v3`. In the examples below:
+
+- replace `SESSION_ID` with the inspected `page_session_id`;
+- replace `REVISION` with the latest successful `state_revision`;
+- after every successful mutation, update `REVISION` before the next call;
+- replace artifact placeholders with returned IDs exactly;
+- keep each `operation_id` stable only for retries of that same logical run or save.
+
+If any mutation returns `STALE_STATE`, stop, call `inspect_flylab_state` again, and rebuild the request from the current page session, revision, artifacts, and next action.
+
+## Competition prompt represented by this sequence
+
+> Investigate how the adult fruit-fly brain coordinates leg and wing output during rapid escape. Separate measured findings from connectome inference and simulation assumptions, draft a falsifiable hypothesis, and design a controlled experiment. Stop for my approval, then continue, analyze every metric, compare conditions, and save the complete evidence bundle.
 
 ## 1. Inspect the fresh page
 
-Run `inspect_flylab_state` with:
+Call `inspect_flylab_state` with:
 
 ```json
 {}
 ```
 
-Expected: `agent_status` is `ready` and `next_tool` is `find_fly_circuits`.
+Confirm:
 
-## 2. Find the adult MDN circuit
+- `result_version` is `flylab.tool-result.v3`;
+- `data.agent_context.schema_version` is `flylab.agent-context.v3`;
+- `data.page_session_id` and the top-level `page_session_id` match;
+- `data.agent_context.agent_status` is `ready`;
+- `data.agent_context.next_tool` is `find_fly_circuits`.
 
-Run `find_fly_circuits` with:
+Copy the session ID as `SESSION_ID` and the top-level revision as `REVISION`.
+
+## 2. Discover the rapid-escape circuit
+
+Call `find_fly_circuits`:
 
 ```json
 {
-  "query": "MDN",
-  "behavior": "backward_walking"
+  "page_session_id": "SESSION_ID",
+  "expected_state_revision": "REVISION",
+  "query": "Investigate how the adult fruit-fly brain coordinates leg and wing output during rapid escape. Separate measured findings from connectome inference and simulation assumptions, draft a falsifiable hypothesis, and design a controlled experiment.",
+  "behavior": "short_mode_escape",
+  "evidence_labels": ["measured", "derived", "connectome_inferred"],
+  "limit": 5
 }
 ```
 
-Copy:
+Use the numeric value for `expected_state_revision`; quotation marks around `REVISION` above only mark a placeholder.
 
-- `circuits[0].id` as `CIRCUIT_ID`
-- `hypothesis_eligible_evidence_ids` as the allowed support set. For the activation example, use measured records whose `role` is `hypothesis_support`: `E-MDN-ACTIVATION-001` and `E-MDN-LATERALITY-006`. Do not pass `E-DN-SCREEN-002`; it is `catalog_context` and the hypothesis tool must reject it.
+Confirm:
 
-## 3. Draft the hypothesis
+- `data.selection_status` is `selected`;
+- `data.selected_circuit_id` is `circuit_gf_adult`;
+- `data.discovery_decision.id` is stable and its candidates, rejected alternatives, exclusions, and coverage warning are present;
+- `data.candidate_circuit_records` contains the complete records for considered candidates;
+- hypothesis eligibility remains distinct from contextual/model evidence.
 
-Run `draft_fly_hypothesis`, replacing the placeholders with the copied values:
+Copy the returned revision.
+
+## 3. Draft a falsifiable GF hypothesis
+
+Call `draft_fly_hypothesis`:
 
 ```json
 {
-  "circuit_id": "CIRCUIT_ID",
-  "claim": "Activating adult MDNs in the FlyLab model should increase backward displacement relative to baseline and model-sham controls.",
-  "predicted_behavior": "backward_walking",
+  "page_session_id": "SESSION_ID",
+  "expected_state_revision": "REVISION",
+  "circuit_id": "circuit_gf_adult",
+  "claim": "In FlyLab, bilateral giant-fiber model drive will increase predicted short-mode escape relative to baseline and model-sham conditions.",
+  "predicted_behavior": "short_mode_escape",
   "perturbation": "activate",
-  "evidence_ids": ["E-MDN-ACTIVATION-001", "E-MDN-LATERALITY-006"],
-  "falsification_criterion": "The prediction fails if bilateral activation does not increase backward distance relative to the model-sham condition."
+  "primary_outcome": "short_mode_escape_probability",
+  "expected_direction": "increase",
+  "controls": ["condition_baseline", "condition_sham"],
+  "evidence_ids": ["E-GF-CAUSAL-010", "E-GF-PATH-011", "E-FANC-ESCAPE-012"],
+  "evidence_limitations": [
+    "The cited assays do not calibrate the reduced-order FlyLab effect size.",
+    "The mapped brain-to-leg-and-wing controller is a model assumption rather than a measured transfer function."
+  ],
+  "falsification_criterion": "The model shows no increase in short-mode escape probability relative to both controls."
 }
 ```
 
-Copy `hypothesis.id` as `HYPOTHESIS_ID`.
+Copy `data.hypothesis.id` as `HYPOTHESIS_ID` and update `REVISION`. The output must remain `agent_hypothesized`; structural evidence cannot substitute for matching perturbation-effect evidence.
 
-## 4. Design the controlled protocol
+## 4. Design the bilateral controlled protocol
 
-Run `design_stimulation_trial`:
+Call `design_stimulation_trial`:
 
 ```json
 {
+  "page_session_id": "SESSION_ID",
+  "expected_state_revision": "REVISION",
   "hypothesis_id": "HYPOTHESIS_ID",
-  "target_circuit_id": "CIRCUIT_ID",
+  "target_circuit_id": "circuit_gf_adult",
   "perturbation": "activate",
   "laterality": "bilateral",
-  "activation_level": 0.65,
-  "onset_ms": 1000,
-  "duration_ms": 2000,
-  "trial_duration_ms": 5000,
+  "activation_level": 0.75,
+  "onset_ms": 500,
+  "duration_ms": 900,
+  "trial_duration_ms": 3000,
   "replicates": 8,
   "include_baseline": true,
   "include_sham_control": true,
-  "seed": 73142
+  "seed": 91827
 }
 ```
 
-Copy `experiment.id` as `EXPERIMENT_ID`. The visible page must show five arms: baseline, model-sham, bilateral, left-only, and right-only.
+Copy `data.experiment.id` as `EXPERIMENT_ID` and update `REVISION`. The visible protocol must show exactly three GF arms: baseline, model-sham, and bilateral perturbation. GF unilateral routing is unsupported and must fail rather than inventing left/right arms.
 
-Run `inspect_flylab_state` again with `{}`. Expected: `waiting_for_human`, `blocked_by: human_approval`, and `next_tool: null`.
+Inspect again with `{}`. Confirm `waiting_for_human`, `blocked_by: human_approval`, `next_tool: null`, no approval artifact, and no batch.
 
-Optionally run `run_fly_simulation` with `{"experiment_id":"EXPERIMENT_ID"}` before approval. It must return `APPROVAL_REQUIRED` and create no completed batch.
+An optional negative test may call `run_fly_simulation` with current session/revision, a new `operation_id`, `EXPERIMENT_ID`, and a syntactically valid but incorrect 64-hex SHA-256 string. Before approval it must return `APPROVAL_REQUIRED` and publish no batch.
 
-## 5. Perform the person-owned actions
+## 5. Commit the person-owned approval
 
-In the FlyLab page—not the WebMCP panel—review the complete visible protocol and click **Approve this exact experiment**. Set **Next-trial budget** to `5`.
+In the FlyLab page—not through WebMCP—review the complete visible protocol and click **Approve this exact experiment**. Approval is intentionally not a tool.
 
-Run `inspect_flylab_state` with `{}`. Expected: the human gate is satisfied and `next_tool` is `run_fly_simulation`.
+Call `inspect_flylab_state` again and copy:
 
-## 6. Run the approved simulation
+- the new `REVISION`;
+- `data.agent_context.artifacts.approved_protocol_hash` as `APPROVED_PROTOCOL_HASH`;
+- `approved_seed_manifest_hash` and the approval timestamp for audit.
 
-Run `run_fly_simulation`:
+Confirm the approval experiment ID matches `EXPERIMENT_ID`, `approval_binding_complete` is true, and `next_action.input_refs.approved_protocol_hash` matches the copied hash.
+
+The approval record commits a detached, deeply frozen protocol snapshot and the complete seed manifest. The timestamp is outside the hashes. This is visible authorization for the virtual experiment, not identity authentication or a wet-lab approval.
+
+## 6. Run the exact approved simulation
+
+Call `run_fly_simulation`:
 
 ```json
 {
-  "experiment_id": "EXPERIMENT_ID"
+  "page_session_id": "SESSION_ID",
+  "expected_state_revision": "REVISION",
+  "experiment_id": "EXPERIMENT_ID",
+  "approved_protocol_hash": "APPROVED_PROTOCOL_HASH",
+  "operation_id": "judge-gf-run-91827"
 }
 ```
 
-Copy `id` from the returned batch as `BATCH_ID`.
+Copy `data.id` as `BATCH_ID` and update `REVISION`. Confirm:
 
-## 7. Analyze the complete metric panel
+- the returned approval has matching protocol and seed-manifest hashes;
+- every condition and run is `complete`;
+- every run exposes its seed, effective motor drive, response probability, scalar outputs, trajectory ID, trajectory seed, trajectory role, and full trajectory;
+- each condition's separate trajectory is labeled `illustrative_condition_replay` and explicitly excluded from metric calculation;
+- `operation_id` is echoed and `idempotent_replay` is false on the first commit.
 
-Run `analyze_fly_behavior`:
+A wrong approval hash must return `EVIDENCE_MISMATCH` without changing state.
+
+## 7. Analyze the complete GF metric panel
+
+Call `analyze_fly_behavior`:
 
 ```json
 {
+  "page_session_id": "SESSION_ID",
+  "expected_state_revision": "REVISION",
   "batch_id": "BATCH_ID",
   "metrics": [
-    "backward_distance_mm",
-    "signed_speed_mm_s",
+    "short_mode_escape_probability",
     "response_latency_ms",
-    "heading_change_deg",
-    "stance_stability"
+    "vertical_displacement_mm",
+    "wing_recruitment",
+    "leg_recruitment"
   ]
 }
 ```
 
-Copy `analysis.id` as `ANALYSIS_ID`. On the page, select baseline and model-sham conditions as well as the bilateral condition. If a condition reports `0/8 responsive`, its response latency must be JSON `null` and UI `n/a`; FlyLab never substitutes the trial duration.
+Copy `data.analysis.id` as `ANALYSIS_ID` and update `REVISION`. Confirm:
 
-## 8. Compare conditions and propose, but do not execute, a follow-up
+- `data.analysis.methodVersion` is `flylab.behavior-metrics.v4`;
+- every requested entry in `data.metric_definitions` provides formula, unit, sign convention, aggregation, null rule, window semantics, method version, provenance, and boundary;
+- `data.response_initiation_summary_definition` is separately declared;
+- `data.per_run_results` enumerates every run and its trajectory audit fields;
+- a condition with no responses has JSON `null` latency, never trial duration;
+- the only supported analysis window is the full trial.
 
-Run `compare_fly_trials`:
+## 8. Compare conditions without executing a follow-up
+
+Call `compare_fly_trials`:
 
 ```json
 {
+  "page_session_id": "SESSION_ID",
+  "expected_state_revision": "REVISION",
   "analysis_ids": ["ANALYSIS_ID"],
-  "objective_metric": "backward_distance_mm",
+  "objective_metric": "short_mode_escape_probability",
   "objective": "maximize"
 }
 ```
 
-Copy `comparison.id` as `COMPARISON_ID`. Confirm `proposal.replicateBudget` is `5` and `execution_authorized` is `false`.
+Copy `data.comparison.id` as `COMPARISON_ID` and update `REVISION`. Confirm `data.execution_authorized` is false. The proposal may be inspected but must not run automatically.
 
-## 9. Save the exact lineage
+## 9. Save the complete mission bundle
 
-Run `save_fly_evidence`:
+Call `save_fly_evidence`:
 
 ```json
 {
-  "title": "Adult MDN backward-walking verification run",
+  "page_session_id": "SESSION_ID",
+  "expected_state_revision": "REVISION",
+  "scope": "mission",
+  "title": "Adult giant-fiber rapid-escape competition run",
   "hypothesis_id": "HYPOTHESIS_ID",
   "experiment_id": "EXPERIMENT_ID",
   "batch_ids": ["BATCH_ID"],
   "analysis_ids": ["ANALYSIS_ID"],
   "comparison_id": "COMPARISON_ID",
-  "note": "Manual Chrome WebMCP verification with a person-owned approval boundary."
+  "note": "Chrome 149+ native WebMCP protocol inspection with a visible person-owned approval boundary.",
+  "operation_id": "judge-gf-save-91827"
 }
 ```
 
-Expected: the tool result contains derived bundle metadata at `data.bundle` and the complete portable export envelope—including its full payload—at `data.evidence_export`. The page's evidence ledger shows the same stable bundle ID and a `sha256:` manifest hash.
+Confirm:
 
-Run `inspect_flylab_state` once more. Expected: `agent_status: complete`, `state.stage: saved`, `next_tool: null`, and `next_action.kind: complete`.
+- `data.bundle.scope` is `mission`;
+- `data.evidence_export.schemaVersion` is `3`;
+- `data.evidence_export.payload.format` is `flylab.mission-evidence-bundle.v3`;
+- the mission section preserves the untrusted goal, discovery decision, all considered candidates, rejected alternatives, evidence/source context, and coverage boundary;
+- the selected lineage contains the exact approval, batch, formal analysis, comparison, and non-authorized proposal;
+- the bundle and integrity manifest hashes match the serialized payload checksum;
+- browser-local storage is described as best-effort convenience, not the portable artifact.
 
-## 10. Verify recovery after a human edit
+An `experiment` scope call instead produces `flylab.experiment-evidence-bundle.v3` for the selected lineage without the broader mission decision record.
 
-Change one protocol field in the FlyLab page, then run `inspect_flylab_state` with `{}` again.
+Inspect once more. Expected: `agent_status: complete`, `state.stage: saved`, `next_tool: null`, and `next_action.kind: complete`.
+
+## 10. Verify operation-ID idempotency
+
+Retry the completed run with the current inspected revision, the same page session, experiment ID, approval hash, and `operation_id: judge-gf-run-91827`. Retry the completed save with the current revision and the exact same logical save input plus `operation_id: judge-gf-save-91827`.
+
+Each retry must return:
+
+- `idempotent_replay: true`;
+- the same `operation_id` and committed artifact identity;
+- `previous_state_revision` equal to `state_revision`;
+- an empty `created_artifact_ids` array;
+- no additional simulation, save, activity item, or state mutation.
+
+Reusing either operation ID with changed logical input must return `INVALID_INPUT` with `conflict: operation_id_input_mismatch` and leave state unchanged.
+
+## 11. Verify recovery after a visible edit
+
+Change one protocol field in the FlyLab page, then inspect again.
 
 Expected:
 
-- a new revision and experiment ID;
-- approval cleared;
+- a new page revision and experiment ID;
+- approval plus both approval hashes cleared;
 - batch, analysis, comparison, and evidence-bundle references cleared;
 - `waiting_for_human` with `next_tool: null`.
 
-The WebMCP panel's **Invoked Tools** list should now contain the complete chronological call record with inputs, outputs, and statuses. For an automated equivalent that also tests cancellation and idempotency, run `FLYLAB_VERIFY_WORKFLOW=1 npm run verify:webmcp` from the public repository.
+The WebMCP panel's invocation list should now show the complete native eight-tool chronology and the single visible non-tool approval boundary.

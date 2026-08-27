@@ -2,129 +2,57 @@
 
 ## Status and release gate
 
-The agent-first application is public and the canonical 13 page-state captures have passed visual and workflow QA. The final challenge video has **not** been generated or uploaded. Build it only after the interface owner explicitly approves the UI.
+The final v24 competition video has not been generated, uploaded, or verified. The candidate app URL and supported-runtime path also require a fresh recorded check. Do not describe either as public/working solely because a URL or capture script exists.
 
-Two headed-browser proof composites and 15 rights-cleared narration clips are still required. The builder itself—not only the preflight—fails closed until UI approval is explicitly supplied. It also fails when any source is missing, when narration rights are not explicitly confirmed, or when the finished video is three minutes or longer.
+The video builder requires explicit interface approval, all planned frames, rights-cleared narration, and a duration below three minutes. Its preflight checks file presence and media requirements; a human must also confirm that every frame actually shows the v3 GF-first story below.
 
-The [official challenge rules](https://webmcp.devpost.com/rules) require a public YouTube video under three minutes with audio that clearly shows the functioning project and explains how it uses WebMCP. The recording must not include unauthorized music, trademarks, or other protected media.
+## Story in one sentence
 
-## Canonical visual sequence
+FlyLab lets an agent use eight native WebMCP tools to turn a source-backed adult fruit-fly rapid-escape question into a falsifiable GF hypothesis, an immutable human-approved virtual protocol, per-run auditable metrics, and a complete mission evidence bundle—without hiding stale page state or executing its own follow-up. The retained release capture is explicitly an automated WebMCP client verification, not a transcript proving that a ChatGPT agent or identified supervisor performed those actions.
 
-The current sequence is designed for roughly 1:57, leaving ample room below the three-minute limit:
+## Required visual sequence
 
-| Target time | Scene | Required proof |
-| --- | --- | --- |
-| 0:00–0:07 | Live WebMCP inventory | `proof-webmcp-tools.png`; all eight page-registered tools, with no approval tool |
-| 0:07–0:15 | Shared control plane | `00-eight-tools-live.png`; revision, blocker, artifact IDs, and one next action |
-| 0:15–0:22 | Circuit discovery | `01-circuit-found.png`; measured evidence and primary sources |
-| 0:22–0:27 | Falsifiable hypothesis | `02-hypothesis-drafted.png`; `agent_hypothesized` label |
-| 0:27–0:35 | Controlled protocol | `03-protocol-locked.png`; five arms and exact review parameters |
-| 0:35–0:42 | Supervisor approval | `04-human-approved.png`; visible non-tool approval and post-approval state |
-| 0:42–0:48 | Seeded replay | `05-simulation-replay.png`; reduced-order, `simulation_predicted` output |
-| 0:48–1:01 | Bilateral circuit | `06-circuit-bilateral-active.png`; BANC skeletons and bilateral model targets |
-| 1:01–1:11 | Left-only circuit | `07-circuit-left-active.png`; laterality and activity boundary |
-| 1:11–1:18 | Behavior analysis | `08-behavior-analysis.png`; derived plus simulation-predicted metrics |
-| 1:18–1:27 | Bounded follow-up | `09-bounded-follow-up.png`; proposal with no execution authority |
-| 1:27–1:35 | Evidence bundle | `10-evidence-saved.png`; bundle ID and manifest hash |
-| 1:35–1:42 | Provenance record | `11-evidence-ledger.png`; modal title, label, boundary, and source all visible |
-| 1:42–1:50 | Human edit recovery | `12-protocol-edit-invalidates-results.png`; new revision and cleared lineage |
-| 1:50–1:57 | Invocation proof | `proof-webmcp-invocations.png`; initial, post-approval, and post-edit inspections |
+| Scene | Required proof |
+|---|---|
+| Native inventory | Exactly eight registered tool names; no approval tool. |
+| Fresh inspection | `flylab.agent-context.v3`, page-session ID, revision, empty lineage, and one next action. |
+| Rapid-escape discovery | GF ranked first; discovery decision, alternatives, evidence types, and coverage gaps visible. |
+| Falsifiable hypothesis | Primary outcome, expected direction, both controls, causal evidence, limitations, and `agent_hypothesized`. |
+| Bilateral protocol | Three GF arms, exact timing/seed policy, and `waiting_for_human`. |
+| Human approval | Visible non-tool control plus protocol and seed-manifest SHA-256 commitments. |
+| Guard proof | Wrong approval hash rejected without changing state. |
+| Seeded run | `operation_id`, exact approval, complete per-run IDs/seeds/trajectories, and separate illustrative replay. |
+| GF embodiment | T2-leg and wing output with explicit literature-schematic circuit boundary. |
+| Formal analysis | All five GF metrics, method v4 definitions, null rule, and per-run inspection. |
+| Bounded comparison | Ranked conditions and `execution_authorized: false`. |
+| Mission save | Mission v3 format, discovery alternatives, bundle ID, and manifest hash. |
+| Idempotent retry | Same operation ID returns replay, zero new artifacts, unchanged revision. |
+| Visible edit recovery | New experiment/revision and cleared approval/downstream lineage. |
+| Runtime evidence | Supported client/version, target URL, timestamp, diagnostic, native invocation history, and final status. |
 
-The two proof images must be tightly cropped and free of unrelated browser branding. The inventory proof must show all eight registered tool names. The invocation proof must make three `inspect_flylab_state` checkpoints legible: initial state, post-approval execution readiness, and post-edit recovery with cleared downstream IDs.
+The inventory and invocation proof must come from a supported WebMCP surface: ChatGPT desktop with GPT-5.6 Sol/Terra or Chrome 149+. Static manifests, inline JSON, a guided-example button, or ordinary DOM automation do not count as native tool proof.
 
-## Generate page-state captures
+The automated Chrome capture invokes the registered WebMCP protocol directly and activates the visible approval control only to verify the boundary. Narration and proof panels must call it an automated WebMCP client/harness. In the judged interaction, the person must review and click that control; the app never exposes approval as a tool.
 
-After UI approval, create the canonical captures directly from the public deployment:
+## Exact competition prompt
 
-```bash
-FLYLAB_DEMO_CAPTURE=1 \
-FLYLAB_VERIFY_WORKFLOW=1 \
-FLYLAB_CAPTURE_DIR=outputs/demo/v7/frames \
-npm run verify:webmcp
-```
+Show this prompt verbatim:
 
-Clean capture mode uses the documented `0.65` unitless model drive. It omits negative cancellation tests and completed-lineage replay calls from the visible activity trail. The normal workflow verifier remains the authoritative QA path for those cases.
+> Investigate how the adult fruit-fly brain coordinates leg and wing output during rapid escape. Separate measured findings from connectome inference and simulation assumptions, draft a falsifiable hypothesis, and design a controlled experiment. Stop for my approval, then continue, analyze every metric, compare conditions, and save the complete evidence bundle.
 
-The headless verifier cannot capture browser debugging UI. Produce the two proof composites separately in a headed Chrome 149+ session with WebMCP testing and DevTools support enabled, using the same canonical protocol. Crop away browser logos and unrelated controls before placing them in `outputs/demo/v7/frames`.
-
-## Narration rights and inputs
-
-The builder intentionally does not synthesize or record a macOS System Voice. Supply 15 WAV clips in scene order:
-
-```text
-outputs/demo/v7/narration/00.wav
-...
-outputs/demo/v7/narration/14.wav
-```
-
-Use the entrant's own recording or a voice service whose terms expressly permit public and commercial publication. Do not include music unless the entrant owns it or has explicit permission to publish it. Keep documentation of the audio rights with the submission records.
-
-The spoken script is the `narration` field for each segment in `scripts/build-demo-video.mjs`. Record one clip per segment without reading stage directions. The builder adds a short pause, derives caption timing from the actual clip duration, and normalizes the combined track to the validated loudness range.
-
-Print the numbered clip plan without producing any media:
-
-```bash
-npm run demo:narration-plan
-```
-
-Check every UI, frame, narration, and rights gate without producing any media:
-
-```bash
-FLYLAB_UI_APPROVED=1 \
-FLYLAB_NARRATION_RIGHTS_CONFIRMED=1 \
-npm run demo:preflight
-```
-
-Until approval and all sources exist, the preflight exits nonzero and prints the exact missing frame and narration filenames as `flylab.demo-preflight.v1` JSON.
-
-Build only after confirming the rights of every clip:
-
-```bash
-FLYLAB_NARRATION_DIR=outputs/demo/v7/narration \
-FLYLAB_UI_APPROVED=1 \
-FLYLAB_NARRATION_RIGHTS_CONFIRMED=1 \
-npm run demo:video
-```
-
-The delivery report records that UI approval was explicitly supplied and the SHA-256 hash of every narration input without copying the raw clips into the promoted gallery. An unsuccessful rebuild leaves any prior delivery report in place instead of deleting its audit record before the replacement passes validation.
-
-## Scientific wording boundaries
-
-- Call the BANC table entries **four directed v3 rows totaling 153 predicted synaptic links after the postsynapse-size ≥10-voxel filter**, not four neural pathways, physiological weights, activity measurements, or measured connections.
-- “Real” refers only to the six pinned BANC v888 L2 reconstruction geometries.
-- Purple is unitless model-target selection; cyan is connectome-inferred structure.
-- Glow is not calcium, voltage, measured activity, or biological signal propagation.
-- The CNS shell and procedural arena fly are schematic.
-- Trajectories are deterministic reduced-order simulation predictions, not FlyGym execution, direct BANC simulation, whole-brain dynamics, or wet-lab measurements.
-- Behavior cards are derived aggregates of simulation-generated per-run summaries.
-- The `measured` label applies only to findings summarized from cited biological studies.
-- The follow-up is proposed but never executed.
-
-Credits must identify the BANC v888 static dataset, Harvard Dataverse version 3.0, <https://doi.org/10.7910/DVN/7WTH1N>, CC BY 4.0; the six simplified L2 SWC derivatives; and FlyLab's shared coordinate-transform and topology-preserving-simplification changes. See [Third-party notices](../THIRD_PARTY_NOTICES.md).
-
-## Canonical prompts
-
-**Prompt 1 — evidence through protocol**
-
-> Find source-backed adult fruit-fly circuits associated with backward walking. Draft a falsifiable MDN activation hypothesis and design a controlled MDN-inspired model-drive experiment with baseline, model-sham, bilateral, left-only, and right-only comparisons. Use unitless model drive 0.65, onset 1000 ms, duration 2000 ms, trial duration 5000 ms, eight replicates per arm, and seed 73142. Stop before running anything so I can inspect and approve the protocol.
-
-Expected sequence:
+The first phase must stop here:
 
 ```text
 inspect_flylab_state
 → find_fly_circuits
 → draft_fly_hypothesis
 → design_stimulation_trial
-→ human approval required
+→ visible human approval required
 ```
 
-After a person approves the exact visible protocol, set the visible next-trial budget to five and call `inspect_flylab_state` again.
+After the person approves the exact visible protocol, show a fresh inspection and continue with:
 
-**Prompt 2 — approved execution through evidence**
-
-> Run the exact approved experiment. Analyze backward distance, signed speed, response latency, heading change, and stance stability. Rank the conditions by backward distance using my visible next-trial budget, do not execute the proposed follow-up, and save the exact supporting evidence and comparison lineage.
-
-Expected sequence:
+> Continue with the exact approved protocol. Analyze every available metric, compare the conditions, do not execute the proposed follow-up, and save the complete mission evidence bundle.
 
 ```text
 inspect_flylab_state
@@ -134,20 +62,79 @@ inspect_flylab_state
 → save_fly_evidence
 ```
 
-After saving, edit one protocol field and inspect again. The recording must show a new experiment ID, `waiting_for_human`, no callable next tool, and cleared batch, analysis, comparison, and bundle IDs.
+## v3 facts the narration must state accurately
+
+- Every mutation echoes the current `page_session_id` and `expected_state_revision`.
+- Simulation also requires the exact human-approved protocol hash and a stable operation ID.
+- Approval commits a detached, deeply frozen protocol snapshot and full seed manifest; its timestamp is outside the hashes.
+- Run/save retries with the same operation ID and logical input replay without mutation; conflicting reuse fails.
+- Every seeded run has its own trajectory. The displayed condition replay is separate and illustrative.
+- `flylab.behavior-metrics.v4` publishes formal metric definitions and per-run traceability.
+- Mission scope preserves the goal, discovery decision, considered/rejected alternatives, exclusions, coverage gaps, and selected lineage.
+- The evidence-export checksum detects payload changes; it is not a signature or immutability guarantee.
+- The follow-up is proposed but never authorized or executed.
+
+## Scientific wording boundaries
+
+- Call the GF path a **literature-schematic Giant Fiber/DNp01 to middle-leg and wing motor map**. Do not call it a BANC/FANC reconstruction.
+- GF short-mode escape probability is not total takeoff probability; the parallel long-mode pathway is outside the model.
+- Purple is unitless model-target selection, not measured activity, voltage, calcium, firing, or signal propagation.
+- The procedural fly and GF circuit lines are schematic.
+- Trajectories are deterministic reduced-order simulation predictions, not FlyGym, connectome execution, biomechanics, aerodynamics, or wet-lab measurements.
+- Metric values are uncalibrated model outputs, not animal effect sizes or confidence intervals.
+- `measured` applies only to findings summarized from cited studies.
+- MDN/BANC is a secondary implemented slice, not the rapid-escape hero story. If shown, describe the four directed v3 rows and 153 predicted synaptic links as structural data only.
+
+## Capture and build
+
+For a local native Chrome capture, use the actual development URL:
+
+```bash
+FLYLAB_URL=http://localhost:3000/ \
+FLYLAB_VERIFY_WORKFLOW=1 \
+FLYLAB_DEMO_CAPTURE=1 \
+FLYLAB_CAPTURE_DIR=outputs/demo/v24/frames \
+FLYLAB_REPORT_FILE=outputs/demo/v24/webmcp-capture-report.json \
+npm run verify:webmcp
+```
+
+Use the actual port if different. A successful command report must be retained with the browser version, URL, timestamp, and captures. Demo-capture mode must follow the GF rapid-escape path represented by the v24 narration plan; review the semantic contents of every frame rather than trusting its filename.
+
+Print the narration plan without producing media:
+
+```bash
+npm run demo:narration-plan
+```
+
+Check release gates:
+
+```bash
+FLYLAB_UI_APPROVED=1 \
+FLYLAB_NARRATION_RIGHTS_CONFIRMED=1 \
+npm run demo:preflight
+```
+
+Build only after reviewing every frame and confirming the rights of every narration clip:
+
+```bash
+FLYLAB_NARRATION_DIR=outputs/demo/v24/narration \
+FLYLAB_UI_APPROVED=1 \
+FLYLAB_NARRATION_RIGHTS_CONFIRMED=1 \
+npm run demo:video
+```
+
+Use the entrant's own recording or a service whose terms permit publication. Do not add music or protected media without permission. Keep rights records with the submission materials.
 
 ## Pre-upload verification
 
-- Confirm the delivery report says `ok: true` and the duration is below `180` seconds.
-- Watch the complete MP4 with audio on; verify every frame and caption is readable.
-- Confirm H.264 video, AAC audio, embedded English captions, and the separate `.srt`.
-- Confirm the narration-input hashes match the reviewed recordings.
-- Confirm the social and scientific wording boundaries above.
-- Confirm the proof frames demonstrate real WebMCP inventory and invocation state.
-- Confirm the BANC attribution and derivative notice appear in the video description or credits.
-- Confirm there is no unauthorized music, system voice, trademark, or other protected media.
-- Upload to YouTube as a public video and verify it while signed out.
-- Replace `[YOUTUBE_DEMO_URL]` only after public playback, audio, captions, chapters, links, and visibility all pass.
-- Keep the public application free and unrestricted through September 21, 2026 at 5:00 p.m. PT.
+- [ ] The delivery report says `ok: true` and duration is below 180 seconds.
+- [ ] Every shot matches the GF-first v3 sequence above.
+- [ ] The native inventory and invocation proof come from a supported runtime.
+- [ ] The runtime evidence includes target URL, client/version, timestamp, and final status.
+- [ ] Approval hashes, operation replay, formal metrics, per-run traceability, and mission v3 export are legible.
+- [ ] Scientific boundaries and BANC attribution are accurate.
+- [ ] H.264 video, AAC audio, embedded English captions, separate `.srt`, and narration rights all pass review.
+- [ ] Public playback, audio, captions, links, and visibility are verified while signed out.
+- [ ] `[YOUTUBE_DEMO_URL]` is replaced only after those checks pass.
 
-See [YouTube metadata](YOUTUBE_DESCRIPTION.md) for the publication template.
+See [YouTube metadata](YOUTUBE_DESCRIPTION.md) and [WebMCP verification](WEBMCP_VERIFICATION.md).

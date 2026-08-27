@@ -6,13 +6,17 @@ import {
   FLYLAB_ERROR_CODES,
   FLYLAB_PROVENANCE_MANIFEST_VERSION,
   FLYLAB_TOOL_RESULT_VERSION,
+  FlyLabDomainError,
+  canonicalOperationInput,
   flyLabToolContracts,
   flyLabToolOutputContracts,
   diagnosticFromWebMCPError,
   installFlyLabWebMCP,
   prepareCancellableCommit,
   requireCurrentStateRevision,
+  verifyAtCurrentStateRevision,
   validateToolInput,
+  type ToolActionResult,
   type FlyLabToolAction,
 } from '../lib/webmcp.js';
 import { FLYLAB_AGENT_CONTEXT_VERSION } from '../lib/agent-context.js';
@@ -29,6 +33,18 @@ const expectedNames = [
   'run_fly_simulation',
   'save_fly_evidence',
 ];
+
+const mutationContext = {
+  page_session_id: 'session_test_0001',
+  expected_state_revision: 1,
+};
+
+const structuredHypothesisFields = {
+  primary_outcome: 'backward_distance_mm',
+  expected_direction: 'increase',
+  controls: ['condition_baseline', 'condition_sham'],
+  evidence_limitations: ['The cited assay does not calibrate the reduced-order FlyLab model.'],
+};
 
 const derivedProvenanceManifest = {
   entries: [{
@@ -110,6 +126,72 @@ describe('FlyLab WebMCP contracts', () => {
     }
   });
 
+  test('requires page-session and revision preconditions on every mutation and operation IDs on run/save', () => {
+    for (const contract of flyLabToolContracts) {
+      if (contract.name === 'inspect_flylab_state') {
+        assert.equal(contract.inputSchema.required.includes('page_session_id'), false);
+        assert.equal(contract.inputSchema.required.includes('expected_state_revision'), false);
+        continue;
+      }
+      assert.ok(contract.inputSchema.required.includes('page_session_id'), contract.name);
+      assert.ok(contract.inputSchema.required.includes('expected_state_revision'), contract.name);
+      assert.ok('page_session_id' in contract.inputSchema.properties, contract.name);
+      assert.ok('expected_state_revision' in contract.inputSchema.properties, contract.name);
+    }
+    for (const name of ['run_fly_simulation', 'save_fly_evidence']) {
+      const contract = flyLabToolContracts.find((item) => item.name === name);
+      assert.ok(contract?.inputSchema.required.includes('operation_id'), name);
+      assert.ok(contract && 'operation_id' in contract.inputSchema.properties, name);
+    }
+    const runContract = flyLabToolContracts.find((item) => item.name === 'run_fly_simulation');
+    assert.ok(runContract?.inputSchema.required.includes('approved_protocol_hash'));
+    assert.ok(runContract && 'approved_protocol_hash' in runContract.inputSchema.properties);
+    assert.throws(
+      () => validateToolInput('find_fly_circuits', { query: 'MDN' }),
+      (error: unknown) => (error as { code?: string }).code === 'INVALID_INPUT',
+    );
+    assert.doesNotThrow(() => validateToolInput('run_fly_simulation', {
+      ...mutationContext,
+      experiment_id: 'exp_1',
+      approved_protocol_hash: `sha256:${'a'.repeat(64)}`,
+      operation_id: 'run_once_1',
+    }));
+    assert.throws(
+      () => validateToolInput('run_fly_simulation', { ...mutationContext, experiment_id: 'exp_1' }),
+      (error: unknown) => (error as { code?: string }).code === 'INVALID_INPUT',
+    );
+  });
+
+  test('compares operation inputs by exact canonical JSON rather than key order or a short hash', () => {
+    const first = canonicalOperationInput({
+      page_session_id: 'session_test_0001',
+      expected_state_revision: 4,
+      experiment_id: 'exp_1',
+      approved_protocol_hash: `sha256:${'a'.repeat(64)}`,
+      operation_id: 'run_1',
+      nested: { z: 2, a: 1 },
+    });
+    const reordered = canonicalOperationInput({
+      nested: { a: 1, z: 2 },
+      operation_id: 'different_retry_id',
+      approved_protocol_hash: `sha256:${'a'.repeat(64)}`,
+      experiment_id: 'exp_1',
+      expected_state_revision: 99,
+      page_session_id: 'session_test_0001',
+    });
+    const changed = canonicalOperationInput({
+      page_session_id: 'session_test_0001',
+      expected_state_revision: 99,
+      experiment_id: 'exp_1',
+      approved_protocol_hash: `sha256:${'b'.repeat(64)}`,
+      operation_id: 'run_1',
+      nested: { a: 1, z: 2 },
+    });
+
+    assert.equal(first, reordered);
+    assert.notEqual(first, changed);
+  });
+
   test('publishes a machine-readable manifest synchronized with the live WebMCP tool surface', () => {
     const manifest = JSON.parse(readFileSync('public/flylab-agent-manifest.json', 'utf8')) as {
       schema_version?: string;
@@ -150,7 +232,7 @@ describe('FlyLab WebMCP contracts', () => {
       };
     };
 
-    assert.equal(manifest.schema_version, 'flylab.agent-manifest.v2');
+    assert.equal(manifest.schema_version, 'flylab.agent-manifest.v3');
     assert.equal(manifest.transport?.required_first_call, 'inspect_flylab_state');
     assert.equal(manifest.transport?.state_contract, FLYLAB_AGENT_CONTEXT_VERSION);
     assert.equal(manifest.transport?.result_contract, FLYLAB_TOOL_RESULT_VERSION);
@@ -185,7 +267,7 @@ describe('FlyLab WebMCP contracts', () => {
   });
 
   test('derives a complete public contract document from the registered tool source', () => {
-    assert.equal(flyLabAgentContractDocument.schema_version, 'flylab.webmcp-contracts.v2');
+    assert.equal(flyLabAgentContractDocument.schema_version, 'flylab.webmcp-contracts.v3');
     assert.equal(flyLabAgentContractDocument.transport.required_first_call, 'inspect_flylab_state');
     assert.equal(flyLabAgentContractDocument.transport.context_contract, FLYLAB_AGENT_CONTEXT_VERSION);
     assert.equal(flyLabAgentContractDocument.transport.result_contract, FLYLAB_TOOL_RESULT_VERSION);
@@ -224,6 +306,7 @@ describe('FlyLab WebMCP contracts', () => {
 
   test('requires baseline and model-sham controls in every trial design', () => {
     const input = {
+      ...mutationContext,
       hypothesis_id: 'hyp_1',
       target_circuit_id: 'circuit_mdn_adult',
       perturbation: 'activate',
@@ -253,6 +336,7 @@ describe('FlyLab WebMCP contracts', () => {
   test('requires the full analysis panel and accepts bounded hypothesis evidence arrays', () => {
     assert.throws(
       () => validateToolInput('analyze_fly_behavior', {
+        ...mutationContext,
         batch_id: 'batch_1',
         metrics: ['backward_distance_mm'],
       }),
@@ -263,14 +347,18 @@ describe('FlyLab WebMCP contracts', () => {
     );
 
     assert.doesNotThrow(() => validateToolInput('analyze_fly_behavior', {
+      ...mutationContext,
       batch_id: 'batch_1',
       metrics: ['backward_distance_mm', 'signed_speed_mm_s', 'response_latency_ms', 'heading_change_deg', 'stance_stability'],
     }));
     assert.doesNotThrow(() => validateToolInput('analyze_fly_behavior', {
+      ...mutationContext,
       batch_id: 'batch_gf',
       metrics: ['short_mode_escape_probability', 'response_latency_ms', 'vertical_displacement_mm', 'wing_recruitment', 'leg_recruitment'],
     }));
     assert.doesNotThrow(() => validateToolInput('draft_fly_hypothesis', {
+      ...mutationContext,
+      ...structuredHypothesisFields,
       circuit_id: 'circuit_mdn_adult',
       claim: 'MDN activation will increase predicted backward walking.',
       predicted_behavior: 'backward_walking',
@@ -279,6 +367,8 @@ describe('FlyLab WebMCP contracts', () => {
       falsification_criterion: 'No predicted increase over controls.',
     }));
     assert.doesNotThrow(() => validateToolInput('draft_fly_hypothesis', {
+      ...mutationContext,
+      ...structuredHypothesisFields,
       circuit_id: 'circuit_mdn_adult',
       claim: 'MDN activation will increase predicted retreat behavior.',
       predicted_behavior: 'retreat',
@@ -370,14 +460,23 @@ describe('FlyLab WebMCP registration lifecycle', () => {
       provenance: ['derived'],
       provenanceManifest: derivedProvenanceManifest,
       stateRevision: 1,
+      previousStateRevision: 1,
+      createdArtifactIds: [],
     });
     const actions = Object.fromEntries(
       expectedNames.map((name) => [name, action]),
     );
+    let discoveryActionCalls = 0;
+    actions.find_fly_circuits = async (input, context) => {
+      discoveryActionCalls += 1;
+      return action(input, context);
+    };
     const observedInvocations: string[] = [];
+    let runtimeRevision = 1;
 
     const installation = await installFlyLabWebMCP(actions, {
       onToolInvocation: (toolName) => observedInvocations.push(toolName),
+      getRuntimeMetadata: () => ({ pageSessionId: mutationContext.page_session_id, stateRevision: runtimeRevision }),
     });
 
     assert.equal(installation.supported, true);
@@ -407,8 +506,30 @@ describe('FlyLab WebMCP registration lifecycle', () => {
 
     const discovery = registrations.find(({ tool }) => tool.name === 'find_fly_circuits');
     assert.ok(discovery);
+    const wrongSession = await discovery.tool.execute({
+      ...mutationContext,
+      page_session_id: 'session_wrong_0001',
+      query: 'MDN',
+      behavior: 'backward_walking',
+    }) as {
+      isError?: boolean;
+      structuredContent?: { error?: { code?: string }; recovery?: { tool?: string } };
+    };
+    assert.equal(wrongSession.isError, true);
+    assert.equal(wrongSession.structuredContent?.error?.code, 'STALE_STATE');
+    assert.equal(wrongSession.structuredContent?.recovery?.tool, 'inspect_flylab_state');
+    const wrongRevision = await discovery.tool.execute({
+      ...mutationContext,
+      expected_state_revision: 999,
+      query: 'MDN',
+      behavior: 'backward_walking',
+    }) as { isError?: boolean; structuredContent?: { error?: { code?: string } } };
+    assert.equal(wrongRevision.isError, true);
+    assert.equal(wrongRevision.structuredContent?.error?.code, 'STALE_STATE');
+    assert.equal(discoveryActionCalls, 0, 'central mutation guards must reject stale requests before action dispatch');
+
     const result = await discovery.tool.execute(
-      { query: 'MDN', behavior: 'backward_walking' },
+      { ...mutationContext, query: 'MDN', behavior: 'backward_walking' },
     ) as {
       isError?: boolean;
       structuredContent?: {
@@ -416,6 +537,12 @@ describe('FlyLab WebMCP registration lifecycle', () => {
         result_version?: string;
         tool?: string;
         summary?: string;
+        page_session_id?: string;
+        previous_state_revision?: number;
+        state_revision?: number;
+        created_artifact_ids?: string[];
+        idempotent_replay?: boolean;
+        verification?: { selector?: string };
         provenance_scope?: string;
         provenance_manifest?: { schema_version?: string };
       };
@@ -424,10 +551,81 @@ describe('FlyLab WebMCP registration lifecycle', () => {
     assert.equal(result.structuredContent?.ok, true);
     assert.equal(result.structuredContent?.tool, 'find_fly_circuits');
     assert.equal(result.structuredContent?.summary, 'ok');
+    assert.equal(result.structuredContent?.page_session_id, mutationContext.page_session_id);
+    assert.equal(result.structuredContent?.previous_state_revision, 1);
+    assert.equal(result.structuredContent?.state_revision, 1);
+    assert.deepEqual(result.structuredContent?.created_artifact_ids, []);
+    assert.equal(result.structuredContent?.idempotent_replay, false);
+    assert.equal(result.structuredContent?.verification?.selector, '#flylab-agent-context');
     assert.equal(result.structuredContent?.result_version, FLYLAB_TOOL_RESULT_VERSION);
     assert.match(result.structuredContent?.provenance_scope ?? '', /union summary only/i);
     assert.equal(result.structuredContent?.provenance_manifest?.schema_version, FLYLAB_PROVENANCE_MANIFEST_VERSION);
-    assert.deepEqual(observedInvocations, ['inspect_flylab_state', 'find_fly_circuits']);
+    assert.equal(discoveryActionCalls, 1);
+    assert.deepEqual(observedInvocations, [
+      'inspect_flylab_state',
+      'find_fly_circuits',
+      'find_fly_circuits',
+      'find_fly_circuits',
+    ]);
+
+    actions.find_fly_circuits = async () => ({
+      summary: 'invalid transition fixture',
+      data: {},
+      provenance: ['derived'],
+      provenanceManifest: derivedProvenanceManifest,
+      stateRevision: 1,
+    } as unknown as ToolActionResult);
+    const invalidSuccess = await discovery.tool.execute(
+      { ...mutationContext, query: 'MDN', behavior: 'backward_walking' },
+    ) as {
+      isError?: boolean;
+      structuredContent?: {
+        error?: { code?: string; details?: { contract_violation?: string; field?: string } };
+      };
+    };
+    assert.equal(invalidSuccess.isError, true);
+    assert.equal(invalidSuccess.structuredContent?.error?.code, 'SIMULATION_UNAVAILABLE');
+    assert.equal(invalidSuccess.structuredContent?.error?.details?.contract_violation, 'invalid_success_metadata');
+    assert.equal(invalidSuccess.structuredContent?.error?.details?.field, 'previousStateRevision');
+
+    const runRegistration = registrations.find(({ tool }) => tool.name === 'run_fly_simulation');
+    assert.ok(runRegistration);
+    const runInput = {
+      ...mutationContext,
+      experiment_id: 'exp_1',
+      approved_protocol_hash: `sha256:${'a'.repeat(64)}`,
+      operation_id: 'run_conflict_1',
+    };
+    actions.run_fly_simulation = async () => {
+      throw new FlyLabDomainError('INVALID_INPUT', 'operation ID conflict', false, {
+        conflict: 'operation_id_input_mismatch',
+        recovery: 'Generate a new operation_id for a different logical operation.',
+      });
+    };
+    const operationConflict = await runRegistration.tool.execute(runInput) as {
+      isError?: boolean;
+      structuredContent?: { recovery?: { tool?: string; input?: { operation_id?: string }; reason?: string } };
+    };
+    assert.equal(operationConflict.isError, true);
+    assert.equal(operationConflict.structuredContent?.recovery?.tool, 'run_fly_simulation');
+    assert.equal(operationConflict.structuredContent?.recovery?.input?.operation_id, '<new_operation_id>');
+    assert.match(operationConflict.structuredContent?.recovery?.reason ?? '', /new operation_id/i);
+
+    actions.run_fly_simulation = async () => {
+      throw new FlyLabDomainError('APPROVAL_REQUIRED', 'human approval required', false, {
+        blocked_by: 'human_approval',
+      });
+    };
+    const approvalRequired = await runRegistration.tool.execute({
+      ...runInput,
+      operation_id: 'run_requires_approval_1',
+    }) as {
+      isError?: boolean;
+      structuredContent?: { recovery?: { tool?: string; reason?: string } };
+    };
+    assert.equal(approvalRequired.isError, true);
+    assert.equal(approvalRequired.structuredContent?.recovery?.tool, 'inspect_flylab_state');
+    assert.match(approvalRequired.structuredContent?.recovery?.reason ?? '', /visible human approval/i);
 
     const invalidInspection = await inspector.tool.execute({ unexpected: true }) as {
       isError?: boolean;
@@ -445,13 +643,15 @@ describe('FlyLab WebMCP registration lifecycle', () => {
         provenance: ['derived'],
         provenanceManifest: derivedProvenanceManifest,
         stateRevision: 2,
+        previousStateRevision: 1,
+        createdArtifactIds: ['artifact_cancelled'],
       };
     };
     const callController = new AbortController();
     callController.abort();
     await assert.rejects(
       discovery.tool.execute(
-        { query: 'MDN', behavior: 'backward_walking' },
+        { ...mutationContext, query: 'MDN', behavior: 'backward_walking' },
         { signal: callController.signal },
       ),
       { name: 'AbortError' },
@@ -462,16 +662,19 @@ describe('FlyLab WebMCP registration lifecycle', () => {
     actions.find_fly_circuits = async () => {
       cancelledActionCalls += 1;
       postCommitController.abort(new DOMException('cancel arrived after commit', 'AbortError'));
+      runtimeRevision = 3;
       return {
         summary: 'committed before cancellation became observable',
         data: { committed: true },
         provenance: ['derived'],
         provenanceManifest: derivedProvenanceManifest,
         stateRevision: 3,
+        previousStateRevision: 1,
+        createdArtifactIds: ['artifact_committed'],
       };
     };
     const postCommitResult = await discovery.tool.execute(
-      { query: 'MDN', behavior: 'backward_walking' },
+      { ...mutationContext, query: 'MDN', behavior: 'backward_walking' },
       { signal: postCommitController.signal },
     ) as { isError?: boolean; structuredContent?: { ok?: boolean; state_revision?: number } };
     assert.notEqual(postCommitResult.isError, true, 'a committed synchronous mutation must report success, not cancellation');
@@ -507,6 +710,8 @@ describe('FlyLab WebMCP registration lifecycle', () => {
       provenance: ['derived'],
       provenanceManifest: derivedProvenanceManifest,
       stateRevision: 1,
+      previousStateRevision: 1,
+      createdArtifactIds: [],
     });
     const actions = Object.fromEntries(
       expectedNames.map((name) => [name, action]),
@@ -627,5 +832,53 @@ describe('FlyLab cancellable commit boundary', () => {
         return true;
       },
     );
+  });
+
+  test('rejects an asynchronous approval check when the shared revision changes during hashing', async () => {
+    let currentRevision = 7;
+    let actualExperimentId = 'exp_approved';
+    let finishVerification!: (value: boolean) => void;
+    const verification = new Promise<boolean>((resolve) => { finishVerification = resolve; });
+
+    const guardedVerification = verifyAtCurrentStateRevision({
+      expectedRevision: 7,
+      getCurrentRevision: () => currentRevision,
+      verify: () => verification,
+      details: () => ({
+        expected_experiment_id: 'exp_approved',
+        actual_experiment_id: actualExperimentId,
+        expected_protocol_hash: `sha256:${'a'.repeat(64)}`,
+      }),
+    });
+
+    currentRevision = 8;
+    actualExperimentId = 'exp_revised';
+    finishVerification(true);
+
+    await assert.rejects(
+      guardedVerification,
+      (error: unknown) => {
+        assert.equal((error as { code?: string }).code, 'STALE_STATE');
+        assert.deepEqual((error as { details?: Record<string, unknown> }).details, {
+          expected_state_revision: 7,
+          actual_state_revision: 8,
+          recovery_tool: 'inspect_flylab_state',
+          expected_experiment_id: 'exp_approved',
+          actual_experiment_id: 'exp_revised',
+          expected_protocol_hash: `sha256:${'a'.repeat(64)}`,
+        });
+        return true;
+      },
+    );
+  });
+
+  test('returns an asynchronous verification result only while its revision remains current', async () => {
+    const result = await verifyAtCurrentStateRevision({
+      expectedRevision: 7,
+      getCurrentRevision: () => 7,
+      verify: async () => ({ protocol_hash: `sha256:${'b'.repeat(64)}` }),
+    });
+
+    assert.deepEqual(result, { protocol_hash: `sha256:${'b'.repeat(64)}` });
   });
 });

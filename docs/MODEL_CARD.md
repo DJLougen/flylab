@@ -9,6 +9,8 @@
 | Controller | `mapped-circuit-to-body-adapter.v1` |
 | Environment | `open-field-model-scale.v2` |
 | Parameter set | `flylab.mapped-motor-parameters.v2` |
+| Seed policy | `flylab.seed-policy.v2` |
+| Metric method | `flylab.behavior-metrics.v4` |
 | Parameter provenance | `agent_hypothesized` |
 | Batch provenance | `simulation_predicted` |
 | Analysis provenance | `derived`, `simulation_predicted` |
@@ -170,13 +172,15 @@ This makes suppression magnitude operational rather than silently discarding it.
 
 ## Seeded replicate summaries
 
-For replicate index `r` in condition index `c`:
+For zero-based replicate index `r`, every condition reuses the same seed:
 
 ```text
-replicate_seed = base_seed + c × 1009 + r × 37
+replicate_seed = base_seed + r × 37
+per_run_trajectory_seed = replicate_seed + 104729
+illustrative_condition_trajectory_seed = base_seed + 130363
 ```
 
-The seeded generator is Mulberry32. The helper below appears in several equations:
+This is a common-random-number design: replicate `r` reuses the same latent draws across arms, so equal effective drives are exactly paired and differing drives are compared under the same draw sequence. The seeded generator is Mulberry32. The helper below appears in several equations:
 
 ```text
 jitter(scale) = ((u1 + u2 + u3 + u4) / 4 − 0.5) × scale
@@ -271,9 +275,11 @@ leg_recruitment = clamp(0.06 + 0.92 × d + jitter(0.08), 0, 1)
 
 Non-responsive runs receive zero vertical displacement. These outputs are seeded reduced-order indices and model-scale motion, not wingbeat amplitude, muscle force, aerodynamic lift, a synaptic response, or a fit to the sub-millisecond physiological timing reported in giant-fiber experiments. GF silencing uses the same hand-authored reference-drive convention as MDN silencing; it is not a model of the parallel long-mode escape pathway.
 
-## Illustrative condition trajectory
+## Per-run and illustrative trajectories
 
-The Three.js replay is generated separately from the replicate summaries above. It is an illustrative condition path and is not the raw trajectory used to calculate the metric cards.
+Every replicate has a complete `per_run_simulated_trajectory` generated from its recorded trajectory seed. Its response onset, direction, speed, heading, and vertical displacement are consistent with that run's scalar result. The simulation response returns the full trace; the analysis response returns its ID, seed, role, completion status, and point count for audit.
+
+The Three.js condition replay is generated separately from the replicate summaries above. It is labeled `illustrative_condition_replay`, is not any run trajectory, and is never used to calculate metric cards.
 
 The replay has 80 equal time steps. The MDN reverse-walk program uses:
 
@@ -298,10 +304,10 @@ The `active` flag and circuit/body glow indicate only that a perturbation arm is
 
 ## Analysis
 
-`flylab.behavior-metrics.v3` reports condition means across the seeded replicate summaries. Each motor map declares its complete five-metric panel. Response initiation is the motor-program-specific responsive fraction; MDN additionally reports reverse initiation and GF reports short-mode escape probability—not total takeoff probability. Heading change is returned and displayed as the absolute condition-mean magnitude. Response latency is averaged over responsive runs only and reports both `responsiveN` and total `n`. FlyLab does not claim a formal preregistration artifact.
+`flylab.behavior-metrics.v4` reports condition means across the seeded replicate summaries. Each motor map declares its complete five-metric panel. Every metric publishes a machine-readable formula, unit, sign convention, aggregation, null rule, full-trial window semantics, method version, provenance, and interpretation boundary. Response initiation has a separately declared summary definition. MDN additionally reports reverse initiation and GF reports short-mode escape probability—not total takeoff probability. Heading change is returned and displayed as the absolute condition-mean magnitude. Response latency is averaged over responsive runs only and reports both `responsiveN` and total `n`; a no-response condition is JSON `null`. The response also exposes per-run audit rows linked to trajectory IDs. FlyLab does not claim a formal preregistration artifact.
 
 The comparison ranks those model-derived condition summaries by the requested objective and proposes nearby nominal control levels. The ranking remains `derived` plus `simulation_predicted`; the follow-up proposal remains `agent_hypothesized` and is never executed automatically.
 
 ## Reproducibility and change control
 
-The authoritative numeric parameter object is `MODEL_PARAMETERS` in `lib/flylab.ts`; the equations above mirror that object. Model, controller, environment, and parameter-set identifiers are serialized into experiments, batches, and evidence exports. A change to model behavior requires a version change, updated tests, this model card, and a fresh public deployment.
+The authoritative numeric parameter object is `MODEL_PARAMETERS` in `lib/flylab.ts`; the equations above mirror that object. Model, controller, environment, seed-policy, metric-method, and parameter-set identifiers are serialized into experiments, batches, approvals, and evidence exports. A change to model behavior requires a version change, updated tests, this model card, and a newly verified release candidate.

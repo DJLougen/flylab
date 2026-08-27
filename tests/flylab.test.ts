@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { describe, test } from 'node:test';
 
@@ -7,7 +8,13 @@ import {
   CIRCUITS,
   EMBODIED_MOTOR_MAPS,
   EVIDENCE,
+  EXPERIMENT_SEED_POLICY,
+  HYPOTHESIS_CONTROL_IDS,
+  METRIC_DEFINITIONS,
+  METRIC_LABELS,
+  METRIC_METHOD_VERSION,
   MODEL_PARAMETERS,
+  RESPONSE_INITIATION_SUMMARY_DEFINITION,
   SOURCES,
   analyzeBatch,
   circuitMatchesSearch,
@@ -16,12 +23,17 @@ import {
   designExperiment,
   embodimentCoverageForCircuits,
   evidenceBundleTitle,
+  illustrativeTrajectorySeedFromPolicy,
   makeHypothesis,
   rankCircuitsForSearch,
+  replicateSeedFromPolicy,
   reviseExperiment,
+  runTrajectorySeedFromPolicy,
   sharedAvailableObjectiveMetrics,
   simulateExperiment,
   snapshotExperimentProtocol,
+  stableHash,
+  takeRankedMatchesWithTies,
   type Experiment,
   type ProvenanceLabel,
 } from '../lib/flylab.js';
@@ -99,6 +111,19 @@ describe('FlyLab bounded circuit catalog', () => {
     assert.equal(rankCircuitsForSearch('GF')[0]?.circuit.id, 'circuit_gf_adult');
     assert.equal(rankCircuitsForSearch('MDN backward')[0]?.circuit.id, 'circuit_mdn_adult');
   });
+
+  test('preserves every score tie at the result limit boundary', () => {
+    const ranked = [
+      { id: 'alpha', score: 10 },
+      { id: 'beta', score: 10 },
+      { id: 'gamma', score: 4 },
+    ];
+
+    assert.deepEqual(takeRankedMatchesWithTies(ranked, 1).map((item) => item.id), ['alpha', 'beta']);
+    assert.deepEqual(takeRankedMatchesWithTies(ranked, 2).map((item) => item.id), ['alpha', 'beta']);
+    assert.deepEqual(takeRankedMatchesWithTies(ranked, 3).map((item) => item.id), ['alpha', 'beta', 'gamma']);
+    assert.throws(() => takeRankedMatchesWithTies(ranked, 0), RangeError);
+  });
 });
 
 describe('FlyLab reduced-order simulation', () => {
@@ -137,12 +162,245 @@ describe('FlyLab reduced-order simulation', () => {
     assert.notEqual(batch.protocol.conditions, experiment.conditions);
     assert.notEqual(batch.protocol.conditions[0], experiment.conditions[0]);
     assert.notEqual(batch.protocol.assumptions, experiment.assumptions);
+    assert.notEqual(batch.protocol.seedPolicy, experiment.seedPolicy);
+    assert.deepEqual(experiment.seedPolicy, EXPERIMENT_SEED_POLICY);
+    assert.deepEqual(batch.protocol.seedPolicy, EXPERIMENT_SEED_POLICY);
+    assert.equal(experiment.metricMethodVersion, METRIC_METHOD_VERSION);
+    assert.equal(batch.protocol.metricMethodVersion, METRIC_METHOD_VERSION);
     assert.ok(byCondition.get('condition_baseline')?.trajectory.every((point) => !point.active));
     assert.ok(byCondition.get('condition_sham')?.trajectory.every((point) => !point.active));
     assert.ok(byCondition.get('condition_bilateral')?.trajectory.some((point) => point.active));
     assert.ok(byCondition.get('condition_bilateral')?.trajectory
       .filter((point) => point.active)
       .every((point) => point.t >= experiment.onsetMs && point.t <= experiment.onsetMs + experiment.durationMs));
+  });
+
+  test('derives paired metric and trajectory seeds from the versioned common-random-number policy', () => {
+    const experiment = makeExperiment();
+    const batch = simulateExperiment(experiment);
+
+    assert.equal(experiment.seedPolicy.version, 'flylab.seed-policy.v2');
+    assert.equal(experiment.seedPolicy.generator, 'mulberry32');
+    assert.equal(experiment.seedPolicy.design, 'common_random_numbers_by_replicate');
+    assert.equal(
+      experiment.seedPolicy.replicateFormula,
+      'baseSeed + replicateIndex * 37',
+    );
+    assert.equal(
+      experiment.seedPolicy.trajectoryFormula,
+      'replicateSeed + 104729',
+    );
+    assert.equal(
+      experiment.seedPolicy.illustrativeTrajectoryFormula,
+      'baseSeed + 130363',
+    );
+    batch.conditionRuns.forEach((condition) => {
+      assert.equal(
+        condition.trajectorySeed,
+        illustrativeTrajectorySeedFromPolicy(experiment.seedPolicy, experiment.seed),
+      );
+      condition.replicates.forEach((replicate, replicateIndex) => {
+        const expectedSeed = replicateSeedFromPolicy(
+          experiment.seedPolicy,
+          experiment.seed,
+          replicateIndex,
+        );
+        assert.equal(
+          replicate.seed,
+          expectedSeed,
+        );
+        assert.equal(
+          replicate.trajectorySeed,
+          runTrajectorySeedFromPolicy(experiment.seedPolicy, expectedSeed),
+        );
+      });
+    });
+    for (let replicateIndex = 0; replicateIndex < experiment.replicates; replicateIndex += 1) {
+      assert.equal(
+        new Set(batch.conditionRuns.map((condition) => condition.replicates[replicateIndex]?.seed)).size,
+        1,
+      );
+    }
+
+    const analysis = analyzeBatch(batch, ['backward_distance_mm']);
+    assert.equal(analysis.methodVersion, experiment.metricMethodVersion);
+  });
+
+  test('publishes formal definitions for exactly nine stable metrics and a separate response-initiation summary', () => {
+    assert.deepEqual(Object.keys(METRIC_DEFINITIONS), [...ANALYSIS_METRICS]);
+    assert.equal('response_initiation_probability' in METRIC_DEFINITIONS, false);
+    for (const metric of ANALYSIS_METRICS) {
+      const definition = METRIC_DEFINITIONS[metric];
+      assert.equal(definition.id, metric);
+      assert.deepEqual(METRIC_LABELS[metric], {
+        label: definition.label,
+        unit: definition.unit,
+      });
+      assert.ok(definition.formula.length > 0);
+      assert.ok(definition.unit.length > 0);
+      assert.ok(definition.signConvention.length > 0);
+      assert.ok(definition.aggregation.length > 0);
+      assert.ok(definition.nullRule.length > 0);
+      assert.match(definition.windowSemantics, /full-trial/i);
+      assert.equal(definition.methodVersion, METRIC_METHOD_VERSION);
+      assert.deepEqual(definition.provenance, ['derived', 'simulation_predicted']);
+      assert.match(definition.boundary, /not a measured biological quantity/i);
+    }
+
+    assert.equal(RESPONSE_INITIATION_SUMMARY_DEFINITION.id, 'response_initiation_probability');
+    assert.equal(RESPONSE_INITIATION_SUMMARY_DEFINITION.methodVersion, METRIC_METHOD_VERSION);
+    assert.match(RESPONSE_INITIATION_SUMMARY_DEFINITION.boundary, /not one of the nine stable objective metrics/i);
+
+    const batch = simulateExperiment(makeExperiment());
+    const analysis = analyzeBatch(batch, ['response_latency_ms', 'backward_distance_mm']);
+    assert.deepEqual(Object.keys(analysis.metricDefinitions), [
+      'backward_distance_mm',
+      'response_latency_ms',
+    ]);
+    assert.deepEqual(
+      analysis.responseInitiationSummaryDefinition,
+      RESPONSE_INITIATION_SUMMARY_DEFINITION,
+    );
+    assert.throws(
+      () => analyzeBatch(batch, ['backward_distance_mm'], 100, batch.protocol.trialDurationMs),
+      /supports only the full-trial analysis window/,
+    );
+  });
+
+  test('makes every completed run inspectable with its own deterministic trajectory and labels condition paths as illustrative', () => {
+    const batch = simulateExperiment(makeExperiment());
+    const repeated = simulateExperiment(makeExperiment());
+    const trajectoryIds = new Set<string>();
+
+    assert.deepEqual(repeated, batch);
+    for (const condition of batch.conditionRuns) {
+      assert.equal(condition.status, 'complete');
+      assert.equal(condition.trajectoryStatus, 'complete');
+      assert.equal(condition.trajectoryRole, 'illustrative_condition_replay');
+      assert.match(condition.trajectoryBoundary, /not any replicate trajectory/i);
+      assert.ok(condition.trajectoryId.startsWith('trajectory_'));
+      assert.equal(condition.trajectory.length, MODEL_PARAMETERS.trajectory.steps + 1);
+      assert.deepEqual(condition.runIds, condition.replicates.map((replicate) => replicate.id));
+      for (const replicate of condition.replicates) {
+        assert.equal(replicate.status, 'complete');
+        assert.equal(replicate.trajectoryRole, 'per_run_simulated_trajectory');
+        assert.deepEqual(replicate.provenance, ['simulation_predicted']);
+        assert.ok(replicate.trajectoryId.startsWith('trajectory_'));
+        assert.equal(replicate.trajectory.length, MODEL_PARAMETERS.trajectory.steps + 1);
+        assert.equal(trajectoryIds.has(replicate.trajectoryId), false);
+        trajectoryIds.add(replicate.trajectoryId);
+      }
+      assert.notDeepEqual(condition.trajectory, condition.replicates[0]?.trajectory);
+    }
+  });
+
+  test('invariant: baseline and model-sham runs with equivalent effective drive are exactly paired', () => {
+    for (const perturbation of ['activate', 'silence'] as const) {
+      const batch = simulateExperiment(makeExperiment({ perturbation }));
+      const baseline = batch.conditionRuns.find((condition) => condition.conditionId === 'condition_baseline');
+      const sham = batch.conditionRuns.find((condition) => condition.conditionId === 'condition_sham');
+
+      assert.ok(baseline && sham);
+      assert.equal(sham.effectiveMotorDrive, baseline.effectiveMotorDrive);
+      assert.deepEqual(sham.trajectory, baseline.trajectory);
+      baseline.replicates.forEach((baselineRun, index) => {
+        const shamRun = sham.replicates[index]!;
+        assert.equal(shamRun.seed, baselineRun.seed);
+        assert.equal(shamRun.effectiveMotorDrive, baselineRun.effectiveMotorDrive);
+        assert.equal(shamRun.responseProbability, baselineRun.responseProbability);
+        assert.equal(shamRun.responseInitiated, baselineRun.responseInitiated);
+        assert.equal(shamRun.reverseInitiated, baselineRun.reverseInitiated);
+        assert.equal(shamRun.shortModeEscapeInitiated, baselineRun.shortModeEscapeInitiated);
+        assert.equal(shamRun.backwardDistanceMm, baselineRun.backwardDistanceMm);
+        assert.equal(shamRun.backwardDistanceScale, baselineRun.backwardDistanceScale);
+        assert.equal(shamRun.signedSpeedMmS, baselineRun.signedSpeedMmS);
+        assert.equal(shamRun.responseLatencyMs, baselineRun.responseLatencyMs);
+        assert.equal(shamRun.headingChangeDeg, baselineRun.headingChangeDeg);
+        assert.equal(shamRun.stanceStability, baselineRun.stanceStability);
+        assert.equal(shamRun.verticalDisplacementMm, baselineRun.verticalDisplacementMm);
+        assert.equal(shamRun.wingRecruitment, baselineRun.wingRecruitment);
+        assert.equal(shamRun.legRecruitment, baselineRun.legRecruitment);
+        assert.deepEqual(shamRun.trajectory, baselineRun.trajectory);
+      });
+    }
+  });
+
+  test('invariant: symmetric left and right inputs differ only by the expected heading sign', () => {
+    const batch = simulateExperiment(makeExperiment());
+    const left = batch.conditionRuns.find((condition) => condition.conditionId === 'condition_left');
+    const right = batch.conditionRuns.find((condition) => condition.conditionId === 'condition_right');
+
+    assert.ok(left && right);
+    assert.equal(left.effectiveMotorDrive, right.effectiveMotorDrive);
+    left.replicates.forEach((leftRun, index) => {
+      const rightRun = right.replicates[index]!;
+      assert.equal(leftRun.seed, rightRun.seed);
+      assert.equal(leftRun.responseInitiated, rightRun.responseInitiated);
+      assert.equal(leftRun.backwardDistanceMm, rightRun.backwardDistanceMm);
+      assert.equal(leftRun.signedSpeedMmS, rightRun.signedSpeedMmS);
+      assert.equal(leftRun.responseLatencyMs, rightRun.responseLatencyMs);
+      assert.equal(leftRun.stanceStability, rightRun.stanceStability);
+      assert.equal(leftRun.legRecruitment, rightRun.legRecruitment);
+      assert.equal(leftRun.headingChangeDeg, -rightRun.headingChangeDeg);
+      assert.ok(leftRun.headingChangeDeg < 0);
+      assert.ok(rightRun.headingChangeDeg > 0);
+      leftRun.trajectory.forEach((leftPoint, pointIndex) => {
+        const rightPoint = rightRun.trajectory[pointIndex]!;
+        assert.ok(Math.abs(leftPoint.x + rightPoint.x) < 1e-12);
+        assert.ok(Math.abs(leftPoint.y - rightPoint.y) < 1e-12);
+        assert.ok(Math.abs(leftPoint.heading + rightPoint.heading) < 1e-12);
+        assert.equal(leftPoint.z, rightPoint.z);
+      });
+    });
+    assert.equal(
+      analyzeBatch(batch, ['heading_change_deg']).conditions.find((condition) => condition.conditionId === 'condition_left')?.headingChangeDeg,
+      analyzeBatch(batch, ['heading_change_deg']).conditions.find((condition) => condition.conditionId === 'condition_right')?.headingChangeDeg,
+    );
+  });
+
+  test('invariant: greater bilateral drive is monotonic under paired latent draws', () => {
+    const batch = simulateExperiment(makeExperiment({ replicates: 20 }));
+    const bilateral = batch.conditionRuns.find((condition) => condition.conditionId === 'condition_bilateral');
+    const unilateral = batch.conditionRuns.find((condition) => condition.conditionId === 'condition_left');
+
+    assert.ok(bilateral && unilateral);
+    assert.ok(bilateral.effectiveMotorDrive > unilateral.effectiveMotorDrive);
+    bilateral.replicates.forEach((higherDriveRun, index) => {
+      const lowerDriveRun = unilateral.replicates[index]!;
+      assert.equal(higherDriveRun.seed, lowerDriveRun.seed);
+      assert.ok(higherDriveRun.responseProbability > lowerDriveRun.responseProbability);
+      assert.ok(Number(higherDriveRun.responseInitiated) >= Number(lowerDriveRun.responseInitiated));
+      assert.ok(higherDriveRun.backwardDistanceMm >= lowerDriveRun.backwardDistanceMm);
+      assert.ok(higherDriveRun.legRecruitment >= lowerDriveRun.legRecruitment);
+      assert.ok(higherDriveRun.stanceStability <= lowerDriveRun.stanceStability);
+      if (lowerDriveRun.responseLatencyMs !== null) {
+        assert.ok(higherDriveRun.responseLatencyMs !== null);
+        assert.ok(higherDriveRun.responseLatencyMs <= lowerDriveRun.responseLatencyMs);
+      }
+    });
+  });
+
+  test('invariant: signed speed and backward-distance direction never contradict', () => {
+    const batches = [
+      simulateExperiment(makeExperiment({ perturbation: 'activate', replicates: 20 })),
+      simulateExperiment(makeExperiment({ perturbation: 'silence', replicates: 20 })),
+    ];
+    for (const replicate of batches.flatMap((batch) => batch.conditionRuns.flatMap((condition) => condition.replicates))) {
+      assert.ok(replicate.backwardDistanceMm >= 0);
+      if (replicate.backwardDistanceMm > 0) {
+        assert.equal(replicate.reverseInitiated, true);
+        assert.ok(replicate.signedSpeedMmS < 0);
+      }
+      if (replicate.signedSpeedMmS >= 0) assert.equal(replicate.backwardDistanceMm, 0);
+      if (replicate.reverseInitiated) assert.ok(replicate.signedSpeedMmS < 0);
+    }
+    for (const condition of batches.flatMap((batch) => analyzeBatch(batch, [
+      'backward_distance_mm',
+      'signed_speed_mm_s',
+    ]).conditions)) {
+      if (condition.backwardDistanceMm > 0) assert.ok(condition.signedSpeedMmS < 0);
+      if (condition.signedSpeedMmS >= 0) assert.equal(condition.backwardDistanceMm, 0);
+    }
   });
 
   test('defines response latency from nominal onset and removes pre-onset time from distance', () => {
@@ -479,7 +737,11 @@ describe('FlyLab embodied leg-and-wing motor maps', () => {
       claim: 'Mapped bilateral giant-fiber drive will increase simulated short-mode escape takeoff.',
       predictedBehavior: 'short_mode_escape',
       perturbation: 'activate',
+      primaryOutcome: 'short_mode_escape_probability',
+      expectedDirection: 'increase',
+      controls: [...HYPOTHESIS_CONTROL_IDS],
       evidenceIds: ['E-GF-CAUSAL-010', 'E-GF-PATH-011', 'E-FANC-ESCAPE-012'],
+      evidenceLimitations: ['The cited assays do not validate the reduced-order simulator effect size.'],
       falsificationCriterion: 'Takeoff probability does not exceed both baseline and model-sham controls.',
     });
 
@@ -489,7 +751,11 @@ describe('FlyLab embodied leg-and-wing motor maps', () => {
       claim: 'Mapped bilateral giant-fiber drive will increase simulated short-mode escape takeoff.',
       predictedBehavior: 'short_mode_escape',
       perturbation: 'activate',
+      primaryOutcome: 'short_mode_escape_probability',
+      expectedDirection: 'increase',
+      controls: [...HYPOTHESIS_CONTROL_IDS],
       evidenceIds: ['E-GF-PATH-011', 'E-FANC-ESCAPE-012'],
+      evidenceLimitations: ['The cited assays do not validate the reduced-order simulator effect size.'],
       falsificationCriterion: 'Takeoff probability does not exceed both baseline and model-sham controls.',
     }), /perturbation_effect/);
   });
@@ -558,15 +824,121 @@ describe('FlyLab provenance', () => {
       claim: 'Bilateral MDN activation will increase backward walking.',
       predictedBehavior: 'backward_walking',
       perturbation: 'activate' as const,
+      primaryOutcome: 'backward_distance_mm' as const,
+      expectedDirection: 'increase' as const,
+      controls: [...HYPOTHESIS_CONTROL_IDS],
       evidenceIds: ['E-BANC-PATH-003', 'E-MDN-ACTIVATION-001'],
+      evidenceLimitations: [
+        'The simulator is not biologically calibrated.',
+        'The causal evidence comes from study-specific conditions.',
+      ],
       falsificationCriterion: 'No increase over baseline in backward distance.',
     };
     const first = makeHypothesis(input);
-    const second = makeHypothesis({ ...input, evidenceIds: [...input.evidenceIds].reverse() });
+    const second = makeHypothesis({
+      ...input,
+      controls: [...input.controls].reverse(),
+      evidenceIds: [...input.evidenceIds].reverse(),
+      evidenceLimitations: [...input.evidenceLimitations].reverse(),
+    });
 
     assert.equal(second.id, first.id);
+    assert.deepEqual(second.controls, [...HYPOTHESIS_CONTROL_IDS]);
     assert.deepEqual(second.evidenceIds, first.evidenceIds);
+    assert.deepEqual(second.evidenceLimitations, first.evidenceLimitations);
     assert.deepEqual(second.causalEvidenceIds, ['E-MDN-ACTIVATION-001']);
+    assert.notEqual(makeHypothesis({ ...input, expectedDirection: 'decrease' }).id, first.id);
+    assert.notEqual(makeHypothesis({ ...input, primaryOutcome: 'signed_speed_mm_s' }).id, first.id);
+    assert.notEqual(makeHypothesis({
+      ...input,
+      evidenceLimitations: ['A materially different evidence boundary.'],
+    }).id, first.id);
+  });
+
+  test('does not treat a legacy 32-bit FNV collision as the same hypothesis lineage', () => {
+    const base = {
+      circuitId: 'circuit_mdn_adult',
+      predictedBehavior: 'backward_walking',
+      perturbation: 'activate' as const,
+      primaryOutcome: 'backward_distance_mm' as const,
+      expectedDirection: 'increase' as const,
+      controls: [...HYPOTHESIS_CONTROL_IDS],
+      evidenceIds: ['E-MDN-ACTIVATION-001'],
+      evidenceLimitations: ['The assay does not calibrate the model.'],
+      falsificationCriterion: 'No model increase relative to controls.',
+    };
+    const firstClaim = 'The model predicts response 61dqpaeib1u 25541';
+    const secondClaim = 'The model predicts response uhvkgvolk1 87823';
+    const legacyIdentity = (claim: string) => ({
+      circuitId: base.circuitId,
+      claim,
+      predictedBehavior: base.predictedBehavior,
+      perturbation: base.perturbation,
+      primaryOutcome: base.primaryOutcome,
+      expectedDirection: base.expectedDirection,
+      controls: base.controls,
+      evidenceIds: base.evidenceIds,
+      evidenceLimitations: base.evidenceLimitations,
+      falsificationCriterion: base.falsificationCriterion,
+    });
+
+    assert.equal(stableHash(legacyIdentity(firstClaim)), stableHash(legacyIdentity(secondClaim)));
+    const first = makeHypothesis({ ...base, claim: firstClaim });
+    const second = makeHypothesis({ ...base, claim: secondClaim });
+    const expectedFirstId = `hyp_${createHash('sha256')
+      .update(JSON.stringify(legacyIdentity(firstClaim)))
+      .digest('hex')}`;
+
+    assert.match(first.id, /^hyp_[a-f0-9]{64}$/);
+    assert.match(second.id, /^hyp_[a-f0-9]{64}$/);
+    assert.equal(first.id, expectedFirstId);
+    assert.notEqual(second.id, first.id);
+    assert.notEqual(second.claim, first.claim);
+    assert.notEqual(
+      makeExperiment({ hypothesisId: second.id }).id,
+      makeExperiment({ hypothesisId: first.id }).id,
+    );
+  });
+
+  test('validates structured hypothesis outcomes, controls, and evidence limitations', () => {
+    const valid = {
+      circuitId: 'circuit_mdn_adult',
+      claim: 'Bilateral MDN activation will increase backward walking.',
+      predictedBehavior: 'backward_walking',
+      perturbation: 'activate' as const,
+      primaryOutcome: 'backward_distance_mm' as const,
+      expectedDirection: 'increase' as const,
+      controls: [...HYPOTHESIS_CONTROL_IDS],
+      evidenceIds: ['E-MDN-ACTIVATION-001'],
+      evidenceLimitations: ['  Evidence is bounded to the cited assay.  '],
+      falsificationCriterion: 'No increase over baseline in backward distance.',
+    };
+
+    assert.deepEqual(makeHypothesis(valid).evidenceLimitations, ['Evidence is bounded to the cited assay.']);
+    assert.throws(
+      () => makeHypothesis({ ...valid, primaryOutcome: 'unknown_metric' as never }),
+      /primaryOutcome must be one of/,
+    );
+    assert.throws(
+      () => makeHypothesis({ ...valid, expectedDirection: 'unchanged' as never }),
+      /expectedDirection must be increase or decrease/,
+    );
+    assert.throws(
+      () => makeHypothesis({ ...valid, controls: ['condition_baseline'] }),
+      /controls must include exactly/,
+    );
+    assert.throws(
+      () => makeHypothesis({ ...valid, controls: ['condition_baseline', 'condition_baseline'] }),
+      /controls must include exactly/,
+    );
+    assert.throws(
+      () => makeHypothesis({ ...valid, evidenceLimitations: [] }),
+      /at least one nonempty string/,
+    );
+    assert.throws(
+      () => makeHypothesis({ ...valid, evidenceLimitations: ['   '] }),
+      /at least one nonempty string/,
+    );
   });
 
   test('rejects structural-only and wrong-perturbation evidence as causal hypothesis support', () => {
@@ -575,6 +947,10 @@ describe('FlyLab provenance', () => {
       claim: 'Bilateral MDN activation will increase backward walking.',
       predictedBehavior: 'backward_walking',
       perturbation: 'activate' as const,
+      primaryOutcome: 'backward_distance_mm' as const,
+      expectedDirection: 'increase' as const,
+      controls: [...HYPOTHESIS_CONTROL_IDS],
+      evidenceLimitations: ['The evidence is bounded to the cited assay conditions.'],
       falsificationCriterion: 'No increase over baseline in backward distance.',
     };
 
@@ -615,7 +991,11 @@ describe('FlyLab provenance', () => {
       claim: 'Bilateral MDN activation will increase backward walking.',
       predictedBehavior: 'backward_walking',
       perturbation: 'activate',
+      primaryOutcome: 'backward_distance_mm',
+      expectedDirection: 'increase',
+      controls: [...HYPOTHESIS_CONTROL_IDS],
       evidenceIds: ['E-MDN-ACTIVATION-001'],
+      evidenceLimitations: ['The evidence is bounded to the cited assay conditions.'],
       falsificationCriterion: 'No increase over baseline in backward distance.',
     });
     const experiment = makeExperiment({ hypothesisId: hypothesis.id });

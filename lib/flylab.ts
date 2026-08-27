@@ -88,6 +88,56 @@ export const ANALYSIS_METRICS = [
 ] as const;
 export type MetricName = (typeof ANALYSIS_METRICS)[number];
 
+export const METRIC_METHOD_VERSION = 'flylab.behavior-metrics.v4' as const;
+
+export interface MetricDefinition {
+  id: MetricName;
+  label: string;
+  formula: string;
+  unit: string;
+  signConvention: string;
+  aggregation: string;
+  nullRule: string;
+  windowSemantics: string;
+  methodVersion: typeof METRIC_METHOD_VERSION;
+  provenance: readonly ['derived', 'simulation_predicted'];
+  boundary: string;
+}
+
+export interface ResponseInitiationSummaryDefinition {
+  id: 'response_initiation_probability';
+  label: string;
+  formula: string;
+  unit: string;
+  signConvention: string;
+  aggregation: string;
+  nullRule: string;
+  windowSemantics: string;
+  methodVersion: typeof METRIC_METHOD_VERSION;
+  provenance: readonly ['derived', 'simulation_predicted'];
+  boundary: string;
+}
+
+export const HYPOTHESIS_CONTROL_IDS = [
+  'condition_baseline',
+  'condition_sham',
+] as const;
+export type HypothesisControlId = (typeof HYPOTHESIS_CONTROL_IDS)[number];
+
+export const EXPERIMENT_SEED_POLICY = {
+  version: 'flylab.seed-policy.v2',
+  generator: 'mulberry32',
+  design: 'common_random_numbers_by_replicate',
+  pairingRule: 'Replicate index r uses the same metric and trajectory seeds in every condition arm; equivalent effective drives are therefore exactly paired, and differing drives reuse the same latent draws.',
+  replicateFormula: 'baseSeed + replicateIndex * 37',
+  trajectoryFormula: 'replicateSeed + 104729',
+  illustrativeTrajectoryFormula: 'baseSeed + 130363',
+  replicateStride: 37,
+  trajectoryOffset: 104729,
+  illustrativeTrajectoryOffset: 130363,
+} as const;
+export type ExperimentSeedPolicy = typeof EXPERIMENT_SEED_POLICY;
+
 export interface SourceRecord {
   id: string;
   kind: 'article' | 'dataset' | 'software' | 'project_page';
@@ -162,8 +212,12 @@ export interface Hypothesis {
   claim: string;
   predictedBehavior: string;
   perturbation: 'activate' | 'silence';
+  primaryOutcome: MetricName;
+  expectedDirection: 'increase' | 'decrease';
+  controls: HypothesisControlId[];
   evidenceIds: string[];
   causalEvidenceIds: string[];
+  evidenceLimitations: string[];
   falsificationCriterion: string;
   provenance: 'agent_hypothesized';
 }
@@ -201,6 +255,8 @@ export interface Experiment {
   trialDurationMs: number;
   replicates: number;
   seed: number;
+  seedPolicy: ExperimentSeedPolicy;
+  metricMethodVersion: typeof METRIC_METHOD_VERSION;
   conditions: TrialCondition[];
   approved: boolean;
   model: typeof MODEL_MANIFEST;
@@ -222,6 +278,8 @@ export interface ExperimentProtocolSnapshot {
   trialDurationMs: number;
   replicates: number;
   seed: number;
+  seedPolicy: ExperimentSeedPolicy;
+  metricMethodVersion: typeof METRIC_METHOD_VERSION;
   conditions: TrialCondition[];
   assumptions: string[];
 }
@@ -238,12 +296,16 @@ export interface TrajectoryPoint {
 
 export interface ReplicateResult {
   id: string;
+  status: 'complete';
   conditionId: string;
   seed: number;
+  effectiveMotorDrive: number;
+  responseProbability: number;
   reverseInitiated: boolean;
   responseInitiated: boolean;
   shortModeEscapeInitiated: boolean;
   backwardDistanceMm: number;
+  backwardDistanceScale: number;
   signedSpeedMmS: number;
   responseLatencyMs: number | null;
   headingChangeDeg: number;
@@ -251,14 +313,26 @@ export interface ReplicateResult {
   verticalDisplacementMm: number;
   wingRecruitment: number;
   legRecruitment: number;
+  trajectoryId: string;
+  trajectorySeed: number;
+  trajectoryRole: 'per_run_simulated_trajectory';
+  trajectory: TrajectoryPoint[];
+  provenance: ['simulation_predicted'];
 }
 
 export interface ConditionRun {
   conditionId: string;
   label: string;
   laterality: Laterality;
+  status: 'complete';
+  effectiveMotorDrive: number;
   runIds: string[];
   replicates: ReplicateResult[];
+  trajectoryId: string;
+  trajectorySeed: number;
+  trajectoryStatus: 'complete';
+  trajectoryRole: 'illustrative_condition_replay';
+  trajectoryBoundary: string;
   trajectory: TrajectoryPoint[];
 }
 
@@ -298,9 +372,11 @@ export interface Analysis {
   id: string;
   batchId: string;
   metrics: MetricName[];
+  metricDefinitions: Partial<Record<MetricName, MetricDefinition>>;
+  responseInitiationSummaryDefinition: ResponseInitiationSummaryDefinition;
   conditions: ConditionAnalysis[];
   windowMs: { start: number; end: number };
-  methodVersion: 'flylab.behavior-metrics.v3';
+  methodVersion: typeof METRIC_METHOD_VERSION;
   provenance: ['derived', 'simulation_predicted'];
   warning: string;
 }
@@ -1008,6 +1084,20 @@ export function rankCircuitsForSearch(
   }).sort((left, right) => right.score - left.score || left.circuit.id.localeCompare(right.circuit.id));
 }
 
+export function takeRankedMatchesWithTies<T extends { score: number }>(
+  matches: readonly T[],
+  limit: number,
+) {
+  if (!Number.isInteger(limit) || limit < 1) {
+    throw new RangeError('ranked match limit must be a positive integer.');
+  }
+  const limitedMatches = matches.slice(0, limit);
+  const cutoffScore = limitedMatches.at(-1)?.score;
+  return cutoffScore === undefined
+    ? []
+    : matches.filter((match, index) => index < limit || match.score === cutoffScore);
+}
+
 export function circuitMatchesSearch(
   circuit: CircuitRecord,
   query: string,
@@ -1024,19 +1114,155 @@ export function evidenceBundleTitle(
   return `Mapped-circuit ${perturbation === 'silence' ? 'suppression' : 'drive'} and predicted ${predictedBehavior.replaceAll('_', ' ')}`;
 }
 
-export const DEFAULT_GOAL = 'Reproduce an adult fly behavior by tracing a source-backed brain circuit into mapped leg or wing controllers.';
+export const DEFAULT_GOAL = 'Investigate how the adult fruit-fly brain coordinates leg and wing output during rapid escape. Separate measured findings from connectome inference and simulation assumptions, draft a falsifiable hypothesis, and design a controlled experiment. Stop for my approval, then continue, analyze every metric, compare conditions, and save the complete evidence bundle.';
 
-export const METRIC_LABELS: Record<MetricName, { label: string; unit: string }> = {
-  backward_distance_mm: { label: 'Backward distance', unit: 'model mm' },
-  signed_speed_mm_s: { label: 'Signed speed', unit: 'model mm/s' },
-  response_latency_ms: { label: 'Response latency', unit: 'ms' },
-  heading_change_deg: { label: 'Heading change', unit: '°' },
-  stance_stability: { label: 'Stance stability', unit: 'index' },
-  short_mode_escape_probability: { label: 'Short-mode escape probability', unit: 'fraction' },
-  vertical_displacement_mm: { label: 'Vertical displacement', unit: 'model mm' },
-  wing_recruitment: { label: 'Wing recruitment', unit: 'index' },
-  leg_recruitment: { label: 'Leg recruitment', unit: 'index' },
-};
+const SIMULATED_METRIC_BOUNDARY = 'Derived only from seeded outputs of the hand-authored, uncalibrated reduced-order FlyLab model. It is not a measured biological quantity, confidence interval, or independent validation.';
+const FULL_TRIAL_WINDOW_SEMANTICS = 'Protocol-full-trial scalar. Method v4 supports the analysis window [0, trial_duration_ms] only; response-dependent integration begins at nominal onset plus response latency and ends at trial_duration_ms.';
+
+export const METRIC_DEFINITIONS = {
+  backward_distance_mm: {
+    id: 'backward_distance_mm',
+    label: 'Backward distance',
+    formula: 'run = I(reverse_initiated) * max(0, -signed_speed_mm_s) * max(0, trial_duration_ms - onset_ms - response_latency_ms) / 1000 * backward_distance_scale; condition = sum(run) / n',
+    unit: 'model mm',
+    signConvention: 'Nonnegative distance in the backward direction; zero means no modeled backward displacement during the response window.',
+    aggregation: 'Arithmetic mean across all seeded runs, including zero for runs without reverse initiation.',
+    nullRule: 'Never null; a nonresponsive or non-reverse run contributes 0.',
+    windowSemantics: FULL_TRIAL_WINDOW_SEMANTICS,
+    methodVersion: METRIC_METHOD_VERSION,
+    provenance: ['derived', 'simulation_predicted'],
+    boundary: SIMULATED_METRIC_BOUNDARY,
+  },
+  signed_speed_mm_s: {
+    id: 'signed_speed_mm_s',
+    label: 'Signed speed',
+    formula: 'run = reverse_initiated ? -max(epsilon, reverse_intercept + effective_motor_drive * reverse_gain + paired_speed_noise) : max(0, forward_baseline + mode_drive_term + paired_speed_noise); condition = reverse_mode ? (backward_moving_n > 0 ? sum(run where backward_distance_mm > 0) / backward_moving_n : 0) : sum(run) / n',
+    unit: 'model mm/s',
+    signConvention: 'Negative is backward, positive is forward, and zero is stationary. Any run or reverse-mode condition with positive backward distance has negative signed speed.',
+    aggregation: 'For reverse maps, arithmetic mean across runs with positive backward distance, or 0 when none move backward; for takeoff maps, arithmetic mean across all seeded runs.',
+    nullRule: 'Never null.',
+    windowSemantics: FULL_TRIAL_WINDOW_SEMANTICS,
+    methodVersion: METRIC_METHOD_VERSION,
+    provenance: ['derived', 'simulation_predicted'],
+    boundary: SIMULATED_METRIC_BOUNDARY,
+  },
+  response_latency_ms: {
+    id: 'response_latency_ms',
+    label: 'Response latency',
+    formula: 'run = response_initiated ? clamp(intercept_ms + (1 - effective_motor_drive) * inverse_drive_gain_ms + paired_latency_noise, minimum_ms, trial_duration_ms - onset_ms) : null; condition = responsive_n > 0 ? sum(responsive run latency) / responsive_n : null',
+    unit: 'ms',
+    signConvention: 'Nonnegative elapsed time measured from nominal protocol onset; smaller values are earlier responses.',
+    aggregation: 'Arithmetic mean across responsive runs only; responsive_n is reported separately.',
+    nullRule: 'Run value is null when response_initiated is false; condition value is null when responsive_n is 0.',
+    windowSemantics: FULL_TRIAL_WINDOW_SEMANTICS,
+    methodVersion: METRIC_METHOD_VERSION,
+    provenance: ['derived', 'simulation_predicted'],
+    boundary: SIMULATED_METRIC_BOUNDARY,
+  },
+  heading_change_deg: {
+    id: 'heading_change_deg',
+    label: 'Heading change',
+    formula: 'run_signed = lateral_sign == 0 ? paired_bilateral_heading_noise : lateral_sign * (perturbation_mode_sign * (heading_base_deg + lateral_effect * heading_gain_deg) + paired_unilateral_heading_noise); condition = abs(sum(run_signed) / n)',
+    unit: '°',
+    signConvention: 'Per-run negative is leftward and positive is rightward; the stable condition metric is the nonnegative magnitude of the mean signed change.',
+    aggregation: 'Absolute value of the arithmetic mean of signed per-run heading changes.',
+    nullRule: 'Never null.',
+    windowSemantics: FULL_TRIAL_WINDOW_SEMANTICS,
+    methodVersion: METRIC_METHOD_VERSION,
+    provenance: ['derived', 'simulation_predicted'],
+    boundary: SIMULATED_METRIC_BOUNDARY,
+  },
+  stance_stability: {
+    id: 'stance_stability',
+    label: 'Stance stability',
+    formula: 'run = clamp(baseline - effective_motor_drive * drive_penalty + paired_stance_noise, minimum, maximum); condition = sum(run) / n',
+    unit: 'index',
+    signConvention: 'Larger values indicate greater modeled stance stability.',
+    aggregation: 'Arithmetic mean across all seeded runs.',
+    nullRule: 'Never null.',
+    windowSemantics: FULL_TRIAL_WINDOW_SEMANTICS,
+    methodVersion: METRIC_METHOD_VERSION,
+    provenance: ['derived', 'simulation_predicted'],
+    boundary: SIMULATED_METRIC_BOUNDARY,
+  },
+  short_mode_escape_probability: {
+    id: 'short_mode_escape_probability',
+    label: 'Short-mode escape probability',
+    formula: 'condition = sum(I(short_mode_escape_initiated)) / n',
+    unit: 'fraction',
+    signConvention: 'Larger values indicate a larger fraction of seeded runs initiating modeled short-mode escape.',
+    aggregation: 'Bernoulli sample mean across all seeded runs.',
+    nullRule: 'Never null; reverse-walk runs contribute 0 because short_mode_escape_initiated is false.',
+    windowSemantics: FULL_TRIAL_WINDOW_SEMANTICS,
+    methodVersion: METRIC_METHOD_VERSION,
+    provenance: ['derived', 'simulation_predicted'],
+    boundary: SIMULATED_METRIC_BOUNDARY,
+  },
+  vertical_displacement_mm: {
+    id: 'vertical_displacement_mm',
+    label: 'Vertical displacement',
+    formula: 'run = short_mode_escape_initiated ? max(0, intercept + effective_motor_drive * drive_gain + paired_vertical_noise) : 0; condition = sum(run) / n',
+    unit: 'model mm',
+    signConvention: 'Nonnegative upward modeled displacement; zero means no modeled lift.',
+    aggregation: 'Arithmetic mean across all seeded runs, including zero for runs without short-mode escape initiation.',
+    nullRule: 'Never null.',
+    windowSemantics: FULL_TRIAL_WINDOW_SEMANTICS,
+    methodVersion: METRIC_METHOD_VERSION,
+    provenance: ['derived', 'simulation_predicted'],
+    boundary: SIMULATED_METRIC_BOUNDARY,
+  },
+  wing_recruitment: {
+    id: 'wing_recruitment',
+    label: 'Wing recruitment',
+    formula: 'run = takeoff_mode ? clamp(baseline + effective_motor_drive * drive_gain + paired_wing_noise, 0, 1) : 0; condition = sum(run) / n',
+    unit: 'index',
+    signConvention: 'Larger values indicate greater modeled wing-controller recruitment.',
+    aggregation: 'Arithmetic mean across all seeded runs.',
+    nullRule: 'Never null; non-takeoff motor maps contribute 0.',
+    windowSemantics: FULL_TRIAL_WINDOW_SEMANTICS,
+    methodVersion: METRIC_METHOD_VERSION,
+    provenance: ['derived', 'simulation_predicted'],
+    boundary: SIMULATED_METRIC_BOUNDARY,
+  },
+  leg_recruitment: {
+    id: 'leg_recruitment',
+    label: 'Leg recruitment',
+    formula: 'run = clamp(mode_baseline + effective_motor_drive * mode_drive_gain + paired_leg_noise, 0, 1); condition = sum(run) / n',
+    unit: 'index',
+    signConvention: 'Larger values indicate greater modeled leg-controller recruitment.',
+    aggregation: 'Arithmetic mean across all seeded runs.',
+    nullRule: 'Never null.',
+    windowSemantics: FULL_TRIAL_WINDOW_SEMANTICS,
+    methodVersion: METRIC_METHOD_VERSION,
+    provenance: ['derived', 'simulation_predicted'],
+    boundary: SIMULATED_METRIC_BOUNDARY,
+  },
+} as const satisfies Record<MetricName, MetricDefinition>;
+
+export const RESPONSE_INITIATION_SUMMARY_DEFINITION = {
+  id: 'response_initiation_probability',
+  label: 'Response initiation probability',
+  formula: 'condition = sum(I(response_initiated)) / n',
+  unit: 'fraction',
+  signConvention: 'Larger values indicate a larger fraction of seeded runs initiating the motor-map response mode.',
+  aggregation: 'Bernoulli sample mean across all seeded runs; the event is reverse initiation for reverse maps and short-mode escape initiation for takeoff maps.',
+  nullRule: 'Never null.',
+  windowSemantics: FULL_TRIAL_WINDOW_SEMANTICS,
+  methodVersion: METRIC_METHOD_VERSION,
+  provenance: ['derived', 'simulation_predicted'],
+  boundary: `${SIMULATED_METRIC_BOUNDARY} This is a separately declared result summary and is not one of the nine stable objective metrics.`,
+} as const satisfies ResponseInitiationSummaryDefinition;
+
+export const METRIC_LABELS = ANALYSIS_METRICS.reduce<Record<MetricName, { label: string; unit: string }>>(
+  (labels, metric) => {
+    labels[metric] = {
+      label: METRIC_DEFINITIONS[metric].label,
+      unit: METRIC_DEFINITIONS[metric].unit,
+    };
+    return labels;
+  },
+  {} as Record<MetricName, { label: string; unit: string }>,
+);
 
 export function metricsForCircuit(circuitId: string): MetricName[] {
   const map = motorMapForCircuit(circuitId);
@@ -1052,6 +1278,97 @@ export function stableHash(value: unknown): string {
     hash = Math.imul(hash, 16777619);
   }
   return (hash >>> 0).toString(16).padStart(8, '0');
+}
+
+const SHA256_ROUND_CONSTANTS = new Uint32Array([
+  0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+  0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+  0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+  0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+  0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+  0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+  0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+  0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+]);
+
+function rotateRight32(value: number, bits: number) {
+  return (value >>> bits) | (value << (32 - bits));
+}
+
+/**
+ * Browser-safe synchronous SHA-256 used only for deterministic artifact identity.
+ * Approval commitments continue to use Web Crypto and fail closed when it is absent.
+ */
+export function deterministicSha256Hex(value: unknown): string {
+  const serialized = typeof value === 'string' ? value : JSON.stringify(value);
+  if (serialized === undefined) throw new TypeError('SHA-256 identity input must be JSON serializable.');
+  const bytes = new TextEncoder().encode(serialized);
+  const paddedLength = Math.ceil((bytes.length + 9) / 64) * 64;
+  const padded = new Uint8Array(paddedLength);
+  padded.set(bytes);
+  padded[bytes.length] = 0x80;
+  const view = new DataView(padded.buffer);
+  const bitLength = bytes.length * 8;
+  view.setUint32(paddedLength - 8, Math.floor(bitLength / 0x1_0000_0000), false);
+  view.setUint32(paddedLength - 4, bitLength >>> 0, false);
+
+  const state = new Uint32Array([
+    0x6a09e667,
+    0xbb67ae85,
+    0x3c6ef372,
+    0xa54ff53a,
+    0x510e527f,
+    0x9b05688c,
+    0x1f83d9ab,
+    0x5be0cd19,
+  ]);
+  const schedule = new Uint32Array(64);
+  for (let offset = 0; offset < paddedLength; offset += 64) {
+    for (let index = 0; index < 16; index += 1) {
+      schedule[index] = view.getUint32(offset + index * 4, false);
+    }
+    for (let index = 16; index < 64; index += 1) {
+      const prior15 = schedule[index - 15];
+      const prior2 = schedule[index - 2];
+      const sigma0 = rotateRight32(prior15, 7) ^ rotateRight32(prior15, 18) ^ (prior15 >>> 3);
+      const sigma1 = rotateRight32(prior2, 17) ^ rotateRight32(prior2, 19) ^ (prior2 >>> 10);
+      schedule[index] = (schedule[index - 16] + sigma0 + schedule[index - 7] + sigma1) >>> 0;
+    }
+
+    let a = state[0];
+    let b = state[1];
+    let c = state[2];
+    let d = state[3];
+    let e = state[4];
+    let f = state[5];
+    let g = state[6];
+    let h = state[7];
+    for (let index = 0; index < 64; index += 1) {
+      const sum1 = rotateRight32(e, 6) ^ rotateRight32(e, 11) ^ rotateRight32(e, 25);
+      const choice = (e & f) ^ (~e & g);
+      const temporary1 = (h + sum1 + choice + SHA256_ROUND_CONSTANTS[index] + schedule[index]) >>> 0;
+      const sum0 = rotateRight32(a, 2) ^ rotateRight32(a, 13) ^ rotateRight32(a, 22);
+      const majority = (a & b) ^ (a & c) ^ (b & c);
+      const temporary2 = (sum0 + majority) >>> 0;
+      h = g;
+      g = f;
+      f = e;
+      e = (d + temporary1) >>> 0;
+      d = c;
+      c = b;
+      b = a;
+      a = (temporary1 + temporary2) >>> 0;
+    }
+    state[0] = (state[0] + a) >>> 0;
+    state[1] = (state[1] + b) >>> 0;
+    state[2] = (state[2] + c) >>> 0;
+    state[3] = (state[3] + d) >>> 0;
+    state[4] = (state[4] + e) >>> 0;
+    state[5] = (state[5] + f) >>> 0;
+    state[6] = (state[6] + g) >>> 0;
+    state[7] = (state[7] + h) >>> 0;
+  }
+  return [...state].map((word) => word.toString(16).padStart(8, '0')).join('');
 }
 
 function mulberry32(seed: number) {
@@ -1074,9 +1391,34 @@ function jitter(random: () => number, scale = 1) {
 }
 
 export function makeHypothesis(input: Omit<Hypothesis, 'id' | 'provenance' | 'causalEvidenceIds'>): Hypothesis {
+  if (!ANALYSIS_METRICS.includes(input.primaryOutcome)) {
+    throw new RangeError(`Hypothesis primaryOutcome must be one of: ${ANALYSIS_METRICS.join(', ')}.`);
+  }
+  if (input.expectedDirection !== 'increase' && input.expectedDirection !== 'decrease') {
+    throw new RangeError('Hypothesis expectedDirection must be increase or decrease.');
+  }
+  if (!Array.isArray(input.controls)
+    || input.controls.length !== HYPOTHESIS_CONTROL_IDS.length
+    || new Set(input.controls).size !== HYPOTHESIS_CONTROL_IDS.length
+    || input.controls.some((control) => !HYPOTHESIS_CONTROL_IDS.includes(control))) {
+    throw new RangeError(`Hypothesis controls must include exactly: ${HYPOTHESIS_CONTROL_IDS.join(', ')}.`);
+  }
+  if (!Array.isArray(input.evidenceLimitations)
+    || input.evidenceLimitations.length === 0
+    || input.evidenceLimitations.some((limitation) => typeof limitation !== 'string' || limitation.trim().length === 0)) {
+    throw new RangeError('Hypothesis evidenceLimitations must contain at least one nonempty string.');
+  }
   const canonicalInput = {
-    ...input,
+    circuitId: input.circuitId,
+    claim: input.claim,
+    predictedBehavior: input.predictedBehavior,
+    perturbation: input.perturbation,
+    primaryOutcome: input.primaryOutcome,
+    expectedDirection: input.expectedDirection,
+    controls: [...HYPOTHESIS_CONTROL_IDS],
     evidenceIds: [...input.evidenceIds].sort(),
+    evidenceLimitations: [...new Set(input.evidenceLimitations.map((limitation) => limitation.trim()))].sort(),
+    falsificationCriterion: input.falsificationCriterion,
   };
   const causalEvidenceIds = canonicalInput.evidenceIds.filter((id) => {
     const evidence = EVIDENCE.find((record) => record.id === id);
@@ -1090,7 +1432,7 @@ export function makeHypothesis(input: Omit<Hypothesis, 'id' | 'provenance' | 'ca
   return {
     ...canonicalInput,
     causalEvidenceIds,
-    id: `hyp_${stableHash(canonicalInput)}`,
+    id: `hyp_${deterministicSha256Hex(canonicalInput)}`,
     provenance: 'agent_hypothesized',
   };
 }
@@ -1224,9 +1566,11 @@ export function designExperiment(input: {
     motorMapId: motorMap.id,
     modelVersion: MODEL_MANIFEST.version,
     controller: MODEL_MANIFEST.controller,
+    seedPolicy: EXPERIMENT_SEED_POLICY,
+    metricMethodVersion: METRIC_METHOD_VERSION,
   };
   return {
-    id: `exp_${stableHash(identity)}`,
+    id: `exp_${deterministicSha256Hex(identity)}`,
     hypothesisId: input.hypothesisId,
     targetCircuitId: input.targetCircuitId,
     behavior,
@@ -1239,6 +1583,8 @@ export function designExperiment(input: {
     trialDurationMs: input.trialDurationMs,
     replicates: input.replicates,
     seed: input.seed,
+    seedPolicy: EXPERIMENT_SEED_POLICY,
+    metricMethodVersion: METRIC_METHOD_VERSION,
     conditions,
     approved: false,
     model: MODEL_MANIFEST,
@@ -1293,6 +1639,8 @@ export function snapshotExperimentProtocol(experiment: Experiment): ExperimentPr
     trialDurationMs: experiment.trialDurationMs,
     replicates: experiment.replicates,
     seed: experiment.seed,
+    seedPolicy: { ...experiment.seedPolicy },
+    metricMethodVersion: experiment.metricMethodVersion,
     conditions: experiment.conditions.map((condition) => ({ ...condition })),
     assumptions: [...experiment.assumptions],
   };
@@ -1316,7 +1664,7 @@ function conditionMotorDrive(condition: TrialCondition, experiment: Experiment) 
   return MODEL_PARAMETERS.silencingReferenceMotorDrive * (1 - suppressionFraction);
 }
 
-function simulateTrajectory(condition: TrialCondition, experiment: Experiment, motorDrive: number, seed: number): TrajectoryPoint[] {
+function simulateIllustrativeTrajectory(condition: TrialCondition, experiment: Experiment, motorDrive: number, seed: number): TrajectoryPoint[] {
   const random = mulberry32(seed);
   const points: TrajectoryPoint[] = [];
   let x = 0;
@@ -1342,11 +1690,12 @@ function simulateTrajectory(condition: TrialCondition, experiment: Experiment, m
           MODEL_PARAMETERS.trajectory.activeTurnBaseDegPerStep
           + lateralEffect * MODEL_PARAMETERS.trajectory.activeTurnGainDegPerStep
         )
-      : jitter(random, MODEL_PARAMETERS.trajectory.headingJitterScaleDeg);
+      : (lateralSign || 1) * jitter(random, MODEL_PARAMETERS.trajectory.headingJitterScaleDeg);
     const speed = takeoffMode
       ? MODEL_PARAMETERS.trajectory.baseStepModelMm + drive * MODEL_PARAMETERS.escapeTakeoff.trajectoryForwardGainModelMm
       : MODEL_PARAMETERS.trajectory.baseStepModelMm + drive * MODEL_PARAMETERS.trajectory.driveStepGainModelMm;
-    x += Math.sin((heading * Math.PI) / 180) * speed + jitter(random, MODEL_PARAMETERS.trajectory.positionJitterScaleModelMm);
+    x += Math.sin((heading * Math.PI) / 180) * speed
+      + (lateralSign || 1) * jitter(random, MODEL_PARAMETERS.trajectory.positionJitterScaleModelMm);
     y += direction * Math.cos((heading * Math.PI) / 180) * speed + jitter(random, MODEL_PARAMETERS.trajectory.positionJitterScaleModelMm);
     if (takeoffMode && motorOutputActive) z += drive * MODEL_PARAMETERS.escapeTakeoff.trajectoryLiftGainModelMm;
     points.push({ t: Math.round(t), x, y, z, heading, active, motorOutputActive });
@@ -1354,13 +1703,127 @@ function simulateTrajectory(condition: TrialCondition, experiment: Experiment, m
   return points;
 }
 
+export function replicateSeedFromPolicy(
+  policy: ExperimentSeedPolicy,
+  baseSeed: number,
+  replicateIndex: number,
+) {
+  return baseSeed + replicateIndex * policy.replicateStride;
+}
+
+export function runTrajectorySeedFromPolicy(
+  policy: ExperimentSeedPolicy,
+  replicateSeed: number,
+) {
+  return replicateSeed + policy.trajectoryOffset;
+}
+
+export function illustrativeTrajectorySeedFromPolicy(
+  policy: ExperimentSeedPolicy,
+  baseSeed: number,
+) {
+  return baseSeed + policy.illustrativeTrajectoryOffset;
+}
+
+interface PairedReplicateDraws {
+  responseUniform: number;
+  speedNoise: number;
+  latencyNoise: number;
+  backwardDistanceUniform: number;
+  verticalNoise: number;
+  wingNoise: number;
+  legNoise: number;
+  headingNoise: number;
+  stanceNoise: number;
+}
+
+function pairedReplicateDraws(seed: number): PairedReplicateDraws {
+  const random = mulberry32(seed);
+  return {
+    responseUniform: random(),
+    speedNoise: jitter(random),
+    latencyNoise: jitter(random),
+    backwardDistanceUniform: random(),
+    verticalNoise: jitter(random),
+    wingNoise: jitter(random),
+    legNoise: jitter(random),
+    headingNoise: jitter(random),
+    stanceNoise: jitter(random),
+  };
+}
+
+interface RunTrajectoryInputs {
+  responseInitiated: boolean;
+  responseLatencyMs: number | null;
+  signedSpeedMmS: number;
+  backwardDistanceScale: number;
+  headingChangeDeg: number;
+  verticalDisplacementMm: number;
+}
+
+function simulateRunTrajectory(
+  condition: TrialCondition,
+  experiment: Experiment,
+  motorDrive: number,
+  seed: number,
+  outcome: RunTrajectoryInputs,
+): TrajectoryPoint[] {
+  const random = mulberry32(seed);
+  const points: TrajectoryPoint[] = [];
+  const steps = MODEL_PARAMETERS.trajectory.steps;
+  const stepDurationSeconds = experiment.trialDurationMs / steps / 1000;
+  const responseStartMs = outcome.responseLatencyMs === null
+    ? Number.POSITIVE_INFINITY
+    : experiment.onsetMs + outcome.responseLatencyMs;
+  const headingWindowMs = Math.max(1, experiment.trialDurationMs - experiment.onsetMs);
+  const responseWindowMs = Math.max(1, experiment.trialDurationMs - responseStartMs);
+  const lateralMirror = condition.laterality === 'left' ? -1 : 1;
+  const takeoffMode = experiment.motorMap.responseMode === 'takeoff';
+  let x = 0;
+  let y = 0;
+
+  for (let step = 0; step <= steps; step += 1) {
+    const t = (experiment.trialDurationMs * step) / steps;
+    const inProtocolWindow = t >= experiment.onsetMs && t <= experiment.onsetMs + experiment.durationMs;
+    const active = condition.kind === 'perturbation' && inProtocolWindow;
+    const motorOutputActive = inProtocolWindow && motorDrive > MODEL_PARAMETERS.trajectory.reverseDriveThreshold;
+    const headingProgress = clamp((t - experiment.onsetMs) / headingWindowMs, 0, 1);
+    const heading = outcome.headingChangeDeg * headingProgress;
+    const responseProgress = !outcome.responseInitiated
+      ? 0
+      : responseStartMs >= experiment.trialDurationMs
+        ? Number(t >= responseStartMs)
+        : clamp((t - responseStartMs) / responseWindowMs, 0, 1);
+    const z = takeoffMode ? outcome.verticalDisplacementMm * responseProgress : 0;
+
+    if (step > 0) {
+      const midpointMs = t - experiment.trialDurationMs / steps / 2;
+      const responseMotionActive = outcome.responseInitiated && midpointMs >= responseStartMs;
+      const backwardMotionActive = !takeoffMode && responseMotionActive && outcome.signedSpeedMmS < 0;
+      const forwardSpeedMmS = outcome.signedSpeedMmS > 0
+        ? outcome.signedSpeedMmS
+        : MODEL_PARAMETERS.signedSpeed.forwardBaselineMmS;
+      const speedMmS = backwardMotionActive ? -outcome.signedSpeedMmS : forwardSpeedMmS;
+      const direction = backwardMotionActive ? -1 : 1;
+      const distanceScale = backwardMotionActive ? outcome.backwardDistanceScale : 1;
+      const distance = speedMmS * stepDurationSeconds * distanceScale;
+      x += Math.sin((heading * Math.PI) / 180) * distance
+        + lateralMirror * jitter(random, MODEL_PARAMETERS.trajectory.positionJitterScaleModelMm);
+      y += direction * Math.cos((heading * Math.PI) / 180) * distance
+        + jitter(random, MODEL_PARAMETERS.trajectory.positionJitterScaleModelMm);
+    }
+    points.push({ t: Math.round(t), x, y, z, heading, active, motorOutputActive });
+  }
+  return points;
+}
+
 export function simulateExperiment(experiment: Experiment): SimulationBatch {
-  const conditionRuns = experiment.conditions.map((condition, conditionIndex): ConditionRun => {
+  const conditionRuns = experiment.conditions.map((condition): ConditionRun => {
     const motorDrive = conditionMotorDrive(condition, experiment);
     const takeoffMode = experiment.motorMap.responseMode === 'takeoff';
     const replicates = Array.from({ length: experiment.replicates }, (_, replicateIndex): ReplicateResult => {
-      const seed = experiment.seed + conditionIndex * 1009 + replicateIndex * 37;
-      const random = mulberry32(seed);
+      const seed = replicateSeedFromPolicy(experiment.seedPolicy, experiment.seed, replicateIndex);
+      const draws = pairedReplicateDraws(seed);
       const responseProbability = takeoffMode
         ? clamp(
             MODEL_PARAMETERS.escapeTakeoff.responseProbability.baseline + motorDrive * MODEL_PARAMETERS.escapeTakeoff.responseProbability.driveGain,
@@ -1372,25 +1835,29 @@ export function simulateExperiment(experiment: Experiment): SimulationBatch {
             MODEL_PARAMETERS.reverseProbability.minimum,
             MODEL_PARAMETERS.reverseProbability.maximum,
           );
-      const responseInitiated = random() < responseProbability;
+      const responseInitiated = draws.responseUniform < responseProbability;
       const reverseInitiated = !takeoffMode && responseInitiated;
       const shortModeEscapeInitiated = takeoffMode && responseInitiated;
       const signedSpeedMmS = reverseInitiated
-        ? -(
+        ? -Math.max(
+            Number.EPSILON,
             MODEL_PARAMETERS.signedSpeed.reverseInterceptMmS
             + motorDrive * MODEL_PARAMETERS.signedSpeed.reverseDriveGainMmS
-            + jitter(random, MODEL_PARAMETERS.signedSpeed.jitterScaleMmS)
+            + draws.speedNoise * MODEL_PARAMETERS.signedSpeed.jitterScaleMmS,
           )
-        : MODEL_PARAMETERS.signedSpeed.forwardBaselineMmS
-          + (takeoffMode ? motorDrive * MODEL_PARAMETERS.escapeTakeoff.forwardSpeedGainModelMmS : -motorDrive * MODEL_PARAMETERS.signedSpeed.forwardDrivePenaltyMmS)
-          + jitter(random, MODEL_PARAMETERS.signedSpeed.forwardJitterScaleMmS);
+        : Math.max(
+            0,
+            MODEL_PARAMETERS.signedSpeed.forwardBaselineMmS
+              + (takeoffMode ? motorDrive * MODEL_PARAMETERS.escapeTakeoff.forwardSpeedGainModelMmS : -motorDrive * MODEL_PARAMETERS.signedSpeed.forwardDrivePenaltyMmS)
+              + draws.speedNoise * MODEL_PARAMETERS.signedSpeed.forwardJitterScaleMmS,
+          );
       const responseWindowMs = Math.max(0, experiment.trialDurationMs - experiment.onsetMs);
       const responseLatencyParameters = takeoffMode ? MODEL_PARAMETERS.escapeTakeoff.responseLatency : MODEL_PARAMETERS.responseLatency;
       const responseLatencyMs = responseInitiated
         ? clamp(
             responseLatencyParameters.interceptMs
               + (1 - motorDrive) * responseLatencyParameters.inverseDriveGainMs
-              + jitter(random, responseLatencyParameters.jitterScaleMs),
+              + draws.latencyNoise * responseLatencyParameters.jitterScaleMs,
             Math.min(responseLatencyParameters.minimumClampMs, responseWindowMs),
             responseWindowMs,
           )
@@ -1398,26 +1865,27 @@ export function simulateExperiment(experiment: Experiment): SimulationBatch {
       const reverseSeconds = responseLatencyMs === null
         ? 0
         : Math.max(0, responseWindowMs - responseLatencyMs) / 1000;
+      const backwardDistanceScale = MODEL_PARAMETERS.backwardDistanceScale.minimum
+        + draws.backwardDistanceUniform * (
+          MODEL_PARAMETERS.backwardDistanceScale.maximum - MODEL_PARAMETERS.backwardDistanceScale.minimum
+        );
       const backwardDistanceMm = reverseInitiated
-        ? Math.abs(signedSpeedMmS) * reverseSeconds * (
-            MODEL_PARAMETERS.backwardDistanceScale.minimum
-            + random() * (MODEL_PARAMETERS.backwardDistanceScale.maximum - MODEL_PARAMETERS.backwardDistanceScale.minimum)
-          )
+        ? Math.max(0, -signedSpeedMmS) * reverseSeconds * backwardDistanceScale
         : 0;
       const verticalDisplacementMm = shortModeEscapeInitiated
         ? Math.max(0, MODEL_PARAMETERS.escapeTakeoff.verticalDisplacement.interceptModelMm
           + motorDrive * MODEL_PARAMETERS.escapeTakeoff.verticalDisplacement.driveGainModelMm
-          + jitter(random, MODEL_PARAMETERS.escapeTakeoff.verticalDisplacement.jitterScaleModelMm))
+          + draws.verticalNoise * MODEL_PARAMETERS.escapeTakeoff.verticalDisplacement.jitterScaleModelMm)
         : 0;
       const wingRecruitment = takeoffMode
         ? clamp(MODEL_PARAMETERS.escapeTakeoff.wingRecruitment.baseline
           + motorDrive * MODEL_PARAMETERS.escapeTakeoff.wingRecruitment.driveGain
-          + jitter(random, MODEL_PARAMETERS.escapeTakeoff.wingRecruitment.jitterScale), 0, 1)
+          + draws.wingNoise * MODEL_PARAMETERS.escapeTakeoff.wingRecruitment.jitterScale, 0, 1)
         : 0;
       const legRecruitment = clamp(
         (takeoffMode ? MODEL_PARAMETERS.escapeTakeoff.legRecruitment.baseline : MODEL_PARAMETERS.reverseWalk.legRecruitment.baseline)
           + motorDrive * (takeoffMode ? MODEL_PARAMETERS.escapeTakeoff.legRecruitment.driveGain : MODEL_PARAMETERS.reverseWalk.legRecruitment.driveGain)
-          + jitter(random, takeoffMode ? MODEL_PARAMETERS.escapeTakeoff.legRecruitment.jitterScale : MODEL_PARAMETERS.reverseWalk.legRecruitment.jitterScale),
+          + draws.legNoise * (takeoffMode ? MODEL_PARAMETERS.escapeTakeoff.legRecruitment.jitterScale : MODEL_PARAMETERS.reverseWalk.legRecruitment.jitterScale),
         0,
         1,
       );
@@ -1426,29 +1894,54 @@ export function simulateExperiment(experiment: Experiment): SimulationBatch {
       const lateralEffect = experiment.perturbation === 'silence'
         ? MODEL_PARAMETERS.silencingReferenceMotorDrive - motorDrive
         : motorDrive;
-      const headingChangeDeg = lateralSign * lateralModeSign * (
-        MODEL_PARAMETERS.heading.baseDeg + lateralEffect * MODEL_PARAMETERS.heading.driveGainDeg
-      ) + jitter(
-        random,
-        condition.laterality === 'bilateral'
-          ? MODEL_PARAMETERS.heading.bilateralJitterScaleDeg
-          : MODEL_PARAMETERS.heading.unilateralJitterScaleDeg,
-      );
+      const headingChangeDeg = lateralSign === 0
+        ? draws.headingNoise * MODEL_PARAMETERS.heading.bilateralJitterScaleDeg
+        : lateralSign * (
+            lateralModeSign * (
+              MODEL_PARAMETERS.heading.baseDeg + lateralEffect * MODEL_PARAMETERS.heading.driveGainDeg
+            )
+            + draws.headingNoise * MODEL_PARAMETERS.heading.unilateralJitterScaleDeg
+          );
       const stanceStability = clamp(
         MODEL_PARAMETERS.stanceStability.baseline
           - motorDrive * MODEL_PARAMETERS.stanceStability.drivePenalty
-          + jitter(random, MODEL_PARAMETERS.stanceStability.jitterScale),
+          + draws.stanceNoise * MODEL_PARAMETERS.stanceStability.jitterScale,
         MODEL_PARAMETERS.stanceStability.minimum,
         MODEL_PARAMETERS.stanceStability.maximum,
       );
+      const id = `run_${deterministicSha256Hex({ experiment: experiment.id, condition: condition.id, replicateIndex, seed })}`;
+      const trajectorySeed = runTrajectorySeedFromPolicy(experiment.seedPolicy, seed);
+      const trajectoryId = `trajectory_${deterministicSha256Hex({
+        run: id,
+        seed: trajectorySeed,
+        method: 'flylab.per-run-trajectory.v1',
+      })}`;
+      const trajectory = simulateRunTrajectory(
+        condition,
+        experiment,
+        motorDrive,
+        trajectorySeed,
+        {
+          responseInitiated,
+          responseLatencyMs,
+          signedSpeedMmS,
+          backwardDistanceScale,
+          headingChangeDeg,
+          verticalDisplacementMm,
+        },
+      );
       return {
-        id: `run_${stableHash({ experiment: experiment.id, condition: condition.id, replicateIndex, seed })}`,
+        id,
+        status: 'complete',
         conditionId: condition.id,
         seed,
+        effectiveMotorDrive: motorDrive,
+        responseProbability,
         reverseInitiated,
         responseInitiated,
         shortModeEscapeInitiated,
         backwardDistanceMm,
+        backwardDistanceScale,
         signedSpeedMmS,
         responseLatencyMs,
         headingChangeDeg,
@@ -1456,22 +1949,44 @@ export function simulateExperiment(experiment: Experiment): SimulationBatch {
         verticalDisplacementMm,
         wingRecruitment,
         legRecruitment,
+        trajectoryId,
+        trajectorySeed,
+        trajectoryRole: 'per_run_simulated_trajectory',
+        trajectory,
+        provenance: ['simulation_predicted'],
       };
     });
 
+    const trajectorySeed = illustrativeTrajectorySeedFromPolicy(experiment.seedPolicy, experiment.seed);
+    const trajectoryId = `trajectory_${deterministicSha256Hex({
+      experiment: experiment.id,
+      condition: condition.id,
+      seed: trajectorySeed,
+      method: 'flylab.illustrative-condition-replay.v1',
+    })}`;
     return {
       conditionId: condition.id,
       label: condition.label,
       laterality: condition.laterality,
+      status: 'complete',
+      effectiveMotorDrive: motorDrive,
       runIds: replicates.map((replicate) => replicate.id),
       replicates,
-      trajectory: simulateTrajectory(condition, experiment, motorDrive, experiment.seed + conditionIndex * 1009),
+      trajectoryId,
+      trajectorySeed,
+      trajectoryStatus: 'complete',
+      trajectoryRole: 'illustrative_condition_replay',
+      trajectoryBoundary: 'Condition-level controller replay for display only. It is not any replicate trajectory and must not be used to calculate run or condition metrics.',
+      trajectory: simulateIllustrativeTrajectory(condition, experiment, motorDrive, trajectorySeed),
     };
   });
 
-  const identity = conditionRuns.flatMap((condition) => condition.runIds);
+  const identity = conditionRuns.flatMap((condition) => condition.replicates.map((replicate) => ({
+    runId: replicate.id,
+    trajectoryId: replicate.trajectoryId,
+  })));
   return {
-    id: `batch_${stableHash({ experiment: experiment.id, identity })}`,
+    id: `batch_${deterministicSha256Hex({ experiment: experiment.id, identity })}`,
     experimentId: experiment.id,
     targetCircuitId: experiment.targetCircuitId,
     behavior: experiment.behavior,
@@ -1495,7 +2010,16 @@ export function analyzeBatch(
   analysisStartMs = 0,
   analysisEndMs = batch.protocol.trialDurationMs,
 ): Analysis {
+  if (analysisStartMs !== 0 || analysisEndMs !== batch.protocol.trialDurationMs) {
+    throw new RangeError(
+      `${batch.protocol.metricMethodVersion} supports only the full-trial analysis window [0, ${batch.protocol.trialDurationMs}] ms.`,
+    );
+  }
   const canonicalMetrics = ANALYSIS_METRICS.filter((metric) => metrics.includes(metric));
+  const metricDefinitions = canonicalMetrics.reduce<Partial<Record<MetricName, MetricDefinition>>>((definitions, metric) => {
+    definitions[metric] = METRIC_DEFINITIONS[metric];
+    return definitions;
+  }, {});
   const conditions = batch.conditionRuns.map((run): ConditionAnalysis => {
     const responsive = run.replicates.filter(
       (replicate): replicate is ReplicateResult & { responseLatencyMs: number } => (
@@ -1503,6 +2027,9 @@ export function analyzeBatch(
         && replicate.responseLatencyMs !== null
       ),
     );
+    const signedSpeedContributors = batch.motorMap.responseMode === 'takeoff'
+      ? run.replicates
+      : run.replicates.filter((replicate) => replicate.backwardDistanceMm > 0);
     return {
       conditionId: run.conditionId,
       label: run.label,
@@ -1511,7 +2038,9 @@ export function analyzeBatch(
       responseInitiationProbability: mean(run.replicates.map((replicate) => replicate.responseInitiated ? 1 : 0)),
       shortModeEscapeProbability: mean(run.replicates.map((replicate) => replicate.shortModeEscapeInitiated ? 1 : 0)),
       backwardDistanceMm: mean(run.replicates.map((replicate) => replicate.backwardDistanceMm)),
-      signedSpeedMmS: mean(run.replicates.map((replicate) => replicate.signedSpeedMmS)),
+      signedSpeedMmS: signedSpeedContributors.length
+        ? mean(signedSpeedContributors.map((replicate) => replicate.signedSpeedMmS))
+        : 0,
       responseLatencyMs: responsive.length ? mean(responsive.map((replicate) => replicate.responseLatencyMs)) : null,
       responsiveN: responsive.length,
       headingChangeDeg: Math.abs(mean(run.replicates.map((replicate) => replicate.headingChangeDeg))),
@@ -1522,14 +2051,16 @@ export function analyzeBatch(
     };
   });
   return {
-    id: `analysis_${stableHash({ batch: batch.id, metrics: canonicalMetrics, analysisStartMs, analysisEndMs })}`,
+    id: `analysis_${deterministicSha256Hex({ batch: batch.id, metrics: canonicalMetrics, analysisStartMs, analysisEndMs })}`,
     batchId: batch.id,
     metrics: canonicalMetrics,
+    metricDefinitions,
+    responseInitiationSummaryDefinition: RESPONSE_INITIATION_SUMMARY_DEFINITION,
     conditions,
     windowMs: { start: analysisStartMs, end: analysisEndMs },
-    methodVersion: 'flylab.behavior-metrics.v3',
+    methodVersion: batch.protocol.metricMethodVersion,
     provenance: ['derived', 'simulation_predicted'],
-    warning: 'These estimates summarize seeded simulator variation. Response latency is a simulated delay from the nominal protocol onset and is null when no seeded run responds. Values are not biological confidence intervals or new experimental evidence.',
+    warning: 'These full-trial estimates summarize common-random-number-paired simulator variation. Response initiation is a separately declared summary; response latency is a simulated delay from nominal onset and is null when no seeded run responds. Values are not biological confidence intervals or new experimental evidence.',
   };
 }
 
@@ -1597,14 +2128,14 @@ export function compareAnalyses(
     replicateBudget: budget,
   };
   return {
-    id: `comparison_${stableHash({ analyses: analyses.map((analysis) => analysis.id), objectiveMetric, objective, targetValue, budget })}`,
+    id: `comparison_${deterministicSha256Hex({ analyses: analyses.map((analysis) => analysis.id), objectiveMetric, objective, targetValue, budget })}`,
     analysisIds: analyses.map((analysis) => analysis.id),
     objectiveMetric,
     objective,
     ...(objective === 'target' ? { targetValue } : {}),
     rankedConditions: rows,
     proposal: {
-      id: `proposal_${stableHash(proposalIdentity)}`,
+      id: `proposal_${deterministicSha256Hex(proposalIdentity)}`,
       rationale,
       activationLevels,
       replicateBudget: budget,

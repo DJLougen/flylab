@@ -3,26 +3,47 @@
 [![CI](https://github.com/DJLougen/flylab/actions/workflows/ci.yml/badge.svg)](https://github.com/DJLougen/flylab/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
 
-FlyLab is a WebMCP-enabled virtual neuroethology lab for investigating how an adult fruit-fly neural circuit could influence behavior. It is agent-operable, human-auditable, and scientifically bounded: a person and an agent share one visible page session while structured site tools expose the exact workflow state, next valid action, approval boundary, and evidence lineage.
+FlyLab is a WebMCP-enabled virtual neuroethology lab for investigating how an adult fruit-fly neural circuit could influence behavior. A person and an agent work in one visible page session while eight native site tools expose the current workflow state, exact next action, approval boundary, formal analysis methods, and evidence lineage.
 
-Created on August 26, 2026 during the WebMCP Challenge period, FlyLab is for computational-neuroethology researchers, neuroscience educators, and agent-tool builders who need inspectable experiment state without UI scraping.
+The competition story leads with the adult Giant Fiber/DNp01 rapid-escape slice: a literature-supported, bilateral short-mode controller with middle-leg jump and wing-depressor output. FlyLab also includes an adult MDN reverse-walking slice. Both use the deterministic **FlyLab mapped-motor model** `0.2.0` and `mapped-circuit-to-body-adapter.v1`; neither executes a connectome, synapses, muscles, aerodynamics, FlyGym, neural dynamics, or a complete fly.
 
-- **Live lab:** [flylab-neuroethology.d-lougen.chatgpt.site](https://flylab-neuroethology.d-lougen.chatgpt.site)
-- **Public source:** [github.com/DJLougen/flylab](https://github.com/DJLougen/flylab)
+This repository contains a release candidate and verification tooling. It does not, by itself, prove that a public deployment is reachable or that a particular supported client completed the workflow. Record those claims only after a fresh run produces retained evidence.
 
-> **Current release boundary:** FlyLab now contains two adult brain-to-body motor maps: MDN into a six-leg reverse-walking controller, and Giant Fiber/DNp01 into a bilateral short-mode escape controller with middle-leg jump and wing-depressor output. Its embodiment is the **FlyLab mapped-motor model** version `0.2.0` with `mapped-circuit-to-body-adapter.v1`. It does not execute a connectome, electrical or chemical synapses, muscles, aerodynamics, FlyGym, neural dynamics, or a complete fly.
+## Competition prompt
 
-## What the challenge release demonstrates
+Use this exact rapid-escape prompt in a supported ChatGPT desktop session:
 
-- One read-only WebMCP state inspector plus seven structured scientific workflow actions that operate the same page interface a person sees.
-- Curated, primary-source-backed adult MDN leg-retreat and giant-fiber leg/wing escape paths, with typed nodes, edges, body targets, and explicit missing-data boundaries.
-- A procedural Three.js adult-fly arena model with six legs, one wing pair plus halteres, compound eyes, branched aristae, a segmented abdomen, replay-linked heading, and an explicitly schematic morphology boundary.
-- An orbitable Three.js CNS viewer with the six reconstruction-derived BANC v888 MDN/LBL40 skeletons plus a separately labeled literature-schematic GF→TTMn/TTM and GF→PSI→DLMn/DLM path. A schematic path is never presented as a dataset reconstruction.
-- Runtime- and schema-enforced baseline and model-sham controls. Bilateral MDN designs add left-only and right-only comparisons; the current GF map is bilateral-only.
-- A hard human-approval gate before simulation.
-- Deterministic virtual trials with recorded seeds, model versions, condition IDs, and run hashes.
-- Method-versioned behavioral summaries and an evidence ledger that never upgrades simulation output into biological measurement, with a portable JSON download for each saved bundle.
-- Bounded autoresearch: the agent may rank results and propose one follow-up, but it cannot execute that follow-up by itself.
+> Investigate how the adult fruit-fly brain coordinates leg and wing output during rapid escape. Separate measured findings from connectome inference and simulation assumptions, draft a falsifiable hypothesis, and design a controlled experiment. Stop for my approval, then continue, analyze every metric, compare conditions, and save the complete evidence bundle.
+
+The expected native path is:
+
+```text
+inspect_flylab_state
+→ find_fly_circuits
+→ draft_fly_hypothesis
+→ design_stimulation_trial
+→ visible human approval
+→ inspect_flylab_state
+→ run_fly_simulation
+→ analyze_fly_behavior
+→ compare_fly_trials
+→ save_fly_evidence
+```
+
+Approval is deliberately absent from the tool inventory. The person reviews and approves the exact visible protocol; the agent then continues through the same eight-tool page surface.
+
+## What the release candidate implements
+
+- One read-only inspector plus seven state-changing scientific actions registered with `document.modelContext.registerTool(...)`.
+- A persisted discovery decision that records ranked candidates, rejected alternatives, evidence eligibility, and motor-map coverage gaps.
+- Hypotheses with a primary outcome, expected direction, mandatory baseline/model-sham controls, causal evidence compatibility, explicit evidence limitations, and a falsification criterion.
+- Same-page mutation guards: every state-changing call must echo the inspected `page_session_id` and `expected_state_revision`.
+- Caller-generated `operation_id` idempotency for simulation and evidence saving. An identical completed retry replays the committed result without another mutation; reusing the ID for different logical input fails closed.
+- A non-tool approval record that binds the experiment to a detached, deeply frozen protocol snapshot and complete seed manifest. The caller must echo its cryptographic `approved_protocol_hash` to run.
+- Common-random-number-paired deterministic trials with recorded policies, run seeds, trajectory seeds, per-run trajectories, separate illustrative condition replays, and stable IDs.
+- `flylab.behavior-metrics.v4` analyses with machine-readable formula, unit, sign, aggregation, null, window, provenance, and boundary fields for every requested metric, plus exact per-run inspection records.
+- Scoped evidence exports: `flylab.experiment-evidence-bundle.v3` for the selected lineage and `flylab.mission-evidence-bundle.v3` for that lineage plus the goal, discovery decision, candidates, exclusions, and coverage gaps. Both travel in a `flylab.evidence-export` schema-version-`3` envelope.
+- Bounded autoresearch: comparison may propose one follow-up within the visible person-selected budget, but never authorizes or executes it.
 
 ## Quick start
 
@@ -33,118 +54,118 @@ npm ci
 npm run dev
 ```
 
-Open the local URL printed by the development server. WebMCP invocation requires a compatible browser plus a workspace where Site Tools are available. FlyLab's independently verified path is Chrome 149 or newer with WebMCP testing enabled. ChatGPT's in-app browser can expose the same tools when the feature is available for that model, account, and workspace; FlyLab does not treat an absent browser API as a successful registration.
+Open the local URL printed by the development server.
 
-Verification commands:
+Supported WebMCP execution surfaces for judging are:
+
+- ChatGPT desktop with GPT-5.6 Sol or GPT-5.6 Terra, current app, Site Tools enabled, and an eligible account/workspace rollout.
+- Chrome 149 or newer with WebMCP testing and DevTools WebMCP support enabled.
+
+An eligible product/version label is not proof that tools are available in the current page session. Check the visible runtime diagnostic and the client tool inventory. Do not substitute a static manifest, DOM packet, browser automation, or guided-example control for a WebMCP callback.
+
+Local checks:
 
 ```bash
 npm test
 npm run lint
 npm run build
-npm run verify:webmcp
+FLYLAB_URL=http://localhost:3000/ npm run verify:webmcp
 ```
 
-`npm test` compiles the TypeScript test target and runs Node's built-in test runner. The current 78-test suite covers same-seed reproducibility, changed-seed divergence, MDN leg output, GF causal-evidence gating, ranked circuit discovery, GF jump-leg/wing branches, short-mode escape metrics and lift traces, silencing replay semantics, complete protocol snapshots, 3D appendage routing, schematic-versus-reconstruction labeling, mandatory controls, artifact identity, response latency, recovery, stale commits, cancellation, source closure, model-card parity, provenance, the eight WebMCP contracts, exact runtime diagnostics, synchronized manifests, transport handoffs, and publication-safe preflight gates. `npm run verify:webmcp` checks the deployed browser tool surface; the deterministic model tests exercise both embodied motor programs without relying on browser rendering.
+Use the actual local URL if the development server chose a different port. `npm run verify:webmcp` is the supported Chrome protocol verifier; it is not evidence of a successful run until it exits successfully and its report is retained.
 
-## Human-agent workflow
+## v3 page-session contract
 
-The intended sequence is deliberately explicit:
+Call `inspect_flylab_state` before the first mutation and again after navigation, interruption, cancellation, any visible edit, or whenever a structured failure directs you back to inspection. Other failures publish semantic recovery for the exact invalid field, visible approval gate, discovery retry, or replacement operation ID. The inspector returns `flylab.agent-context.v3`, including the page-session ID, monotonic revision, artifact manifest, approval binding, blocker, and exactly one next action.
 
-1. The agent calls `inspect_flylab_state` first and after interruptions or person edits. It receives the current revision, artifact IDs, hypothesis behavior and perturbation, analysis metric sets, comparison lineage, gate status, person-selected limits, and exactly one valid next action without scraping the page.
-2. It calls `find_fly_circuits` to search FlyLab's bounded evidence catalog.
-3. It calls `draft_fly_hypothesis` to create a falsifiable claim labeled `agent_hypothesized`.
-4. It calls `design_stimulation_trial` to create the visible controlled protocol.
-5. **A person reviews or edits the protocol and approves it.** Editing clears approval and all downstream results. While blocked, the inspector reports `waiting_for_human`, `next_tool: null`, and `blocked_by: human_approval`.
-6. The agent may call `run_fly_simulation` for that exact approved experiment.
-7. It calls `analyze_fly_behavior` to compute versioned metrics from simulation-predicted run outputs.
-8. It calls `compare_fly_trials` to rank conditions and propose, but not execute, one bounded follow-up.
-9. It calls `save_fly_evidence` to commit the full visible lineage to the evidence ledger. A person can then download that exact saved bundle as versioned JSON instead of relying on best-effort browser-local storage.
+Every mutation requires:
 
-The approval step is intentionally not a WebMCP tool. It remains a human action in the shared interface.
+- `page_session_id`: the exact ID for the current open page;
+- `expected_state_revision`: the most recently inspected or successfully returned revision.
+
+A wrong session or revision returns non-retryable `STALE_STATE`, publishes no requested mutation, and points back to `inspect_flylab_state`. Successful `flylab.tool-result.v3` envelopes include `page_session_id`, `previous_state_revision`, `state_revision`, `created_artifact_ids`, `operation_id`, `idempotent_replay`, `next_action`, a visible verification target, and field-addressed provenance.
+
+`run_fly_simulation` and `save_fly_evidence` additionally require a stable caller-generated `operation_id`. The cache key is scoped to this page session and tool. Retrying a completed operation with the same logical input returns `idempotent_replay: true`, no new artifacts, and no state advance. The inspected revision may be newer because revision is excluded from logical operation identity. The same ID with changed logical input returns `INVALID_INPUT` with `conflict: operation_id_input_mismatch`.
+
+## Immutable approval binding
+
+`design_stimulation_trial` always creates an unapproved protocol. A person reviews the exact visible experiment and clicks the approval control. FlyLab then creates a detached, deeply frozen `flylab.experiment-approval` record containing:
+
+- the complete protocol snapshot, model version, metric-method version, and seed-policy version;
+- every condition's illustrative trajectory seed;
+- every replicate's run seed and trajectory seed;
+- SHA-256 commitments at `protocol_hash` and `seed_manifest_hash`.
+
+The approval timestamp is metadata outside the hashes. `run_fly_simulation` requires the exact `approved_protocol_hash` exposed by the inspector and verifies both stored commitments against the current experiment. A protocol, model, metric method, or seed-manifest mismatch fails closed. Editing a protocol field creates a revised experiment and clears approval, batch, analyses, comparison, and bundle. This is visible authorization for one virtual experiment, not identity-authenticated protection against general browser automation and not wet-lab approval.
 
 ## WebMCP tools
 
-| Tool | Purpose | State and trust boundary |
+| Tool | Purpose | Boundary |
 |---|---|---|
-| `inspect_flylab_state` | Return the current page revision, artifact IDs, visible review gate, limits, pipeline, and exactly one next action. | Sole read-only tool; operational and provenance-free. Human-authored goal text is marked untrusted. |
-| `find_fly_circuits` | Search by behavior, body part, circuit, or neuron and return evidence, typed motor maps, body coverage, and dataset boundaries. | Selects the circuit in shared page state; externally sourced content is marked untrusted. |
-| `draft_fly_hypothesis` | Create an editable claim, prediction, evidence links, and falsification criterion. | Requires a discovered `perturbation_effect` record matching the claim's perturbation and behavior; structural/inventory/motor records are supplemental only. Output remains an agent hypothesis. |
-| `design_stimulation_trial` | Create controls, timing, laterality, activation level, replicate count, and seed manifest. | Writes a draft protocol; execution remains locked. |
-| `run_fly_simulation` | Execute an approved experiment or return its existing deterministic batch. | Writes simulation runs; results are `simulation_predicted`. |
-| `analyze_fly_behavior` | Calculate requested behavior metrics from a completed batch. | Writes a method-versioned analysis; results are derived from simulation. |
-| `compare_fly_trials` | Rank compatible analyses and create one next-experiment proposal. | Writes a comparison; the proposal is not execution authority. |
-| `save_fly_evidence` | Save sources, claims, model assumptions, protocol, seeds, runs, analyses, and comparison. | Prepares a manifest-hashed, downloadable JSON envelope and attempts a browser-local convenience copy. |
+| `inspect_flylab_state` | Return current session, revision, artifacts, human gate, pipeline, and one next action. | Sole read-only tool. Human goal text is untrusted. |
+| `find_fly_circuits` | Rank bounded circuit candidates and return a stable discovery decision, evidence closure, motor paths, and coverage. | Writes shared selection; source text is untrusted. |
+| `draft_fly_hypothesis` | Create a falsifiable, metric-linked claim with compatible causal evidence and limitations. | Remains `agent_hypothesized`. |
+| `design_stimulation_trial` | Create controls, timing, laterality, model settings, seed policy, and conditions. | Writes an unapproved virtual protocol. |
+| `run_fly_simulation` | Execute the current approved protocol and expose exact per-run results and trajectories. | Requires session/revision, approval hash, and operation ID; output is `simulation_predicted`. |
+| `analyze_fly_behavior` | Compute the complete motor-map metric panel and return formal definitions plus per-run audit rows. | Full-trial `flylab.behavior-metrics.v4`; derived from simulation only. |
+| `compare_fly_trials` | Rank compatible analyses and propose one bounded next experiment. | Proposal is not execution authority. |
+| `save_fly_evidence` | Save an `experiment` or `mission` v3 bundle and return its exact portable envelope. | Requires operation ID; browser-local storage is convenience only. |
 
-The current WebMCP implementation uses `document.modelContext.registerTool(...)`, closed object schemas, `readOnlyHint`, `untrustedContentHint`, cancellable execution, and AbortSignal-owned registration lifecycle. Every successful tool call returns `state_revision`; agent actions and person edits advance one shared monotonic revision. Long-running simulation and evidence-save work capture that revision, prepare without publishing, then compare it with the live revision at commit. A mismatch publishes nothing and returns non-retryable `STALE_STATE` with expected/actual revisions and `inspect_flylab_state` as recovery. A cancellation observed before commit cannot publish the prepared batch or bundle, while a mutation already synchronously committed reports success rather than a false cancellation. Every success uses the `flylab.tool-result.v2` structured envelope; domain failures are machine-readable, and the inspector is the canonical recovery contract.
+## Runtime diagnostics and read-only recovery
 
-The HTML publishes FlyLab-specific documentation links to the [agent manifest](public/flylab-agent-manifest.json) and the live `/flylab-tool-contracts.json` document. The contract endpoint is generated from the same eight definitions registered with WebMCP, including full input schemas, annotations, error codes, result fields, and recovery rules. The page also embeds `flylab.agent-context.v2` workflow state, transport availability, and a combined recovery packet at `#flylab-agent-context`, `#flylab-agent-runtime`, and `#flylab-agent-handoff`. A visible **Runtime diagnostic** reports whether the browser exposed `modelContext`, whether registration was attempted, how many registrations were accepted before rollback, the failed tool, and the browser exception name and message. It reports page registration separately from an observed WebMCP callback and leaves client/agent availability unknown until such a callback occurs. The browser-readable `/agent` page mirrors the static manifest and contracts for clients that block top-level JSON navigation, while `/Use` and `/use` safely redirect to the lab. These are honest read-only aids when WebMCP is unavailable; they do not polyfill the browser API, make a tool callable, or claim standardized WebMCP manifest discovery.
-It follows OpenAI's [Site tools documentation](https://learn.chatgpt.com/docs/webmcp) for making website capabilities directly available to agents.
+The page exposes a `flylab.webmcp-capability-diagnostic.v1` record with secure-context, origin-cluster, permissions-policy, `document.modelContext`, `registerTool`, registration-attempt, accepted-count-before-rollback, failed-tool, and sanitized exception fields. It distinguishes:
 
-## Reproducibility and provenance
+- API absent;
+- `registerTool` missing;
+- registration failed and rolled back;
+- all eight page registrations accepted;
+- a WebMCP callback observed in this page session.
 
-Every claim or artifact uses one or more of five labels:
+Registration alone cannot establish client, model, account, workspace, permission, rollout, or agent identity. An observed callback proves invocation through the browser surface, not that the caller was a ChatGPT agent.
 
-| Label | Meaning in FlyLab |
+When WebMCP is unavailable, `/agent`, `/flylab-agent-manifest.json`, `/flylab-tool-contracts.json`, and the inline context/runtime/handoff packets remain read-only diagnostics. They do not register, emulate, or polyfill WebMCP; `invocable_next_tool` remains unavailable. The ordinary human interface can still be used, but that is not a successful site-tool run.
+
+## Metrics, trajectories, and evidence exports
+
+The GF panel is short-mode escape probability, response latency, vertical displacement, wing recruitment, and leg recruitment. The MDN panel is backward distance, signed speed, response latency, heading change, and stance stability. Each analysis returns its complete five-metric panel, formal method definitions, the always-present response-initiation summary definition, and per-run rows linked to run and trajectory IDs.
+
+Every replicate has its own simulation-generated trajectory. The condition-level Three.js replay is a separate `illustrative_condition_replay` and is never used to calculate metric cards. No-response latency is JSON `null`, never trial duration. All distances, speeds, lift, recruitment, and probabilities remain uncalibrated model outputs rather than animal measurements or biological confidence intervals.
+
+The evidence-export manifest hash detects payload changes; it is not a signature, authorship proof, or immutability guarantee. That checksum is distinct from the immutable in-memory approval snapshot and its protocol/seed-manifest commitments.
+
+## Scientific provenance
+
+FlyLab uses five labels:
+
+| Label | Meaning |
 |---|---|
-| `measured` | Reported biological observation from a cited experiment. |
-| `derived` | A transformation or summary of recorded or simulated data. |
-| `connectome_inferred` | A structural pathway hypothesis; wiring is not activity or behavior. |
-| `simulation_predicted` | Output generated by the versioned FlyLab model. |
-| `agent_hypothesized` | A proposed claim or follow-up that still requires testing and human judgment. |
+| `measured` | A biological observation reported under the cited experiment's conditions. |
+| `derived` | A deterministic transformation or summary. |
+| `connectome_inferred` | A structural pathway inference; wiring is not activity or behavior. |
+| `simulation_predicted` | Output conditional on FlyLab's versioned model and seeds. |
+| `agent_hypothesized` | An untested claim or proposal requiring human judgment. |
 
-The labels travel with the machine-readable artifacts: the curated circuit record is `derived`; a designed protocol is `agent_hypothesized`; a batch is `simulation_predicted`; an analysis and comparison are both `derived` plus `simulation_predicted`; a follow-up proposal is `agent_hypothesized`; and the saved bundle metadata is `derived`. The `save_fly_evidence` result carries both that metadata and the complete portable evidence-export envelope; it is not a metadata-only response. An experiment stores its base seed. Replicate seeds are derived deterministically from the base seed, condition order, and replicate index. Discovery keeps the returned circuit and motor map source-closed even when an evidence-label filter is used; `matches_requested_evidence_labels` and the eligible-ID lists identify the records that passed that filter. A hypothesis may cite only discovered IDs for the selected circuit, and it must include a `perturbation_effect` record that matches both the proposed perturbation and behavior. Structural, inventory, motor-context, model-method, and catalog records cannot substitute for causal support. Comparison accepts analyses from exactly one batch and requires its objective metric in every analysis. Saving requires the current hypothesis, experiment, sole batch, comparison, and exactly the comparison's complete analysis-ID set. The exact selected circuit, hypothesis-supporting evidence/source closure, separately scoped model-method evidence/source closure, and those exact analyses are serialized. The local model card is the method definition; FlyGym is carried only as a pinned embodiment reference and does not define the controller. Caller-supplied titles and notes travel separately as `untrusted_annotation` administrative metadata and are excluded from scientific provenance counts. The lineage also includes model/controller/environment versions, condition and run IDs, analysis method version, a run hash, assumptions, and a manifest hash. The `flylab.evidence-export` schema-version-`2` download carries the complete saved payload and metadata. Its hash detects changes; it is not a digital signature or guarantee of immutability. Repeating the same experiment and seed produces the same batch; changing the seed changes the generated runs.
+Discovery remains source-closed under evidence filtering. A hypothesis must cite at least one discovered `role=hypothesis_support`, `kind=perturbation_effect` record matching its perturbation and behavior; structural, inventory, and motor-context records are supplemental only. The local model card defines the method. FlyGym remains a pinned embodiment reference and is not executed.
 
-The circuit viewer bundles simplified render assets derived from the six pinned BANC v888 L2 SWC skeletons. The asset manifest records every source URL, SHA-256 checksum, source node count, shared coordinate transform, and topology-preserving simplification rule. For MDN, the neuron lines are reconstruction-derived and cyan marks the bundled structural LBL40 path. For GF, the lines are a literature schematic with no dataset IDs or bundled reconstruction. Purple glow always means model target selection, never measured neural activity or signal propagation. A separate `motorOutputActive` replay state allows a silencing baseline or sham to move without falsely glowing as the perturbation target.
+The Three.js circuit viewer uses six reconstruction-derived BANC v888 L2 skeletons for the MDN/LBL40 slice. Its GF→TTMn/TTM and GF→PSI→DLMn/DLM paths are explicitly literature-schematic and have no invented reconstruction or dataset neuron ID. Purple indicates a selected model target, never measured neural activity. The procedural arena fly is also schematic rather than a scan or biomechanical reconstruction.
 
-The open-field view uses a procedural Three.js model, not a scanned animal or a biomechanical reconstruction. Its major visible landmarks are informed by the adult external-anatomy atlas from Jürgens et al.; its restrained alternating-tripod cue is informed by Chun et al. The selected motor map controls which schematic appendages move: MDN recruits a six-leg walking cue, while GF recruits T2-leg extension, wing tuck/downstroke, and model lift. These are visualizations of seeded reduced-order outputs, not joint dynamics, muscle forces, or aerodynamics.
+See [Scientific boundaries](docs/SCIENTIFIC_BOUNDARIES.md), the [mapped-motor model card](docs/MODEL_CARD.md), [source verification](docs/SOURCE_VERIFICATION.md), and [BANC slice reproducibility](docs/BANC_SLICE_REPRODUCIBILITY.md). Third-party attribution and modification notices are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-The exact six-neuron/four-row table slice is independently reproducible from the two pinned BANC Feather files. See [Reproducing the BANC v888 circuit slice](docs/BANC_SLICE_REPRODUCIBILITY.md) for source hashes, the read-only verification command, extraction rules, and the small canonical artifact used to test the runtime records.
+## Judge and project guides
 
-See [Scientific Boundaries](docs/SCIENTIFIC_BOUNDARIES.md) for the complete interpretation rules.
-See the [reduced-order model card](docs/MODEL_CARD.md) for every controller equation, constant, condition semantic, unit boundary, and calibration limitation.
-Third-party data attribution and modification notices are recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The generated [production and bundled-runtime license inventory](THIRD_PARTY_LICENSES.txt) is also deployed as a public site asset.
-
-## Primary sources and license pointers
-
-FlyLab ships a small curated evidence catalog rather than live literature retrieval.
-
-- [Bidaye et al., *Science* 344, 97–101 (2014)](https://doi.org/10.1126/science.1249964) — targeted adult MDN activation and silencing assays; publisher copyright.
-- [Sen et al., *Current Biology* 27, 766–771 (2017)](https://doi.org/10.1016/j.cub.2017.02.008) — acute and stochastic adult MDN activation assays; Elsevier copyright.
-- [Feng et al., *Nature Communications* 11, 6166 (2020)](https://doi.org/10.1038/s41467-020-19936-x) — motor-circuit studies of MDN-induced backward walking; CC BY 4.0.
-- [von Reyn et al., *Nature Neuroscience* 17, 962–970 (2014)](https://doi.org/10.1038/nn.3741) — targeted GF activation, silencing, intracellular recording, and short-mode escape; publisher copyright.
-- [King & Wyman, *Journal of Neurocytology* 9, 753–770 (1980)](https://doi.org/10.1007/BF01205017) — primary anatomy of the GF jump-muscle and flight-muscle branches; publisher copyright.
-- [Allen & Murphey, *European Journal of Neuroscience* 26, 439–445 (2007)](https://doi.org/10.1111/j.1460-9568.2007.05686.x) — electrical and cholinergic chemical components of the mixed GF–TTMn synapse; CC BY-NC 2.5.
-- [Azevedo et al., *Nature* 631, 360–368 (2024)](https://doi.org/10.1038/s41586-024-07389-x) — adult-female FANC structural context for coordinating legs and wings during escape; FlyLab cites claim-level context and bundles no FANC data.
-- [Cande et al., *eLife* 7:e34275 (2018)](https://doi.org/10.7554/eLife.34275) — broad descending-neuron activation screen; CC BY 4.0. The associated [Dryad version 1 dataset](https://doi.org/10.5061/dryad.fr89c0c) is CC0-1.0.
-- [Bates et al., *Nature* (2026)](https://doi.org/10.1038/s41586-026-10735-w) — BANC structural context. FlyLab pins the [BANC Dataverse version 3.0 / `banc_888` snapshot](https://doi.org/10.7910/DVN/7WTH1N), licensed CC BY 4.0, with source-file checksums; FlyLab's two cited Feather inputs are unrestricted, while the broader deposit has mixed file-level access. The official [BANC released-data documentation](https://github.com/htem/bancpipeline#released-data-products) identifies the L2 SWC skeleton products used by the viewer.
-- [FlyEM MANC `manc:v1.2.1`](https://www.janelia.org/project-team/flyem/manc-connectome) — reference matches to a separate adult male ventral nerve cord specimen; CC BY 4.0. Matching IDs do not identify the same physical cells as the female BANC specimen.
-- [Wang-Chen et al., *Nature Methods* (2024)](https://doi.org/10.1038/s41592-024-02497-y) — NeuroMechFly v2/FlyGym publication. The pinned [FlyGym v2.1.0 release](https://github.com/NeLy-EPFL/flygym/releases/tag/v2.1.0) is Apache-2.0; FlyLab uses it as an embodiment reference and does not execute it.
-- [Jürgens et al., *Genetics* 228:iyae129 (2024)](https://doi.org/10.1093/genetics/iyae129) — scanning-electron-microscopy atlas used as a reference for the schematic arena fly's major adult external landmarks.
-- [Chun, Biswas & Bhandawat, *eLife* 10:e65878 (2021)](https://doi.org/10.7554/eLife.65878) — adult walking kinematics used only to guide the display-level alternating-tripod gait cue.
-
-FlyLab's original source code and documentation are licensed under the [Apache License 2.0](LICENSE). Third-party data and software retain their own terms; those licenses do not become FlyLab's license and FlyLab's license does not replace theirs.
-
-## Project guide
-
-- [Challenge demo](docs/DEMO.md)
-- [WebMCP verification](docs/WEBMCP_VERIFICATION.md)
 - [Judge testing instructions](docs/JUDGE_TESTING.md)
-- [Chrome-only manual WebMCP test](docs/CHROME_MANUAL_TEST.md)
-- [Scientific boundaries](docs/SCIENTIFIC_BOUNDARIES.md)
-- [Scientific source verification](docs/SOURCE_VERIFICATION.md)
-- [BANC v888 slice reproducibility](docs/BANC_SLICE_REPRODUCIBILITY.md)
-- [Third-party notices](THIRD_PARTY_NOTICES.md)
+- [Chrome 149+ native WebMCP protocol test](docs/CHROME_MANUAL_TEST.md)
+- [WebMCP verification](docs/WEBMCP_VERIFICATION.md)
+- [Challenge demo plan](docs/DEMO.md)
 - [Challenge submission copy](docs/CHALLENGE_SUBMISSION.md)
-- `lib/flylab.ts` — evidence records, manifests, deterministic model, metrics, and comparison logic
-- `lib/embodied-fly.ts` — typed circuit→motor-program→body-part maps, provenance-bearing path edges, metric panels, and coverage registry
-- `lib/agent-context.ts` — pure shared-page state machine, approval gate, artifact references, and next-action contract
-- `lib/evidence-export.ts` — portable evidence-envelope schema, serialization, and filename helpers
-- `lib/webmcp.ts` — eight tool contracts, validation, result envelopes, and registration lifecycle
-- `components/FlyBrain3D.tsx` — Three.js BANC morphology viewer plus explicitly schematic GF leg/wing path
-- `components/FlyArena3D.tsx` — procedural Three.js adult-fly arena renderer and replay-linked pose
-- `scripts/build-banc-morphology.mjs` — reproducible SWC download, checksum, transform, and render-asset build
-- `app/page.tsx` — shared human-agent laboratory interface and approval boundary
-- `tests/` — deterministic model and WebMCP contract tests
+- [YouTube metadata draft](docs/YOUTUBE_DESCRIPTION.md)
+- `lib/agent-context.ts` — `flylab.agent-context.v3` state, approval references, and next-action contract
+- `lib/experiment-approval.ts` — immutable protocol and seed-manifest approval commitments
+- `lib/discovery-decision.ts` — stable ranked-discovery decisions and exclusions
+- `lib/flylab.ts` — evidence records, seed policy, simulation, formal metric definitions, and comparison
+- `lib/evidence-export.ts` — experiment/mission v3 portable envelope
+- `lib/webmcp.ts` — eight tool contracts, validation, v3 results, diagnostics, and registration lifecycle
+- `app/page.tsx` — shared human-agent laboratory state and visible approval boundary
 
 ## Responsible interpretation
 
