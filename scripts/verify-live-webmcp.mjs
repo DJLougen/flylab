@@ -1714,7 +1714,14 @@ try {
   let status;
   for (let attempt = 0; attempt < 40; attempt += 1) {
     status = await readRuntimeStatus();
-    if (status.status === '8 tools live') break;
+    if (status?.agentRuntime?.page_registration_status === 'registered'
+      && status?.agentRuntime?.registered_tool_count === 8
+      && /^session_[a-z0-9]{16}$/i.test(status?.agentRuntime?.page_session_id ?? '')) break;
+    if ((status?.agentRuntime?.status === 'unsupported'
+        || status?.agentRuntime?.status === 'registration_failed')
+      && status?.agentRuntime?.capability_diagnostic?.document_ready_state === 'complete') {
+      throw new Error(`FlyLab cannot register WebMCP in this runtime: ${JSON.stringify(status.agentRuntime.capability_diagnostic)}`);
+    }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
 
@@ -1735,23 +1742,43 @@ try {
   );
   await captureCircuitEvidence();
 
+  let postInvocationStatus = status;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    postInvocationStatus = await readRuntimeStatus();
+    if (postInvocationStatus?.agentRuntime?.webmcp_invocation_observed === true) break;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+
   const verified = status?.modelContextType === 'object'
     && status?.registerToolType === 'function'
-    && status?.status === '8 tools live'
     && status?.originAgentCluster === true
     && status?.agentRuntime?.status === 'active'
+    && /^session_[a-z0-9]{16}$/i.test(status?.agentRuntime?.page_session_id ?? '')
+    && status?.agentRuntime?.page_registration_status === 'registered'
+    && status?.agentRuntime?.page_invocation_handler_available === true
     && status?.agentRuntime?.registered_tool_count === 8
-    && status?.agentRuntime?.agent_invocation_available === true
+    && status?.agentRuntime?.agent_invocation_available === null
+    && status?.agentRuntime?.webmcp_invocation_observed === false
+    && status?.agentRuntime?.webmcp_client_availability === 'unknown_to_page'
+    && status?.agentRuntime?.capability_diagnostic?.document_model_context_present === true
+    && status?.agentRuntime?.capability_diagnostic?.register_tool_type === 'function'
+    && status?.agentRuntime?.capability_diagnostic?.registration_attempted === true
+    && status?.agentRuntime?.capability_diagnostic?.registrations_accepted_before_rollback === 8
+    && status?.agentRuntime?.capability_diagnostic?.registration_error === null
     && status?.agentRuntime?.workflow_next_tool === 'find_fly_circuits'
-    && status?.agentRuntime?.invocable_next_tool === 'find_fly_circuits'
-    && status?.agentRuntime?.invocable_next_action?.callable === true
+    && status?.agentRuntime?.invocable_next_tool === null
+    && status?.agentRuntime?.invocable_next_action?.callable === false
+    && status?.agentRuntime?.invocable_next_action?.blocked_by === 'webmcp_client_availability_unconfirmed'
     && status?.agentHandoff?.schema_version === 'flylab.agent-handoff.v1'
     && JSON.stringify(status.agentHandoff.transport) === JSON.stringify(status.agentRuntime)
+    && postInvocationStatus?.agentRuntime?.webmcp_invocation_observed === true
+    && postInvocationStatus?.agentRuntime?.webmcp_client_availability === 'invocation_observed_this_page_session'
+    && postInvocationStatus?.agentRuntime?.agent_invocation_available === true
     && JSON.stringify(actualToolNames) === JSON.stringify(expectedToolNames)
     && response.status === 'Completed';
 
   if (!verified) {
-    throw new Error(`WebMCP live verification failed: ${JSON.stringify({ status, actualToolNames, response })}`);
+    throw new Error(`WebMCP live verification failed: ${JSON.stringify({ status, postInvocationStatus, actualToolNames, response })}`);
   }
 
   const workflow = process.env.FLYLAB_VERIFY_WORKFLOW === '1'
@@ -1770,10 +1797,16 @@ try {
     invocation_status: response.status,
     agent_transport: {
       status: status.agentRuntime.status,
+      page_session_id: status.agentRuntime.page_session_id,
       registered_tool_count: status.agentRuntime.registered_tool_count,
       workflow_next_tool: status.agentRuntime.workflow_next_tool,
-      invocable_next_tool: status.agentRuntime.invocable_next_tool,
-      invocation_available: status.agentRuntime.agent_invocation_available,
+      invocable_next_tool_before_first_call: status.agentRuntime.invocable_next_tool,
+      agent_invocation_available_before_first_call: status.agentRuntime.agent_invocation_available,
+      page_registration_status: status.agentRuntime.page_registration_status,
+      page_invocation_handler_available: status.agentRuntime.page_invocation_handler_available,
+      webmcp_invocation_observed: postInvocationStatus.agentRuntime.webmcp_invocation_observed,
+      webmcp_client_availability: postInvocationStatus.agentRuntime.webmcp_client_availability,
+      capability_diagnostic: status.agentRuntime.capability_diagnostic,
       handoff_schema: status.agentHandoff.schema_version,
     },
     origin_agent_cluster: true,

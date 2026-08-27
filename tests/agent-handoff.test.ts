@@ -35,10 +35,10 @@ describe('FlyLab inline agent handoff', () => {
   test('separates workflow recommendation from browser-local invocability in every transport state', () => {
     const context = buildFlyLabAgentContext(initialSnapshot);
     const expected = {
-      checking: { status: 'checking', registered: null, available: false, invocable: null, blocker: 'webmcp_availability_checking' },
-      active: { status: 'active', registered: 8, available: true, invocable: 'find_fly_circuits', blocker: null },
-      unsupported: { status: 'unsupported', registered: 0, available: false, invocable: null, blocker: 'webmcp_unavailable_in_this_browser' },
-      failed: { status: 'registration_failed', registered: 0, available: false, invocable: null, blocker: 'webmcp_registration_failed' },
+      checking: { status: 'checking', registered: null, available: false, pageHandler: false, client: 'unavailable', invocable: null, callable: false, blocker: 'webmcp_availability_checking' },
+      active: { status: 'active', registered: 8, available: null, pageHandler: true, client: 'unknown_to_page', invocable: null, callable: false, blocker: 'webmcp_client_availability_unconfirmed' },
+      unsupported: { status: 'unsupported', registered: 0, available: false, pageHandler: false, client: 'unavailable', invocable: null, callable: false, blocker: 'webmcp_unavailable_in_this_browser' },
+      failed: { status: 'registration_failed', registered: 0, available: false, pageHandler: false, client: 'unavailable', invocable: null, callable: false, blocker: 'webmcp_registration_failed' },
     } as const;
 
     for (const status of Object.keys(expected) as FlyLabWebMCPStatus[]) {
@@ -52,11 +52,15 @@ describe('FlyLab inline agent handoff', () => {
       assert.equal(transport.status, wanted.status);
       assert.equal(transport.registered_tool_count, wanted.registered);
       assert.equal(transport.agent_invocation_available, wanted.available);
+      assert.equal(transport.page_invocation_handler_available, wanted.pageHandler);
+      assert.equal(transport.webmcp_invocation_observed, false);
+      assert.equal(transport.webmcp_client_availability, wanted.client);
       assert.equal(transport.invocable_next_tool, wanted.invocable);
-      assert.equal(transport.invocable_next_action.callable, wanted.available);
+      assert.equal(transport.invocable_next_action.callable, wanted.callable);
       assert.equal(transport.invocable_next_action.blocked_by, wanted.blocker);
       assert.equal(transport.fallback.mutation_available, false);
-      assert.match(transport.execution_note, wanted.available ? /inspect_flylab_state/ : /not a fallback transport/i);
+      assert.equal(transport.fallback.browser_documentation_url, '/agent');
+      assert.match(transport.execution_note, wanted.pageHandler ? /inspect_flylab_state/ : /not a fallback transport/i);
     }
 
     const unsupported = buildFlyLabAgentHandoff(context, 'unsupported');
@@ -64,5 +68,47 @@ describe('FlyLab inline agent handoff', () => {
     assert.deepEqual(unsupported.agent_context.artifact_manifest, {});
     assert.match(unsupported.agent_context.provenance_policy.inheritance, /artifact_manifest/);
     assert.deepEqual(unsupported.trust.untrusted_human_fields, ['agent_context.state.goal']);
+  });
+
+  test('publishes exact capability evidence and separately records an observed WebMCP callback', () => {
+    const context = buildFlyLabAgentContext(initialSnapshot);
+    const diagnostic = {
+      schema_version: 'flylab.webmcp-capability-diagnostic.v1' as const,
+      document_ready_state: 'complete',
+      secure_context: true,
+      origin_agent_cluster: true,
+      permissions_policy_tools_allowed: true,
+      document_model_context_present: false,
+      register_tool_type: 'undefined',
+      registration_attempted: false,
+      registrations_accepted_before_rollback: 0,
+      failed_tool_name: null,
+      registration_error_name: null,
+      registration_error: null,
+      availability_reason: 'document_model_context_absent' as const,
+    };
+
+    const unsupported = buildFlyLabAgentHandoff(context, 'unsupported', diagnostic);
+    assert.deepEqual(unsupported.transport.capability_diagnostic, diagnostic);
+    assert.equal(unsupported.transport.page_registration_status, 'api_unavailable');
+    assert.equal(unsupported.transport.webmcp_invocation_observed, false);
+    assert.equal(unsupported.transport.webmcp_client_availability, 'unavailable');
+
+    const observed = buildFlyLabAgentHandoff(context, 'active', undefined, true, 'session_test');
+    assert.equal(observed.transport.page_session_id, 'session_test');
+    assert.equal(observed.transport.page_registration_status, 'registered');
+    assert.equal(observed.transport.agent_invocation_available, true);
+    assert.equal(observed.transport.webmcp_invocation_observed, true);
+    assert.equal(observed.transport.webmcp_client_availability, 'invocation_observed_this_page_session');
+    assert.equal(observed.transport.invocable_next_tool, 'find_fly_circuits');
+    assert.match(observed.transport.execution_note, /tool callback has been observed/i);
+
+    const rolledBackAfterObservation = buildFlyLabAgentHandoff(context, 'failed', undefined, true, 'session_test');
+    assert.equal(rolledBackAfterObservation.transport.webmcp_invocation_observed, true);
+    assert.equal(rolledBackAfterObservation.transport.webmcp_client_availability, 'unavailable');
+    assert.equal(rolledBackAfterObservation.transport.agent_invocation_available, false);
+    assert.equal(rolledBackAfterObservation.transport.invocable_next_tool, null);
+    assert.equal(rolledBackAfterObservation.transport.invocable_next_action.callable, false);
+    assert.equal(rolledBackAfterObservation.transport.invocable_next_action.blocked_by, 'webmcp_registration_failed');
   });
 });

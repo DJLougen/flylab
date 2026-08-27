@@ -4,6 +4,31 @@ import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 describe('FlyLab submission assets', () => {
+  it('keeps mistyped handoff routes recoverable', () => {
+    const config = readFileSync('next.config.ts', 'utf8');
+    const fallbackRoute = readFileSync('app/[...path]/page.tsx', 'utf8');
+
+    assert.match(config, /source:\s*['"]\/Use['"]/);
+    assert.match(config, /source:\s*['"]\/use['"]/);
+    assert.equal((config.match(/destination:\s*['"]\/['"]/g) ?? []).length, 2);
+    assert.match(fallbackRoute, /path\[0\]\?\.toLowerCase\(\) === ['"]use['"]/);
+    assert.match(fallbackRoute, /redirect\(['"]\/['"]\)/);
+    assert.match(fallbackRoute, /notFound\(\)/);
+  });
+
+  it('provides browser-readable agent recovery without pretending to polyfill WebMCP', () => {
+    const page = readFileSync('app/page.tsx', 'utf8');
+    const guide = readFileSync('app/agent/page.tsx', 'utf8');
+
+    assert.match(page, /id="agent-diagnostics"/);
+    assert.match(page, /id="agent-recovery-packet"/);
+    assert.match(page, /Retry Site Tool detection/);
+    assert.match(page, /does not exercise Site Tool discovery, registration, or agent invocation/);
+    assert.match(guide, /Browser-readable recovery surface/);
+    assert.match(guide, /does not create a fallback transport or make Site Tools callable/);
+    assert.match(guide, /Exact tool contracts/);
+  });
+
   it('requires rights-cleared narration instead of recording a macOS System Voice', () => {
     const builder = readFileSync('scripts/build-demo-video.mjs', 'utf8');
 

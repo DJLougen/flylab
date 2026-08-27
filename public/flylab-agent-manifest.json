@@ -17,13 +17,15 @@
     "html_link_rel": "alternate",
     "webmcp_standard_discovery": false,
     "catalog_kind": "FlyLab-specific read-only documentation",
+    "browser_documentation_url": "/agent",
     "manifest_url": "/flylab-agent-manifest.json",
     "contract_url": "/flylab-tool-contracts.json",
     "inline_state_selector": "#flylab-agent-context",
     "inline_runtime_selector": "#flylab-agent-runtime",
     "inline_handoff_selector": "#flylab-agent-handoff",
     "control_plane_selector": "[aria-label=\"WebMCP agent control plane\"]",
-    "unsupported_browser_behavior": "Read-only manifest, exact tool schemas, and inline state remain available. This does not polyfill WebMCP or make tools callable; execution requires a browser and workspace where document.modelContext is available."
+    "capability_diagnostic_path": "#flylab-agent-runtime / capability_diagnostic",
+    "unsupported_browser_behavior": "The visible /agent guide and same-page Runtime diagnostic remain browser-readable; raw JSON contracts and inline state remain machine-readable. This does not polyfill WebMCP or make tools callable; execution requires a browser and workspace where document.modelContext is available."
   },
   "workflow": [
     "inspect_flylab_state",

@@ -24,12 +24,14 @@ export const flyLabAgentContractDocument = {
   discovery: {
     webmcp_standard_discovery: false,
     catalog_kind: 'FlyLab-specific read-only documentation',
+    browser_documentation_url: '/agent',
     manifest_url: '/flylab-agent-manifest.json',
     contract_url: '/flylab-tool-contracts.json',
     inline_state_selector: '#flylab-agent-context',
     inline_runtime_selector: '#flylab-agent-runtime',
     inline_handoff_selector: '#flylab-agent-handoff',
     control_plane_selector: '[aria-label="WebMCP agent control plane"]',
+    capability_diagnostic_path: '#flylab-agent-runtime / capability_diagnostic',
   },
   result_contract: {
     schema_version: FLYLAB_TOOL_RESULT_VERSION,

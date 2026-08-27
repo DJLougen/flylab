@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ANALYSIS_METRICS,
@@ -40,6 +41,8 @@ import {
 } from '@/lib/flylab';
 import {
   FlyLabDomainError,
+  detectFlyLabWebMCPRuntime,
+  diagnosticFromWebMCPError,
   installFlyLabWebMCP,
   prepareCancellableCommit,
   requireCurrentStateRevision,
@@ -57,7 +60,12 @@ import {
   type EvidenceExportEnvelope,
 } from '@/lib/evidence-export';
 import { buildFlyLabAgentContext, type FlyLabAgentSnapshot } from '@/lib/agent-context';
-import { buildFlyLabAgentHandoff, type FlyLabWebMCPStatus } from '@/lib/agent-handoff';
+import {
+  CHECKING_WEBMCP_CAPABILITY_DIAGNOSTIC,
+  buildFlyLabAgentHandoff,
+  type FlyLabWebMCPCapabilityDiagnostic,
+  type FlyLabWebMCPStatus,
+} from '@/lib/agent-handoff';
 
 type Stage = 'discover' | 'hypothesize' | 'design' | 'run' | 'analyze' | 'continue' | 'saved';
 
@@ -624,6 +632,10 @@ export default function Home() {
   const [goalDraft, setGoalDraft] = useState(initialState.goal);
   const labRef = useRef(lab);
   const [webmcpStatus, setWebmcpStatus] = useState<FlyLabWebMCPStatus>('checking');
+  const [webmcpDiagnostic, setWebmcpDiagnostic] = useState<FlyLabWebMCPCapabilityDiagnostic>(CHECKING_WEBMCP_CAPABILITY_DIAGNOSTIC);
+  const [webmcpDetectionAttempt, setWebmcpDetectionAttempt] = useState(0);
+  const [webmcpInvocationObserved, setWebmcpInvocationObserved] = useState(false);
+  const [pageSessionId, setPageSessionId] = useState('session_initializing');
   const [notice, setNotice] = useState(`Mission published at r${initialState.revision}. Agent should inspect fresh state.`);
   const [selectedConditionId, setSelectedConditionId] = useState('condition_bilateral');
   const [playhead, setPlayhead] = useState(0);
@@ -632,6 +644,7 @@ export default function Home() {
   const [arenaView, setArenaView] = useState<'body' | 'circuit' | 'trace'>('body');
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const evidenceDialogRef = useRef<HTMLElement | null>(null);
+  const runtimeDiagnosticRef = useRef<HTMLDetailsElement | null>(null);
   const evidenceReturnFocusRef = useRef<HTMLElement | null>(null);
   const [selectedEvidenceId, setSelectedEvidenceId] = useState(EVIDENCE[0].id);
   const [simulationRunning, setSimulationRunning] = useState(false);
@@ -2047,24 +2060,47 @@ export default function Home() {
   }), [commit, getAgentContext, pushActivity]);
 
   useEffect(() => {
+    const publishSessionId = window.setTimeout(() => {
+      const nonce = typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID().replaceAll('-', '')
+        : stableHash({ startedAt: Date.now(), random: Math.random() });
+      setPageSessionId(`session_${nonce.slice(0, 16)}`);
+    }, 0);
+    return () => window.clearTimeout(publishSessionId);
+  }, []);
+
+  useEffect(() => {
     let disposed = false;
-    let registration: { supported: boolean; dispose(): void } | null = null;
-    installFlyLabWebMCP(actions).then((result) => {
+    let registration: Awaited<ReturnType<typeof installFlyLabWebMCP>> | null = null;
+    installFlyLabWebMCP(actions, {
+      onToolInvocation: () => setWebmcpInvocationObserved(true),
+    }).then((result) => {
       if (disposed) {
         result.dispose();
         return;
       }
       registration = result;
+      setWebmcpDiagnostic(result.diagnostic);
       setWebmcpStatus(result.supported ? 'active' : 'unsupported');
     }).catch((error) => {
       console.error('FlyLab WebMCP registration failed', error);
-      if (!disposed) setWebmcpStatus('failed');
+      if (!disposed) {
+        const detail = error instanceof Error ? error.message : 'WebMCP registration failed with an unknown browser error.';
+        setWebmcpDiagnostic(diagnosticFromWebMCPError(error) ?? {
+          ...detectFlyLabWebMCPRuntime(),
+          registration_attempted: true,
+          registration_error_name: error instanceof Error ? error.name || 'Error' : 'NonErrorThrow',
+          registration_error: detail,
+          availability_reason: 'registration_failed',
+        });
+        setWebmcpStatus('failed');
+      }
     });
     return () => {
       disposed = true;
       registration?.dispose();
     };
-  }, [actions]);
+  }, [actions, webmcpDetectionAttempt]);
 
   useEffect(() => {
     const cancelWebMCPTool = (event: Event) => {
@@ -2224,9 +2260,15 @@ export default function Home() {
   }, [invoke]);
 
   const agentContext = buildFlyLabAgentContext(agentSnapshot(lab, simulationRunning, evidenceSaveRunning));
-  const agentHandoff = buildFlyLabAgentHandoff(agentContext, webmcpStatus);
+  const agentHandoff = buildFlyLabAgentHandoff(
+    agentContext,
+    webmcpStatus,
+    webmcpDiagnostic,
+    webmcpInvocationObserved,
+    pageSessionId,
+  );
   const agentRuntime = agentHandoff.transport;
-  const toolsCallable = agentRuntime.agent_invocation_available;
+  const pageToolsRegistered = agentRuntime.page_invocation_handler_available;
   const agentBrief = JSON.stringify(agentHandoff, null, 2);
 
   const copyAgentBrief = async () => {
@@ -2234,7 +2276,11 @@ export default function Home() {
       await navigator.clipboard.writeText(agentBrief);
       setNotice('Versioned JSON recovery packet copied. It is scoped to this open FlyLab page.');
     } catch {
-      setNotice('Clipboard access was unavailable. The same packet remains embedded at #flylab-agent-handoff.');
+      if (runtimeDiagnosticRef.current) {
+        runtimeDiagnosticRef.current.open = true;
+        runtimeDiagnosticRef.current.scrollIntoView({ block: 'nearest' });
+      }
+      setNotice('Clipboard access was unavailable. Select the visible recovery packet in Runtime diagnostic.');
     }
   };
 
@@ -2340,10 +2386,11 @@ export default function Home() {
     ?? null;
   const siteToolStatus = {
     checking: 'checking site tools',
-    active: '8 tools live',
-    unsupported: 'unavailable in this browser',
-    failed: 'tool registration failed',
+    active: '8 tools registered',
+    unsupported: '0 tools · browser API absent',
+    failed: '0 tools · registration failed',
   }[webmcpStatus];
+  const formatCapability = (value: boolean | null) => value === null ? 'not exposed' : value ? 'yes' : 'no';
   const agentNextDisplay = agentContext.next_tool
     ?? (agentContext.next_action.blocked_by ? `blocked · ${agentContext.next_action.blocked_by}` : agentContext.agent_status);
   const humanGate = !lab.experiment
@@ -2380,17 +2427,18 @@ export default function Home() {
         data-next-action={agentRuntime.invocable_next_tool ?? ''}
         data-workflow-next-action={agentContext.next_tool ?? ''}
         data-agent-context-version={agentContext.schema_version}
-        data-next-input-refs={toolsCallable ? JSON.stringify(agentContext.next_action.input_refs) : '{}'}
+        data-next-input-refs={pageToolsRegistered && webmcpInvocationObserved ? JSON.stringify(agentContext.next_action.input_refs) : '{}'}
         data-workflow-next-input-refs={JSON.stringify(agentContext.next_action.input_refs)}
         data-webmcp-status={webmcpStatus}
-        data-tools-callable={webmcpStatus === 'active'}
+        data-page-tools-registered={pageToolsRegistered}
+        data-webmcp-invocation-observed={webmcpInvocationObserved}
       >
         <div className="agent-bridge-identity">
           <span><i /> Agent runtime</span>
           <strong>{siteToolStatus} · r{lab.revision}</strong>
         </div>
         <div className="agent-bridge-next">
-          <span>{toolsCallable ? 'Next agent tool' : 'Recommended when connected'}</span>
+          <span>{pageToolsRegistered && webmcpInvocationObserved ? 'Next WebMCP tool' : pageToolsRegistered ? 'Page-registered next tool' : 'Recommended when connected'}</span>
           <code>{agentNextDisplay}</code>
         </div>
         <div className="agent-bridge-gate">
@@ -2403,14 +2451,61 @@ export default function Home() {
         <aside className="workflow-rail" aria-label="Agent operator panel">
           <section className="agent-handoff-rail" aria-labelledby="agent-handoff-title">
             <div className="section-title-row"><p className="eyebrow" id="agent-handoff-title">Agent handoff</p><span>r{lab.revision}</span></div>
-            <strong>{toolsCallable ? 'Ready for a WebMCP agent' : 'Read-only in this browser'}</strong>
-            <small>Copy the current revision, exact input references, and recovery path as one machine-readable packet.</small>
-            {webmcpStatus === 'unsupported' && (
+            <strong>{pageToolsRegistered ? webmcpInvocationObserved ? 'WebMCP tool invocation observed' : '8 page tools registered' : 'Read-only in this browser'}</strong>
+            <small>{pageToolsRegistered && !webmcpInvocationObserved
+              ? 'The page accepted all registrations. Current client, model, account, workspace, permission, and rollout availability are not observable here.'
+              : 'Copy the current revision, exact input references, and recovery path as one machine-readable packet.'}</small>
+            {(webmcpStatus === 'unsupported' || webmcpStatus === 'failed') && (
               <p className="agent-runtime-fallback">
-                WebMCP is unavailable here; the <a href="/flylab-agent-manifest.json">manifest</a> and <a href="/flylab-tool-contracts.json">contracts</a> remain inspectable.
+                {webmcpStatus === 'unsupported'
+                  ? webmcpDiagnostic.availability_reason === 'register_tool_missing'
+                    ? 'This browser exposed document.modelContext, but registerTool was not callable, so registration was not attempted. '
+                    : 'This browser did not expose document.modelContext, so registration was not attempted. '
+                  : 'The browser exposed WebMCP, but registration failed and all partial registrations were rolled back. '}
+                <a href="#agent-diagnostics">Inspect the exact runtime diagnostic</a> or open the <Link href="/agent" target="_blank" rel="noopener">browser-readable agent guide in a new tab</Link>.
               </p>
             )}
             <button type="button" onClick={() => void copyAgentBrief()}>Copy live agent handoff</button>
+            <details
+              className="runtime-diagnostic"
+              id="agent-diagnostics"
+              ref={runtimeDiagnosticRef}
+              open={webmcpStatus === 'unsupported' || webmcpStatus === 'failed' ? true : undefined}
+            >
+              <summary><span>Runtime diagnostic</span><b>{webmcpDiagnostic.availability_reason}</b></summary>
+              <dl>
+                <div><dt>Document ready</dt><dd>{webmcpDiagnostic.document_ready_state ?? 'not exposed'}</dd></div>
+                <div><dt>Secure context</dt><dd>{formatCapability(webmcpDiagnostic.secure_context)}</dd></div>
+                <div><dt>Origin-keyed cluster</dt><dd>{formatCapability(webmcpDiagnostic.origin_agent_cluster)}</dd></div>
+                <div><dt>Tools policy</dt><dd>{formatCapability(webmcpDiagnostic.permissions_policy_tools_allowed)}</dd></div>
+                <div><dt>modelContext present</dt><dd>{formatCapability(webmcpDiagnostic.document_model_context_present)}</dd></div>
+                <div><dt>registerTool type</dt><dd>{webmcpDiagnostic.register_tool_type ?? 'not checked'}</dd></div>
+                <div><dt>Registration attempted</dt><dd>{webmcpDiagnostic.registration_attempted ? 'yes' : 'no'}</dd></div>
+                <div><dt>Declared tools</dt><dd>8</dd></div>
+                <div><dt>Registered now</dt><dd>{agentRuntime.registered_tool_count ?? 'checking'}</dd></div>
+                <div><dt>{webmcpStatus === 'failed' ? 'Accepted before rollback' : 'Registrations accepted'}</dt><dd>{webmcpDiagnostic.registrations_accepted_before_rollback}/8</dd></div>
+                <div><dt>Failed tool</dt><dd>{webmcpDiagnostic.failed_tool_name ?? 'none'}</dd></div>
+                <div><dt>WebMCP invocation observed</dt><dd>{webmcpInvocationObserved ? 'yes' : 'no'}</dd></div>
+                <div><dt>Page session</dt><dd>{pageSessionId}</dd></div>
+                <div><dt>State revision</dt><dd>r{lab.revision}</dd></div>
+                <div><dt>Recommended next tool</dt><dd>{agentContext.next_tool ?? 'none'}</dd></div>
+              </dl>
+              <p className="runtime-exception"><span>Registration exception</span><code>{webmcpDiagnostic.registration_error
+                ? `${webmcpDiagnostic.registration_error_name ?? 'Error'}: ${webmcpDiagnostic.registration_error}`
+                : webmcpDiagnostic.registration_attempted
+                  ? 'none'
+                  : 'not applicable · API unavailable before registration'}</code></p>
+              {(webmcpStatus === 'unsupported' || webmcpStatus === 'failed') && (
+                <button type="button" onClick={() => {
+                  setWebmcpStatus('checking');
+                  setWebmcpDiagnostic(CHECKING_WEBMCP_CAPABILITY_DIAGNOSTIC);
+                  setWebmcpDetectionAttempt((attempt) => attempt + 1);
+                }}>Retry Site Tool detection</button>
+              )}
+              <label htmlFor="agent-recovery-packet">Visible recovery packet</label>
+              <textarea id="agent-recovery-packet" value={agentBrief} readOnly rows={10} spellCheck={false} />
+              <small>Raw machine endpoints remain <code>/flylab-agent-manifest.json</code> and <code>/flylab-tool-contracts.json</code>. Some in-app browsers block top-level JSON navigation; <Link href="/agent" target="_blank" rel="noopener">the HTML guide</Link> carries the same static documentation without leaving this page session.</small>
+            </details>
           </section>
 
           <div className="goal-block">
@@ -2429,7 +2524,7 @@ export default function Home() {
           </div>
 
           <details className="rail-disclosure">
-            <summary><span>Workflow</span><b>{agentContext.pipeline.filter((step) => step.status === 'complete').length}/{agentContext.pipeline.length - 1}</b></summary>
+            <summary><span>Local workflow</span><b>{agentContext.pipeline.filter((step) => step.status === 'complete').length}/{agentContext.pipeline.length - 1}</b></summary>
             <nav className="agent-run-graph" role="list" aria-label="Agent tool pipeline">
               {agentContext.pipeline.map((step, index) => (
                 <div className={`agent-run-step ${step.status} ${step.kind}`} role="listitem" aria-label={`${step.title}: ${step.status.replace('_', ' ')}. ${step.boundary}`} key={step.name}>
@@ -2462,12 +2557,13 @@ export default function Home() {
           </details>
 
           <details className="rail-disclosure" open={simulationRunning ? true : undefined}>
-            <summary><span>Optional human walkthrough</span></summary>
+            <summary><span>Optional local walkthrough</span></summary>
             <div className="manual-action-wrap">
               <button className="manual-action" type="button" onClick={() => void primaryAction.action()}>
                 <span>{primaryAction.label}</span><b aria-hidden="true">→</b>
               </button>
-              <small>{primaryAction.detail}. This mirrors the tool workflow for supervision; it is not the primary agent interface.</small>
+              <small>{primaryAction.detail}. This uses the same local action handlers and validation rules. It does not exercise Site Tool discovery, registration, or agent invocation.</small>
+              <p className="manual-transport-status"><b>Local lab workflow {agentContext.pipeline.filter((step) => step.status === 'complete').length}/{agentContext.pipeline.length - 1}</b><span>WebMCP transport {agentRuntime.registered_tool_count ?? 0}/8 · {webmcpDiagnostic.registration_attempted ? webmcpDiagnostic.availability_reason : `not attempted · ${webmcpDiagnostic.availability_reason}`}</span></p>
             </div>
           </details>
         </aside>
@@ -2681,11 +2777,15 @@ export default function Home() {
           <details className="inspector-disclosure">
             <summary><span>Artifact state</span><b>r{lab.revision}</b></summary>
             <section className="agent-context-card" aria-labelledby="agent-brief-title">
-              <div className="section-title-row"><p className="eyebrow" id="agent-brief-title">Agent runtime contract</p><span>{toolsCallable ? agentContext.agent_status : webmcpStatus === 'checking' ? 'checking' : 'read-only'}</span></div>
+              <div className="section-title-row"><p className="eyebrow" id="agent-brief-title">Agent runtime contract</p><span>{pageToolsRegistered && webmcpInvocationObserved ? agentContext.agent_status : pageToolsRegistered ? 'registered' : webmcpStatus === 'checking' ? 'checking' : 'read-only'}</span></div>
               <div className="agent-next-card">
-                <span>{toolsCallable ? (agentContext.next_tool ? 'Invocable site tool' : 'Agent is blocked') : 'Workflow recommendation only'}</span>
+                <span>{pageToolsRegistered ? (agentContext.next_tool ? 'Page-registered next tool' : 'Workflow is blocked') : 'Workflow recommendation only'}</span>
                 <code>{agentNextDisplay}</code>
-                <small>{toolsCallable ? agentContext.next_action.reason : 'Not callable in this browser. Use a compatible WebMCP runtime, then inspect fresh state.'}</small>
+                <small>{pageToolsRegistered && webmcpInvocationObserved
+                  ? agentContext.next_action.reason
+                  : pageToolsRegistered
+                    ? 'Page registration succeeded; current client availability is unknown to the page. Start with inspect_flylab_state when Site Tools exposes it.'
+                    : 'Not callable in this browser. Use a compatible WebMCP runtime, then inspect fresh state.'}</small>
               </div>
               <dl className="agent-artifact-ids">
                 <div><dt>State</dt><dd>r{lab.revision}</dd></div>
@@ -2717,7 +2817,7 @@ export default function Home() {
       <footer className="lab-footer" aria-live="polite">
         <p><span className="agent-pulse" /> {notice}</p>
         <p>{lab.bundle ? `${lab.bundle.id} · ${lab.bundle.manifestHash.slice(0, 22)}…` : `state revision ${lab.revision}`}</p>
-        <div className="footer-tools"><span>{webmcpStatus === 'active' ? 'WebMCP active' : 'WebMCP contracts published'}</span><span>{webmcpStatus === 'active' ? '8 callable tools' : '8 published contracts'}</span><a href="/flylab-tool-contracts.json">agent contracts</a><a href="/THIRD_PARTY_LICENSES.txt">licenses</a></div>
+        <div className="footer-tools"><span>{webmcpStatus === 'active' ? 'WebMCP page registration active' : 'WebMCP contracts published'}</span><span>{webmcpStatus === 'active' ? '8 page-registered tools' : '8 published contracts'}</span><Link href="/agent" target="_blank" rel="noopener">agent guide</Link><a href="/THIRD_PARTY_LICENSES.txt">licenses</a></div>
       </footer>
 
       {evidenceOpen && (

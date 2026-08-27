@@ -651,12 +651,256 @@ dd {
 }
 .agent-handoff-rail > button:hover { background: rgba(212, 156, 255, 0.18); }
 
+.runtime-diagnostic {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(5, 12, 14, 0.36);
+}
+
+.runtime-diagnostic > summary {
+  min-height: 38px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--muted-2);
+  font-size: 0.66rem;
+  font-weight: 680;
+}
+
+.runtime-diagnostic > summary b {
+  color: var(--agent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.56rem;
+  font-weight: 620;
+  overflow-wrap: anywhere;
+}
+
+.runtime-diagnostic[open] {
+  padding-bottom: 10px;
+}
+
+.runtime-diagnostic[open] > summary {
+  margin-bottom: 9px;
+  border-bottom: 1px solid var(--line);
+}
+
+.runtime-diagnostic dl {
+  padding: 0 10px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.runtime-diagnostic dl div {
+  min-width: 0;
+  padding: 7px;
+  border-radius: 5px;
+  background: var(--panel-3);
+}
+
+.runtime-diagnostic dt {
+  color: var(--muted);
+  font-size: 0.54rem;
+  text-transform: uppercase;
+}
+
+.runtime-diagnostic dd {
+  margin-top: 3px;
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.58rem;
+  overflow-wrap: anywhere;
+}
+
+.runtime-exception,
+.runtime-diagnostic > label,
+.runtime-diagnostic > small,
+.runtime-diagnostic > textarea,
+.runtime-diagnostic > button {
+  margin-left: 10px;
+  margin-right: 10px;
+}
+
+.runtime-exception {
+  margin-top: 8px;
+  display: grid;
+  gap: 4px;
+}
+
+.runtime-exception span,
+.runtime-diagnostic > label {
+  color: var(--muted);
+  font-size: 0.54rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.runtime-exception code {
+  color: #efc8cf;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.57rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.runtime-diagnostic > button {
+  width: calc(100% - 20px);
+  min-height: 34px;
+  margin-top: 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  background: var(--panel-3);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 0.62rem;
+}
+
+.runtime-diagnostic > label {
+  margin-top: 10px;
+  display: block;
+}
+
+.runtime-diagnostic > textarea {
+  width: calc(100% - 20px);
+  min-height: 150px;
+  margin-top: 5px;
+  padding: 8px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #071012;
+  color: var(--muted-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.55rem;
+  line-height: 1.45;
+}
+
+.runtime-diagnostic > small {
+  margin-top: 7px;
+  display: block;
+  color: var(--muted);
+  font-size: 0.56rem;
+  line-height: 1.45;
+}
+
+.runtime-diagnostic a { color: var(--agent); }
+
+.agent-guide-shell {
+  width: min(1080px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 64px 0 96px;
+  color: var(--ink);
+}
+
+.agent-guide-shell > header {
+  padding-bottom: 30px;
+  border-bottom: 1px solid var(--line);
+}
+
+.agent-guide-shell h1 {
+  margin-top: 7px;
+  font-size: clamp(2rem, 6vw, 4.2rem);
+  font-weight: 640;
+  letter-spacing: -0.055em;
+}
+
+.agent-guide-shell > header > p:not(.eyebrow) {
+  max-width: 760px;
+  margin-top: 16px;
+  color: var(--muted-2);
+  line-height: 1.65;
+}
+
+.agent-guide-return {
+  margin-top: 20px;
+  padding: 10px 14px;
+  display: inline-flex;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--panel-3);
+  color: var(--agent);
+  font-size: 0.8rem;
+  font-weight: 680;
+}
+
+.agent-guide-summary,
+.agent-guide-tools,
+.agent-guide-json {
+  margin-top: 24px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.agent-guide-shell h2 {
+  font-size: 1rem;
+  font-weight: 680;
+}
+
+.agent-guide-summary ol,
+.agent-guide-tools ol {
+  margin-top: 14px;
+  padding-left: 20px;
+}
+
+.agent-guide-summary li,
+.agent-guide-tools li,
+.agent-guide-summary p {
+  color: var(--muted-2);
+  font-size: 0.8rem;
+  line-height: 1.65;
+}
+
+.agent-guide-summary p { margin-top: 14px; }
+.agent-guide-shell code { color: var(--agent); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.agent-guide-tools li + li { margin-top: 11px; }
+.agent-guide-tools li code { display: block; font-size: 0.76rem; }
+.agent-guide-tools li span { display: block; margin-top: 3px; }
+
+.agent-guide-json > summary {
+  cursor: pointer;
+  color: var(--ink);
+  font-size: 0.88rem;
+  font-weight: 680;
+}
+
+.agent-guide-json pre {
+  max-height: 640px;
+  margin-top: 16px;
+  padding: 16px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #071012;
+  color: var(--muted-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.66rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .manual-action-wrap {
   padding-top: 14px;
   display: grid;
   gap: 7px;
 }
 .manual-action-wrap > span { color: var(--muted); }
+
+.manual-transport-status {
+  display: grid;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 0.58rem;
+  line-height: 1.4;
+}
+
+.manual-transport-status b { color: var(--muted-2); font-weight: 650; }
+.manual-transport-status span { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 
 .manual-action {
   width: 100%;

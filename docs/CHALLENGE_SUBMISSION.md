@@ -128,7 +128,7 @@ inspect shared page state
 - Visible human-approval boundary
 - Bounded next-experiment proposal
 - Exact-lineage evidence bundle and directly returned portable evidence export with separately scoped hypothesis-support, circuit-context, and model-method source closures, field-addressed provenance, lineage edges, model manifests, and payload hash
-- 74 automated tests for the dual motor-map model, model-card parity, ranked discovery, recovery state machine, claim-compatible evidence gating, exact protocol snapshots and evidence export, synchronized public agent manifest and generated contract document, unsupported/active transport handoffs, absent-API fail-closed behavior, WebMCP v2 contracts, and publication-safe 15-frame submission and direct-build gates
+- 78 automated tests for the dual motor-map model, model-card parity, ranked discovery, recovery state machine, claim-compatible evidence gating, exact protocol snapshots and evidence export, synchronized public agent manifest and generated contract document, exact WebMCP capability diagnostics, unsupported/active transport handoffs, absent-API fail-closed behavior, WebMCP v2 contracts, and publication-safe 15-frame submission and direct-build gates
 
 **Not claimed**
 

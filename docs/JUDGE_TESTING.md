@@ -6,7 +6,7 @@ FlyLab is public, requires no account, and exposes exactly eight imperative WebM
 - Public source: <https://github.com/DJLougen/flylab>
 - Challenge-period source proof: [first public commit, August 26, 2026](https://github.com/DJLougen/flylab/commit/a45eb82ad29d62a1bf7afc0aff89f71a70384db9)
 - Deployed application release: [`104846997773c6905ed4c6da26fea67e0676c148`](https://github.com/DJLougen/flylab/commit/104846997773c6905ed4c6da26fea67e0676c148)
-- Prior public release verification: [successful CI run from the earlier 59-test milestone](https://github.com/DJLougen/flylab/actions/runs/33017176540); the current source contains 74 tests and should be checked with the commands below.
+- Prior public release verification: [successful CI run from the earlier 59-test milestone](https://github.com/DJLougen/flylab/actions/runs/33017176540); the current source contains 78 tests and should be checked with the commands below.
 
 The complete path takes about three minutes. It intentionally pauses once at a visible approval control that is absent from the WebMCP tool surface.
 

@@ -8,6 +8,7 @@ import {
   FLYLAB_TOOL_RESULT_VERSION,
   flyLabToolContracts,
   flyLabToolOutputContracts,
+  diagnosticFromWebMCPError,
   installFlyLabWebMCP,
   prepareCancellableCommit,
   requireCurrentStateRevision,
@@ -312,7 +313,29 @@ describe('FlyLab WebMCP registration lifecycle', () => {
     const result = await installFlyLabWebMCP({});
 
     assert.equal(result.supported, false);
+    assert.equal(result.diagnostic.document_model_context_present, false);
+    assert.equal(result.diagnostic.register_tool_type, 'undefined');
+    assert.equal(result.diagnostic.registration_attempted, false);
+    assert.equal(result.diagnostic.availability_reason, 'document_model_context_absent');
+    assert.equal(result.diagnostic.failed_tool_name, null);
+    assert.equal(result.diagnostic.registration_error_name, null);
+    assert.equal(result.diagnostic.registration_error, null);
     assert.doesNotThrow(() => result.dispose());
+  });
+
+  test('distinguishes a present modelContext with no registerTool method', async () => {
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: { readyState: 'complete', modelContext: {} },
+    });
+
+    const result = await installFlyLabWebMCP({});
+
+    assert.equal(result.supported, false);
+    assert.equal(result.diagnostic.document_ready_state, 'complete');
+    assert.equal(result.diagnostic.document_model_context_present, true);
+    assert.equal(result.diagnostic.register_tool_type, 'undefined');
+    assert.equal(result.diagnostic.availability_reason, 'register_tool_missing');
   });
 
   test('registers and invokes all eight contracts, then unregisters them on dispose', async () => {
@@ -351,10 +374,17 @@ describe('FlyLab WebMCP registration lifecycle', () => {
     const actions = Object.fromEntries(
       expectedNames.map((name) => [name, action]),
     );
+    const observedInvocations: string[] = [];
 
-    const installation = await installFlyLabWebMCP(actions);
+    const installation = await installFlyLabWebMCP(actions, {
+      onToolInvocation: (toolName) => observedInvocations.push(toolName),
+    });
 
     assert.equal(installation.supported, true);
+    assert.equal(installation.diagnostic.registration_attempted, true);
+    assert.equal(installation.diagnostic.registrations_accepted_before_rollback, 8);
+    assert.equal(installation.diagnostic.availability_reason, 'active');
+    assert.equal(installation.diagnostic.registration_error, null);
     assert.equal(registrations.length, 8);
     assert.deepEqual(
       registrations.map(({ tool }) => tool.name).sort(),
@@ -363,6 +393,17 @@ describe('FlyLab WebMCP registration lifecycle', () => {
     assert.ok(registrations.every(({ signal }) => signal instanceof AbortSignal));
     assert.ok(registrations.every(({ signal }) => signal?.aborted === false));
     assert.equal(new Set(registrations.map(({ signal }) => signal)).size, 1);
+
+    const inspector = registrations.find(({ tool }) => tool.name === 'inspect_flylab_state');
+    assert.ok(inspector);
+    const inspection = await inspector.tool.execute({}) as {
+      isError?: boolean;
+      structuredContent?: { ok?: boolean; tool?: string };
+    };
+    assert.notEqual(inspection.isError, true);
+    assert.equal(inspection.structuredContent?.ok, true);
+    assert.equal(inspection.structuredContent?.tool, 'inspect_flylab_state');
+    assert.deepEqual(observedInvocations, ['inspect_flylab_state']);
 
     const discovery = registrations.find(({ tool }) => tool.name === 'find_fly_circuits');
     assert.ok(discovery);
@@ -386,16 +427,7 @@ describe('FlyLab WebMCP registration lifecycle', () => {
     assert.equal(result.structuredContent?.result_version, FLYLAB_TOOL_RESULT_VERSION);
     assert.match(result.structuredContent?.provenance_scope ?? '', /union summary only/i);
     assert.equal(result.structuredContent?.provenance_manifest?.schema_version, FLYLAB_PROVENANCE_MANIFEST_VERSION);
-
-    const inspector = registrations.find(({ tool }) => tool.name === 'inspect_flylab_state');
-    assert.ok(inspector);
-    const inspection = await inspector.tool.execute({}) as {
-      isError?: boolean;
-      structuredContent?: { ok?: boolean; tool?: string };
-    };
-    assert.notEqual(inspection.isError, true);
-    assert.equal(inspection.structuredContent?.ok, true);
-    assert.equal(inspection.structuredContent?.tool, 'inspect_flylab_state');
+    assert.deepEqual(observedInvocations, ['inspect_flylab_state', 'find_fly_circuits']);
 
     const invalidInspection = await inspector.tool.execute({ unexpected: true }) as {
       isError?: boolean;
@@ -460,7 +492,7 @@ describe('FlyLab WebMCP registration lifecycle', () => {
       ) {
         if (options?.signal) registrationSignals.push(options.signal);
         if (tool.name === 'design_stimulation_trial') {
-          throw new Error('schema rejected');
+          throw new DOMException('schema rejected', 'NotAllowedError');
         }
       },
     };
@@ -480,10 +512,25 @@ describe('FlyLab WebMCP registration lifecycle', () => {
       expectedNames.map((name) => [name, action]),
     );
 
-    await assert.rejects(
-      installFlyLabWebMCP(actions),
+    let registrationError: unknown;
+    try {
+      await installFlyLabWebMCP(actions);
+      assert.fail('Expected the fourth registration to fail.');
+    } catch (error) {
+      registrationError = error;
+    }
+    assert.match(
+      registrationError instanceof Error ? registrationError.message : '',
       /WebMCP registration failed for design_stimulation_trial: schema rejected/,
     );
+    const diagnostic = diagnosticFromWebMCPError(registrationError);
+    assert.ok(diagnostic);
+    assert.equal(diagnostic.availability_reason, 'registration_failed');
+    assert.equal(diagnostic.registration_attempted, true);
+    assert.equal(diagnostic.registrations_accepted_before_rollback, 3);
+    assert.equal(diagnostic.failed_tool_name, 'design_stimulation_trial');
+    assert.equal(diagnostic.registration_error_name, 'NotAllowedError');
+    assert.equal(diagnostic.registration_error, 'schema rejected');
     assert.equal(registrationSignals.length, 4);
     assert.equal(new Set(registrationSignals).size, 1);
     assert.ok(registrationSignals.every((signal) => signal.aborted));

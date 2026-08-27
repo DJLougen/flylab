@@ -1,4 +1,5 @@
 import { ANALYSIS_METRICS, BODY_PART_IDS, type ProvenanceLabel } from './flylab.js';
+import type { FlyLabWebMCPCapabilityDiagnostic } from './agent-handoff.js';
 
 export const FLYLAB_ERROR_CODES = [
   'INVALID_INPUT',
@@ -452,13 +453,74 @@ interface ModelContext {
   ): Promise<void>;
 }
 
-export async function installFlyLabWebMCP(actions: Record<string, FlyLabToolAction>) {
-  const modelContext = (document as Document & { modelContext?: ModelContext }).modelContext;
+type ModelContextDocument = Document & {
+  modelContext?: ModelContext;
+  permissionsPolicy?: { allowsFeature?(feature: string): boolean };
+  featurePolicy?: { allowsFeature?(feature: string): boolean };
+};
+
+type WebMCPRegistrationError = Error & {
+  flylabWebMCPDiagnostic?: FlyLabWebMCPCapabilityDiagnostic;
+};
+
+export function detectFlyLabWebMCPRuntime(): FlyLabWebMCPCapabilityDiagnostic {
+  const targetDocument = typeof document === 'undefined' ? null : document as ModelContextDocument;
+  const targetWindow = typeof window === 'undefined' ? null : window;
+  const modelContext = targetDocument?.modelContext;
+  const registerToolType = typeof modelContext?.registerTool;
+  let permissionsPolicyToolsAllowed: boolean | null = null;
+  const policy = targetDocument?.permissionsPolicy ?? targetDocument?.featurePolicy;
+  if (typeof policy?.allowsFeature === 'function') {
+    try {
+      permissionsPolicyToolsAllowed = policy.allowsFeature('tools');
+    } catch {
+      permissionsPolicyToolsAllowed = null;
+    }
+  }
+
+  return {
+    schema_version: 'flylab.webmcp-capability-diagnostic.v1',
+    document_ready_state: targetDocument?.readyState ?? null,
+    secure_context: typeof targetWindow?.isSecureContext === 'boolean' ? targetWindow.isSecureContext : null,
+    origin_agent_cluster: typeof targetWindow?.originAgentCluster === 'boolean' ? targetWindow.originAgentCluster : null,
+    permissions_policy_tools_allowed: permissionsPolicyToolsAllowed,
+    document_model_context_present: Boolean(modelContext),
+    register_tool_type: registerToolType,
+    registration_attempted: false,
+    registrations_accepted_before_rollback: 0,
+    failed_tool_name: null,
+    registration_error_name: null,
+    registration_error: null,
+    availability_reason: !modelContext
+      ? 'document_model_context_absent'
+      : registerToolType !== 'function'
+        ? 'register_tool_missing'
+        : 'checking',
+  };
+}
+
+export function diagnosticFromWebMCPError(error: unknown): FlyLabWebMCPCapabilityDiagnostic | null {
+  if (!error || typeof error !== 'object') return null;
+  return (error as WebMCPRegistrationError).flylabWebMCPDiagnostic ?? null;
+}
+
+export async function installFlyLabWebMCP(
+  actions: Record<string, FlyLabToolAction>,
+  options: { onToolInvocation?: (toolName: string) => void } = {},
+) {
+  const initialDiagnostic = detectFlyLabWebMCPRuntime();
+  const modelContext = typeof document === 'undefined'
+    ? undefined
+    : (document as ModelContextDocument).modelContext;
   if (!modelContext || typeof modelContext.registerTool !== 'function') {
-    return { supported: false, dispose() {} };
+    return { supported: false, diagnostic: initialDiagnostic, dispose() {} };
   }
 
   const registrationController = new AbortController();
+  let acceptedRegistrationCount = 0;
+  let failedToolName: string | null = null;
+  let registrationErrorName: string | null = null;
+  let registrationErrorMessage: string | null = null;
   try {
     for (const contract of flyLabToolContracts) {
       try {
@@ -466,6 +528,7 @@ export async function installFlyLabWebMCP(actions: Record<string, FlyLabToolActi
           ...contract,
           inputSchema: contract.inputSchema as Record<string, unknown>,
           execute: async (rawInput: unknown, context?: { signal?: AbortSignal }) => {
+            options.onToolInvocation?.(contract.name);
             const signal = context?.signal ?? new AbortController().signal;
             try {
               throwIfCancellationRequested(signal);
@@ -483,18 +546,39 @@ export async function installFlyLabWebMCP(actions: Record<string, FlyLabToolActi
             }
           },
         }, { signal: registrationController.signal });
+        acceptedRegistrationCount += 1;
       } catch (error) {
-        const detail = error instanceof Error ? error.message : 'unknown browser error';
-        throw new Error(`WebMCP registration failed for ${contract.name}: ${detail}`);
+        failedToolName = contract.name;
+        registrationErrorName = error instanceof Error ? error.name || 'Error' : 'NonErrorThrow';
+        registrationErrorMessage = error instanceof Error ? error.message : String(error);
+        throw error;
       }
     }
   } catch (error) {
     registrationController.abort();
-    throw error;
+    const detail = registrationErrorMessage ?? (error instanceof Error ? error.message : String(error));
+    const wrapped = new Error(`WebMCP registration failed for ${failedToolName ?? 'unknown tool'}: ${detail}`) as WebMCPRegistrationError;
+    wrapped.name = 'FlyLabWebMCPRegistrationError';
+    wrapped.flylabWebMCPDiagnostic = {
+      ...initialDiagnostic,
+      registration_attempted: true,
+      registrations_accepted_before_rollback: acceptedRegistrationCount,
+      failed_tool_name: failedToolName,
+      registration_error_name: registrationErrorName ?? (error instanceof Error ? error.name || 'Error' : 'NonErrorThrow'),
+      registration_error: detail,
+      availability_reason: 'registration_failed',
+    };
+    throw wrapped;
   }
 
   return {
     supported: true,
+    diagnostic: {
+      ...initialDiagnostic,
+      registration_attempted: true,
+      registrations_accepted_before_rollback: acceptedRegistrationCount,
+      availability_reason: 'active' as const,
+    },
     dispose() { registrationController.abort(); },
   };
 }
