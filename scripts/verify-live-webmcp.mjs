@@ -2572,9 +2572,18 @@ function verifySavedEvidenceExport(saved, expected) {
     })}`);
   }
   assertSameStringSet(payload.hypothesis?.evidenceIds ?? [], bundle.supportingEvidenceIds, 'hypothesis supporting evidence closure');
+  const selectedCircuitEvidenceIds = payload.circuit?.evidenceIds ?? [];
+  const selectedCircuitEvidenceIdSet = new Set(selectedCircuitEvidenceIds);
+  const nonMethodEvidenceOutsideCircuit = groups
+    .filter((group) => group.name !== 'model method')
+    .flatMap((group) => group.evidenceIds)
+    .filter((evidenceId) => !selectedCircuitEvidenceIdSet.has(evidenceId));
+  if (nonMethodEvidenceOutsideCircuit.length) {
+    throw new Error(`Supporting or circuit-context evidence escaped the selected-circuit partition: ${JSON.stringify(nonMethodEvidenceOutsideCircuit)}`);
+  }
   assertSameStringSet(
-    groups.flatMap((group) => group.evidenceIds),
-    payload.circuit?.evidenceIds ?? [],
+    groups.flatMap((group) => group.evidenceIds).filter((evidenceId) => selectedCircuitEvidenceIdSet.has(evidenceId)),
+    selectedCircuitEvidenceIds,
     'complete selected-circuit evidence partition',
   );
 
