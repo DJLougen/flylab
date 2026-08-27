@@ -296,6 +296,7 @@ function buildArtifactManifest(current: LabState) {
       version: MODEL_MANIFEST.version,
       controller: MODEL_MANIFEST.controller,
       environment: MODEL_MANIFEST.environment,
+      controller_mapping_provenance: MODEL_MANIFEST.controllerMapping,
       calibration_status: MODEL_MANIFEST.calibrationStatus,
       calibration_summary: MODEL_MANIFEST.calibrationSummary,
       parameterization: MODEL_MANIFEST.parameterization,
