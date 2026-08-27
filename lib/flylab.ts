@@ -88,7 +88,7 @@ export const ANALYSIS_METRICS = [
 ] as const;
 export type MetricName = (typeof ANALYSIS_METRICS)[number];
 
-export const METRIC_METHOD_VERSION = 'flylab.behavior-metrics.v4' as const;
+export const METRIC_METHOD_VERSION = 'flylab.behavior-metrics.v5' as const;
 
 export interface MetricDefinition {
   id: MetricName;
@@ -112,6 +112,21 @@ export interface ResponseInitiationSummaryDefinition {
   signConvention: string;
   aggregation: string;
   nullRule: string;
+  windowSemantics: string;
+  methodVersion: typeof METRIC_METHOD_VERSION;
+  provenance: readonly ['derived', 'simulation_predicted'];
+  boundary: string;
+}
+
+export interface ResponseObservationSummaryDefinition {
+  id: 'response_threshold_and_censoring_summary';
+  label: string;
+  fields: Record<'thresholdCrossingProbability' | 'thresholdCrossedN' | 'censoredN', {
+    formula: string;
+    unit: string;
+    aggregation: string;
+    nullRule: string;
+  }>;
   windowSemantics: string;
   methodVersion: typeof METRIC_METHOD_VERSION;
   provenance: readonly ['derived', 'simulation_predicted'];
@@ -241,6 +256,26 @@ export interface TrialCondition {
     | 'suppression_reduces_reference_motor_drive';
 }
 
+export interface MotorDriveDerivation {
+  conditionId: string;
+  perturbation: Experiment['perturbation'];
+  nominalControlLevel: number;
+  durationMs: number;
+  durationReferenceMs: number;
+  rawDurationGain: number;
+  boundedDurationGain: number;
+  durationGainBounds: readonly [number, number];
+  laterality: Laterality;
+  lateralityGain: number;
+  adapterAmount: number;
+  referenceMotorDrive: number;
+  suppressionFraction: number;
+  effectiveMotorDrive: number;
+  formula: string;
+  provenance: 'agent_hypothesized';
+  boundary: string;
+}
+
 export interface Experiment {
   id: string;
   hypothesisId: string;
@@ -281,7 +316,33 @@ export interface ExperimentProtocolSnapshot {
   seedPolicy: ExperimentSeedPolicy;
   metricMethodVersion: typeof METRIC_METHOD_VERSION;
   conditions: TrialCondition[];
+  driveDerivations: MotorDriveDerivation[];
   assumptions: string[];
+}
+
+export type EmbodiedBehaviorState =
+  | 'stance'
+  | 'preparation'
+  | 'reverse_walk'
+  | 'jump'
+  | 'wing_deployment'
+  | 'airborne'
+  | 'recovery';
+
+export interface EmbodiedEventTimeline {
+  responseInitiated: boolean;
+  responseDisposition: 'not_crossed' | 'censored' | 'expressed';
+  thresholdCrossed: boolean;
+  stimulusOnsetMs: number;
+  candidateMovementOnsetMs: number | null;
+  controllerThresholdMs: number | null;
+  movementOnsetMs: number | null;
+  groundReleaseMs: number | null;
+  wingDeploymentMs: number | null;
+  recoveryMs: number | null;
+  sourceConstraint: string;
+  provenance: readonly ['simulation_predicted'];
+  boundary: string;
 }
 
 export interface TrajectoryPoint {
@@ -292,6 +353,14 @@ export interface TrajectoryPoint {
   heading: number;
   active: boolean;
   motorOutputActive: boolean;
+  state: EmbodiedBehaviorState;
+  groundContact: boolean;
+  legExtension: number;
+  wingDeployment: number;
+  bodyPitchDeg: number;
+  bodyRollDeg: number;
+  premotorDriveIndex: number;
+  stanceStability: number;
 }
 
 export interface ReplicateResult {
@@ -300,7 +369,12 @@ export interface ReplicateResult {
   conditionId: string;
   seed: number;
   effectiveMotorDrive: number;
-  responseProbability: number;
+  driveDerivation: MotorDriveDerivation;
+  premotorDriveIndex: number;
+  responseThresholdProbability: number;
+  responseThresholdCrossed: boolean;
+  responseDisposition: 'not_crossed' | 'censored' | 'expressed';
+  candidateResponseLatencyMs: number | null;
   reverseInitiated: boolean;
   responseInitiated: boolean;
   shortModeEscapeInitiated: boolean;
@@ -313,6 +387,8 @@ export interface ReplicateResult {
   verticalDisplacementMm: number;
   wingRecruitment: number;
   legRecruitment: number;
+  takeoffSuccess: boolean;
+  eventTimeline: EmbodiedEventTimeline;
   trajectoryId: string;
   trajectorySeed: number;
   trajectoryRole: 'per_run_simulated_trajectory';
@@ -326,6 +402,7 @@ export interface ConditionRun {
   laterality: Laterality;
   status: 'complete';
   effectiveMotorDrive: number;
+  driveDerivation: MotorDriveDerivation;
   runIds: string[];
   replicates: ReplicateResult[];
   trajectoryId: string;
@@ -345,6 +422,11 @@ export interface SimulationBatch extends Record<string, unknown> {
   status: 'complete';
   conditionRuns: ConditionRun[];
   runHash: string;
+  runHashScope: 'run_and_trajectory_ids_only';
+  runHashSerialization: 'FNV-1a(JSON.stringify([{ runId, trajectoryId }]))';
+  runContentHash: `sha256:${string}`;
+  runContentHashScope: 'protocol_model_and_complete_condition_runs';
+  runContentHashSerialization: 'SHA-256(JSON.stringify({ protocol, model, conditionRuns }))';
   protocol: ExperimentProtocolSnapshot;
   model: typeof MODEL_MANIFEST;
   provenance: ['simulation_predicted'];
@@ -355,6 +437,9 @@ export interface ConditionAnalysis {
   label: string;
   n: number;
   reverseInitiationProbability: number;
+  thresholdCrossingProbability: number;
+  thresholdCrossedN: number;
+  censoredN: number;
   responseInitiationProbability: number;
   shortModeEscapeProbability: number;
   backwardDistanceMm: number;
@@ -371,9 +456,11 @@ export interface ConditionAnalysis {
 export interface Analysis {
   id: string;
   batchId: string;
+  batchRunContentHash: `sha256:${string}`;
   metrics: MetricName[];
   metricDefinitions: Partial<Record<MetricName, MetricDefinition>>;
   responseInitiationSummaryDefinition: ResponseInitiationSummaryDefinition;
+  responseObservationSummaryDefinition: ResponseObservationSummaryDefinition;
   conditions: ConditionAnalysis[];
   windowMs: { start: number; end: number };
   methodVersion: typeof METRIC_METHOD_VERSION;
@@ -400,9 +487,10 @@ export interface Comparison {
 }
 
 export const MODEL_PARAMETERS = {
-  name: 'flylab.mapped-motor-parameters.v2',
+  name: 'flylab.mapped-motor-parameters.v3',
   provenance: 'agent_hypothesized',
-  calibration: 'Hand-authored for deterministic challenge demonstration; not fitted to the cited fly assays, BANC contact counts, neural recordings, or FlyGym output.',
+  calibration: 'State-transition order and approximate GF event intervals are constrained by cited adult escape measurements; probabilities, amplitudes, controller gains, recovery timing and dynamics, and MDN dynamics remain hand-authored and are not fitted to held-out data.',
+  calibrationStatus: 'literature_constrained_event_order_unfitted_amplitudes',
   unitBoundary: 'Distances and speeds use declared model-scale millimeter units. They are internally consistent but are not biologically calibrated effect sizes.',
   durationReferenceMs: 1800,
   durationGainBounds: [0.35, 1.2],
@@ -421,7 +509,17 @@ export const MODEL_PARAMETERS = {
   },
   escapeTakeoff: {
     responseProbability: { baseline: 0.04, driveGain: 0.9, minimum: 0.01, maximum: 0.98 },
-    responseLatency: { interceptMs: 165, inverseDriveGainMs: 510, jitterScaleMs: 90, minimumClampMs: 55 },
+    responseLatency: { interceptMs: 1.4, inverseDriveGainMs: 3.2, jitterScaleMs: 0.4, minimumClampMs: 1.4 },
+    eventTiming: {
+      controllerLeadMs: 0.6,
+      groundReleaseDelayMs: 1.1,
+      wingDelayAfterGroundReleaseMs: 1.5,
+      recoveryBaseMs: 180,
+      recoveryDriveGainMs: 120,
+      recoveryJitterScaleMs: 20,
+      sourceIds: ['SRC-GAITANIDIS-PLOS-BIOLOGY-2025'],
+      boundary: 'The order and approximate millisecond intervals are literature-constrained calibration targets across distinct direct-GF and light-off paradigms; they are not a fitted equivalence to FlyLab unitless drive.',
+    },
     verticalDisplacement: { interceptModelMm: 0.42, driveGainModelMm: 2.6, jitterScaleModelMm: 0.24 },
     wingRecruitment: { baseline: 0.05, driveGain: 0.9, jitterScale: 0.08 },
     legRecruitment: { baseline: 0.06, driveGain: 0.92, jitterScale: 0.08 },
@@ -439,13 +537,40 @@ export const MODEL_PARAMETERS = {
     activeTurnBaseDegPerStep: 0.32,
     activeTurnGainDegPerStep: 0.34,
   },
+  stateTrajectory: {
+    protocolWindowSemantics: '[onset_ms, min(trial_duration_ms, onset_ms + duration_ms))',
+    distanceScale: { minimum: 0.98, range: 0.04 },
+    eventSamplingBoundaryEpsilonMs: 0.001,
+    reverseControllerLead: { latencyFraction: 0.2, maximumMs: 60 },
+    stanceStability: {
+      preparationPenalty: 0.05,
+      reverseWalkPenalty: 0.1,
+      jump: 0.35,
+      wingDeployment: 0.25,
+      airborne: 0.5,
+    },
+    takeoffPose: {
+      jumpPitchDeg: -14,
+      wingDeploymentPitchDeltaDeg: 20,
+      airborneRecoveryPitchDeg: 6,
+      wingDeploymentLegDecayFraction: 0.75,
+      airborneLegRetentionFraction: 0.2,
+      unilateralBodyRollPerHeading: 0.2,
+    },
+    illustrativeCompatibilityPose: {
+      takeoffPitchDeg: 10,
+      airborneStanceStability: 0.6,
+    },
+  },
 } as const;
 
 export const MODEL_MANIFEST = {
   name: 'FlyLab mapped-motor embodiment model',
-  version: '0.2.0',
-  controller: 'mapped-circuit-to-body-adapter.v1',
-  environment: 'open-field-model-scale.v2',
+  version: '0.3.0',
+  controller: 'state-coherent-mapped-circuit-adapter.v2',
+  environment: 'stateful-open-field-model-scale.v3',
+  calibrationStatus: MODEL_PARAMETERS.calibrationStatus,
+  calibrationSummary: MODEL_PARAMETERS.calibration,
   controllerMapping: {
     provenance: 'agent_hypothesized',
     statement: 'Each mapping from a source-backed circuit path to a body controller is hand-authored and versioned; it is not an inferred firing rate, synaptic simulation, muscle model, or optogenetic dose.',
@@ -459,7 +584,7 @@ export const MODEL_MANIFEST = {
     browserStack: { mujocoWasm: '3.9.0', threeJs: '0.169.0' },
   },
   parameterization: MODEL_PARAMETERS,
-  boundary: 'Hand-authored, uncalibrated reduced-order body-controller prediction only. It does not execute connectome neurons, electrical or chemical synapses, neural dynamics, muscles, aerodynamics, FlyGym, or a wet-lab perturbation, and it is not independent biological validation.',
+  boundary: 'Literature-constrained GF event order and selected approximate intervals with hand-authored, unfitted reduced-order probabilities, amplitudes, body-controller gains, and recovery timing and dynamics. It does not execute connectome neurons, electrical or chemical synapses, neural dynamics, muscles, aerodynamics, FlyGym, or a wet-lab perturbation, and it is not independent biological validation.',
 } as const;
 
 export const VISUAL_REFERENCES: readonly VisualReferenceRecord[] = [
@@ -660,6 +785,20 @@ export const SOURCES: SourceRecord[] = [
     notes: 'Supports assay-scoped necessity and sufficiency of giant fibers for short-mode escape; it does not define FlyLab controller parameters.',
   },
   {
+    id: 'SRC-GAITANIDIS-PLOS-BIOLOGY-2025',
+    kind: 'article',
+    title: 'The Drosophila escape motor circuit shows differential vulnerability to aging linked to functional decay',
+    url: 'https://doi.org/10.1371/journal.pbio.3003553',
+    doi: '10.1371/journal.pbio.3003553',
+    citation: 'Gaitanidis A et al. PLOS Biology 23:e3003553 (2025).',
+    version: 'Version of record (2025)',
+    access: 'Open primary article.',
+    license: 'CC-BY-4.0',
+    specimen: 'Adult Drosophila in light-off escape behavior and giant-fiber pathway electrophysiology across age groups.',
+    redistribution: 'Attribution required for reused article material; FlyLab bundles citation and claim metadata only.',
+    notes: 'Provides event-order and timing context: representative light-off escape began moving at about 3.4 ms, became airborne at about 4.5 ms, and extended/beating wings within another 1–2 ms; direct GF stimulation produced an approximately 1.4 ms DLM short-latency response. These are distinct paradigms and are calibration targets, not a fitted FlyLab dose law.',
+  },
+  {
     id: 'SRC-KING-JNEUROCYTOL-1980',
     kind: 'article',
     title: 'Anatomy of the giant fibre pathway in Drosophila. I. Three thoracic components of the pathway',
@@ -706,8 +845,8 @@ export const SOURCES: SourceRecord[] = [
     kind: 'software',
     title: 'FlyLab reduced-order model card',
     url: 'https://github.com/DJLougen/flylab/blob/main/docs/MODEL_CARD.md',
-    citation: 'FlyLab contributors. FlyLab mapped-motor model card, version 0.2.0 (2026).',
-    version: '0.2.0 / mapped-circuit-to-body-adapter.v1',
+    citation: 'FlyLab contributors. FlyLab mapped-motor model card, version 0.3.0 (2026).',
+    version: '0.3.0 / state-coherent-mapped-circuit-adapter.v2',
     access: 'Open source model definition and equations.',
     license: 'Apache-2.0',
     specimen: 'No biological specimen; local deterministic software method.',
@@ -918,6 +1057,20 @@ export const EVIDENCE: EvidenceRecord[] = [
       { sourceId: 'SRC-AZEVEDO-NATURE-2024', relation: 'claim_support', locator: 'Results, Coordination of legs and wings during take-off; Fig. 6', supports: 'Reports connectome-derived hypotheses linking GF-coupled premotor neurons to leg and wing motor output.' },
     ],
   },
+  {
+    id: 'E-GF-SEQUENCE-013',
+    label: 'Measured giant-fiber escape event order and timing context',
+    claim: 'In the cited adult light-off assay, a representative escape first moved at about 3.4 ms, became airborne at about 4.5 ms, and extended and beat its wings within another 1–2 ms; direct GF stimulation produced an approximately 1.4 ms DLM short-latency response.',
+    provenance: 'measured',
+    sourceIds: ['SRC-GAITANIDIS-PLOS-BIOLOGY-2025'],
+    context: 'Adult Drosophila light-off escape behavior and direct giant-fiber pathway electrophysiology reported in distinct assay preparations.',
+    caution: 'These timings are event-order and calibration targets across distinct paradigms. They do not identify a FlyLab unitless drive dose, fit the model amplitudes, or make the reduced-order controller a biological replica.',
+    role: 'model_context',
+    support: { kind: 'motor_context', behaviors: ['short_mode_escape'] },
+    sourceSupport: [
+      { sourceId: 'SRC-GAITANIDIS-PLOS-BIOLOGY-2025', relation: 'claim_support', locator: 'Results, Fig. 1A and Fig. 2; DLM SLR/LLR electrophysiology section', supports: 'Reports the measured jump-to-airborne-to-wing sequence and the direct-GF-to-DLM short-latency response used only as bounded timing context.' },
+    ],
+  },
 ];
 
 export const CIRCUITS: CircuitRecord[] = [
@@ -973,6 +1126,7 @@ export const CIRCUITS: CircuitRecord[] = [
       'E-GF-CAUSAL-010',
       'E-GF-PATH-011',
       'E-FANC-ESCAPE-012',
+      'E-GF-SEQUENCE-013',
       'E-FLYLAB-MODEL-004',
     ],
     summary: 'A derived adult giant-fiber catalog entry linking causal short-mode escape assays to established TTM jump-leg and PSI/DLM wing branches, with separately labeled FANC structural context and a schematic reduced-order body controller.',
@@ -1116,14 +1270,14 @@ export function evidenceBundleTitle(
 
 export const DEFAULT_GOAL = 'Investigate how the adult fruit-fly brain coordinates leg and wing output during rapid escape. Separate measured findings from connectome inference and simulation assumptions, draft a falsifiable hypothesis, and design a controlled experiment. Stop for my approval, then continue, analyze every metric, compare conditions, and save the complete evidence bundle.';
 
-const SIMULATED_METRIC_BOUNDARY = 'Derived only from seeded outputs of the hand-authored, uncalibrated reduced-order FlyLab model. It is not a measured biological quantity, confidence interval, or independent validation.';
-const FULL_TRIAL_WINDOW_SEMANTICS = 'Protocol-full-trial scalar. Method v4 supports the analysis window [0, trial_duration_ms] only; response-dependent integration begins at nominal onset plus response latency and ends at trial_duration_ms.';
+const SIMULATED_METRIC_BOUNDARY = 'Derived only from seeded outputs of the reduced-order FlyLab model. GF event order and approximate timing are literature-constrained; amplitudes, probabilities, controller gains, recovery, and MDN dynamics remain hand-authored and unfitted. It is not a measured biological quantity, confidence interval, or independent validation.';
+const FULL_TRIAL_WINDOW_SEMANTICS = 'Protocol-full-trial scalar. Method v5 supports the analysis window [0, trial_duration_ms] only; exact state-event timestamps are retained independently of the display samples.';
 
 export const METRIC_DEFINITIONS = {
   backward_distance_mm: {
     id: 'backward_distance_mm',
     label: 'Backward distance',
-    formula: 'run = I(reverse_initiated) * max(0, -signed_speed_mm_s) * max(0, trial_duration_ms - onset_ms - response_latency_ms) / 1000 * backward_distance_scale; condition = sum(run) / n',
+    formula: 'run = max over the authoritative per-run state trajectory of max(0, -y_model_mm); condition = sum(run) / n',
     unit: 'model mm',
     signConvention: 'Nonnegative distance in the backward direction; zero means no modeled backward displacement during the response window.',
     aggregation: 'Arithmetic mean across all seeded runs, including zero for runs without reverse initiation.',
@@ -1136,7 +1290,7 @@ export const METRIC_DEFINITIONS = {
   signed_speed_mm_s: {
     id: 'signed_speed_mm_s',
     label: 'Signed speed',
-    formula: 'run = reverse_initiated ? -max(epsilon, reverse_intercept + effective_motor_drive * reverse_gain + paired_speed_noise) : max(0, forward_baseline + mode_drive_term + paired_speed_noise); condition = reverse_mode ? (backward_moving_n > 0 ? sum(run where backward_distance_mm > 0) / backward_moving_n : 0) : sum(run) / n',
+    formula: 'run = reverse mode ? -(maximum backward-axis displacement / movement_onset→recovery duration) : (start-to-end planar displacement / movement_onset→recovery duration); condition = reverse_mode ? mean(runs with backward distance > 0) : mean(all runs)',
     unit: 'model mm/s',
     signConvention: 'Negative is backward, positive is forward, and zero is stationary. Any run or reverse-mode condition with positive backward distance has negative signed speed.',
     aggregation: 'For reverse maps, arithmetic mean across runs with positive backward distance, or 0 when none move backward; for takeoff maps, arithmetic mean across all seeded runs.',
@@ -1149,11 +1303,11 @@ export const METRIC_DEFINITIONS = {
   response_latency_ms: {
     id: 'response_latency_ms',
     label: 'Response latency',
-    formula: 'run = response_initiated ? clamp(intercept_ms + (1 - effective_motor_drive) * inverse_drive_gain_ms + paired_latency_noise, minimum_ms, trial_duration_ms - onset_ms) : null; condition = responsive_n > 0 ? sum(responsive run latency) / responsive_n : null',
+    formula: 'candidate = threshold_crossed ? max(minimum_ms, intercept_ms + (1 - effective_motor_drive) * inverse_drive_gain_ms + paired_latency_noise) : null; run = complete body sequence fits before trial end ? candidate : null; condition = responsive_n > 0 ? sum(expressed run latency) / responsive_n : null',
     unit: 'ms',
     signConvention: 'Nonnegative elapsed time measured from nominal protocol onset; smaller values are earlier responses.',
     aggregation: 'Arithmetic mean across responsive runs only; responsive_n is reported separately.',
-    nullRule: 'Run value is null when response_initiated is false; condition value is null when responsive_n is 0.',
+    nullRule: 'Run value is null when the threshold is not crossed or the candidate response is right-censored by the trial boundary; condition value is null when responsive_n is 0.',
     windowSemantics: FULL_TRIAL_WINDOW_SEMANTICS,
     methodVersion: METRIC_METHOD_VERSION,
     provenance: ['derived', 'simulation_predicted'],
@@ -1162,7 +1316,7 @@ export const METRIC_DEFINITIONS = {
   heading_change_deg: {
     id: 'heading_change_deg',
     label: 'Heading change',
-    formula: 'run_signed = lateral_sign == 0 ? paired_bilateral_heading_noise : lateral_sign * (perturbation_mode_sign * (heading_base_deg + lateral_effect * heading_gain_deg) + paired_unilateral_heading_noise); condition = abs(sum(run_signed) / n)',
+    formula: 'run_signed = final trajectory heading - initial trajectory heading; condition = abs(sum(run_signed) / n)',
     unit: '°',
     signConvention: 'Per-run negative is leftward and positive is rightward; the stable condition metric is the nonnegative magnitude of the mean signed change.',
     aggregation: 'Absolute value of the arithmetic mean of signed per-run heading changes.',
@@ -1175,10 +1329,10 @@ export const METRIC_DEFINITIONS = {
   stance_stability: {
     id: 'stance_stability',
     label: 'Stance stability',
-    formula: 'run = clamp(baseline - effective_motor_drive * drive_penalty + paired_stance_noise, minimum, maximum); condition = sum(run) / n',
+    formula: 'run = left-continuous time integral of stance_stability across the authoritative per-run state trajectory divided by full trace duration; condition = sum(run) / n',
     unit: 'index',
     signConvention: 'Larger values indicate greater modeled stance stability.',
-    aggregation: 'Arithmetic mean across all seeded runs.',
+    aggregation: 'Time-weighted full-trial mean within each run, then arithmetic mean across seeded runs.',
     nullRule: 'Never null.',
     windowSemantics: FULL_TRIAL_WINDOW_SEMANTICS,
     methodVersion: METRIC_METHOD_VERSION,
@@ -1188,11 +1342,11 @@ export const METRIC_DEFINITIONS = {
   short_mode_escape_probability: {
     id: 'short_mode_escape_probability',
     label: 'Short-mode escape probability',
-    formula: 'condition = sum(I(short_mode_escape_initiated)) / n',
+    formula: 'condition = sum(I(per-run state trajectory contains an airborne point with ground_contact=false)) / n',
     unit: 'fraction',
-    signConvention: 'Larger values indicate a larger fraction of seeded runs initiating modeled short-mode escape.',
+    signConvention: 'Larger values indicate a larger fraction of seeded runs completing the model-defined jump-to-airborne state sequence.',
     aggregation: 'Bernoulli sample mean across all seeded runs.',
-    nullRule: 'Never null; reverse-walk runs contribute 0 because short_mode_escape_initiated is false.',
+    nullRule: 'Never null; runs without an airborne state contribute 0.',
     windowSemantics: FULL_TRIAL_WINDOW_SEMANTICS,
     methodVersion: METRIC_METHOD_VERSION,
     provenance: ['derived', 'simulation_predicted'],
@@ -1201,7 +1355,7 @@ export const METRIC_DEFINITIONS = {
   vertical_displacement_mm: {
     id: 'vertical_displacement_mm',
     label: 'Vertical displacement',
-    formula: 'run = short_mode_escape_initiated ? max(0, intercept + effective_motor_drive * drive_gain + paired_vertical_noise) : 0; condition = sum(run) / n',
+    formula: 'run = max over the authoritative per-run state trajectory of max(0, z_model_mm); condition = sum(run) / n',
     unit: 'model mm',
     signConvention: 'Nonnegative upward modeled displacement; zero means no modeled lift.',
     aggregation: 'Arithmetic mean across all seeded runs, including zero for runs without short-mode escape initiation.',
@@ -1214,9 +1368,9 @@ export const METRIC_DEFINITIONS = {
   wing_recruitment: {
     id: 'wing_recruitment',
     label: 'Wing recruitment',
-    formula: 'run = takeoff_mode ? clamp(baseline + effective_motor_drive * drive_gain + paired_wing_noise, 0, 1) : 0; condition = sum(run) / n',
+    formula: 'run = max wing_deployment across the authoritative per-run state trajectory; nonresponding and non-takeoff runs remain 0; condition = sum(run) / n',
     unit: 'index',
-    signConvention: 'Larger values indicate greater modeled wing-controller recruitment.',
+    signConvention: 'Larger values indicate greater modeled expressed wing deployment after the wing-deployment state transition.',
     aggregation: 'Arithmetic mean across all seeded runs.',
     nullRule: 'Never null; non-takeoff motor maps contribute 0.',
     windowSemantics: FULL_TRIAL_WINDOW_SEMANTICS,
@@ -1227,9 +1381,9 @@ export const METRIC_DEFINITIONS = {
   leg_recruitment: {
     id: 'leg_recruitment',
     label: 'Leg recruitment',
-    formula: 'run = clamp(mode_baseline + effective_motor_drive * mode_drive_gain + paired_leg_noise, 0, 1); condition = sum(run) / n',
+    formula: 'run = max leg_extension across the authoritative per-run state trajectory; nonresponding runs remain 0 even when premotor drive is nonzero; condition = sum(run) / n',
     unit: 'index',
-    signConvention: 'Larger values indicate greater modeled leg-controller recruitment.',
+    signConvention: 'Larger values indicate greater modeled expressed leg extension after a body-state transition.',
     aggregation: 'Arithmetic mean across all seeded runs.',
     nullRule: 'Never null.',
     windowSemantics: FULL_TRIAL_WINDOW_SEMANTICS,
@@ -1252,6 +1406,35 @@ export const RESPONSE_INITIATION_SUMMARY_DEFINITION = {
   provenance: ['derived', 'simulation_predicted'],
   boundary: `${SIMULATED_METRIC_BOUNDARY} This is a separately declared result summary and is not one of the nine stable objective metrics.`,
 } as const satisfies ResponseInitiationSummaryDefinition;
+
+export const RESPONSE_OBSERVATION_SUMMARY_DEFINITION = {
+  id: 'response_threshold_and_censoring_summary',
+  label: 'Seeded threshold and censoring summaries',
+  fields: {
+    thresholdCrossingProbability: {
+      formula: 'condition = sum(I(response_threshold_crossed)) / n',
+      unit: 'fraction',
+      aggregation: 'Seeded empirical fraction across all runs; distinct from each run’s model responseThresholdProbability.',
+      nullRule: 'Never null.',
+    },
+    thresholdCrossedN: {
+      formula: 'condition = sum(I(response_threshold_crossed))',
+      unit: 'runs',
+      aggregation: 'Integer count across all seeded runs.',
+      nullRule: 'Never null.',
+    },
+    censoredN: {
+      formula: "condition = sum(I(response_disposition = 'censored'))",
+      unit: 'runs',
+      aggregation: 'Integer count of threshold-crossing candidates whose complete declared body transition does not fit inside the trial window.',
+      nullRule: 'Never null.',
+    },
+  },
+  windowSemantics: FULL_TRIAL_WINDOW_SEMANTICS,
+  methodVersion: METRIC_METHOD_VERSION,
+  provenance: ['derived', 'simulation_predicted'],
+  boundary: `${SIMULATED_METRIC_BOUNDARY} These are seeded model-observation summaries, not biological response rates or survival-analysis estimates.`,
+} as const satisfies ResponseObservationSummaryDefinition;
 
 export const METRIC_LABELS = ANALYSIS_METRICS.reduce<Record<MetricName, { label: string; unit: string }>>(
   (labels, metric) => {
@@ -1642,26 +1825,63 @@ export function snapshotExperimentProtocol(experiment: Experiment): ExperimentPr
     seedPolicy: { ...experiment.seedPolicy },
     metricMethodVersion: experiment.metricMethodVersion,
     conditions: experiment.conditions.map((condition) => ({ ...condition })),
+    driveDerivations: experiment.conditions.map((condition) => deriveConditionMotorDrive(condition, experiment)),
     assumptions: [...experiment.assumptions],
   };
 }
 
-function conditionMotorDrive(condition: TrialCondition, experiment: Experiment) {
-  if (condition.kind !== 'perturbation') {
-    return experiment.perturbation === 'silence' ? MODEL_PARAMETERS.silencingReferenceMotorDrive : 0;
-  }
-  const durationGain = clamp(
-    experiment.durationMs / MODEL_PARAMETERS.durationReferenceMs,
+export function deriveConditionMotorDrive(
+  condition: TrialCondition,
+  experiment: Pick<Experiment, 'perturbation' | 'durationMs'>,
+): MotorDriveDerivation {
+  const rawDurationGain = experiment.durationMs / MODEL_PARAMETERS.durationReferenceMs;
+  const boundedDurationGain = clamp(
+    rawDurationGain,
     MODEL_PARAMETERS.durationGainBounds[0],
     MODEL_PARAMETERS.durationGainBounds[1],
   );
   const lateralityGain = condition.laterality === 'bilateral' ? 1 : MODEL_PARAMETERS.unilateralGain;
-  const adapterAmount = condition.nominalControlLevel * durationGain * lateralityGain;
-  if (experiment.perturbation === 'activate') {
-    return clamp(adapterAmount, 0, MODEL_PARAMETERS.maximumMotorDrive);
-  }
-  const suppressionFraction = clamp(adapterAmount, 0, MODEL_PARAMETERS.maximumSuppressionFraction);
-  return MODEL_PARAMETERS.silencingReferenceMotorDrive * (1 - suppressionFraction);
+  const isPerturbation = condition.kind === 'perturbation';
+  const adapterAmount = isPerturbation
+    ? condition.nominalControlLevel * boundedDurationGain * lateralityGain
+    : 0;
+  const referenceMotorDrive = experiment.perturbation === 'silence'
+    ? MODEL_PARAMETERS.silencingReferenceMotorDrive
+    : 0;
+  const suppressionFraction = experiment.perturbation === 'silence' && isPerturbation
+    ? clamp(adapterAmount, 0, MODEL_PARAMETERS.maximumSuppressionFraction)
+    : 0;
+  const effectiveMotorDrive = !isPerturbation
+    ? referenceMotorDrive
+    : experiment.perturbation === 'activate'
+      ? clamp(adapterAmount, 0, MODEL_PARAMETERS.maximumMotorDrive)
+      : referenceMotorDrive * (1 - suppressionFraction);
+  const formula = !isPerturbation
+    ? experiment.perturbation === 'silence'
+      ? `reference drive ${referenceMotorDrive} (control arm; no suppression applied)`
+      : '0 (baseline/model-sham arm; no mapped activation drive applied)'
+    : experiment.perturbation === 'activate'
+      ? `clamp(${condition.nominalControlLevel} × clamp(${experiment.durationMs} / ${MODEL_PARAMETERS.durationReferenceMs}, ${MODEL_PARAMETERS.durationGainBounds[0]}, ${MODEL_PARAMETERS.durationGainBounds[1]}) × ${lateralityGain}, 0, ${MODEL_PARAMETERS.maximumMotorDrive}) = ${effectiveMotorDrive}`
+      : `${referenceMotorDrive} × (1 - clamp(${condition.nominalControlLevel} × clamp(${experiment.durationMs} / ${MODEL_PARAMETERS.durationReferenceMs}, ${MODEL_PARAMETERS.durationGainBounds[0]}, ${MODEL_PARAMETERS.durationGainBounds[1]}) × ${lateralityGain}, 0, ${MODEL_PARAMETERS.maximumSuppressionFraction})) = ${effectiveMotorDrive}`;
+  return {
+    conditionId: condition.id,
+    perturbation: experiment.perturbation,
+    nominalControlLevel: condition.nominalControlLevel,
+    durationMs: experiment.durationMs,
+    durationReferenceMs: MODEL_PARAMETERS.durationReferenceMs,
+    rawDurationGain,
+    boundedDurationGain,
+    durationGainBounds: MODEL_PARAMETERS.durationGainBounds,
+    laterality: condition.laterality,
+    lateralityGain,
+    adapterAmount,
+    referenceMotorDrive,
+    suppressionFraction,
+    effectiveMotorDrive,
+    formula,
+    provenance: 'agent_hypothesized',
+    boundary: 'Versioned FlyLab controller arithmetic only. Nominal control and effective motor drive are unitless model quantities, not optical power, firing rate, synaptic weight, muscle activation, or a biological dose.',
+  };
 }
 
 function simulateIllustrativeTrajectory(condition: TrialCondition, experiment: Experiment, motorDrive: number, seed: number): TrajectoryPoint[] {
@@ -1674,7 +1894,8 @@ function simulateIllustrativeTrajectory(condition: TrialCondition, experiment: E
   const steps = MODEL_PARAMETERS.trajectory.steps;
   for (let step = 0; step <= steps; step += 1) {
     const t = (experiment.trialDurationMs * step) / steps;
-    const inProtocolWindow = t >= experiment.onsetMs && t <= experiment.onsetMs + experiment.durationMs;
+    const protocolOffsetMs = Math.min(experiment.trialDurationMs, experiment.onsetMs + experiment.durationMs);
+    const inProtocolWindow = t >= experiment.onsetMs && t < protocolOffsetMs;
     const active = condition.kind === 'perturbation' && inProtocolWindow;
     const drive = inProtocolWindow ? motorDrive : 0;
     const takeoffMode = experiment.motorMap.responseMode === 'takeoff';
@@ -1685,20 +1906,53 @@ function simulateIllustrativeTrajectory(condition: TrialCondition, experiment: E
     const lateralEffect = experiment.perturbation === 'silence'
       ? MODEL_PARAMETERS.silencingReferenceMotorDrive - drive
       : drive;
-    heading += active
-      ? lateralSign * lateralModeSign * (
-          MODEL_PARAMETERS.trajectory.activeTurnBaseDegPerStep
-          + lateralEffect * MODEL_PARAMETERS.trajectory.activeTurnGainDegPerStep
-        )
-      : (lateralSign || 1) * jitter(random, MODEL_PARAMETERS.trajectory.headingJitterScaleDeg);
+    const lateralEffectFraction = clamp(
+      Math.abs(lateralEffect) / MODEL_PARAMETERS.silencingReferenceMotorDrive,
+      0,
+      1,
+    );
+    if (motorOutputActive) {
+      heading += active && lateralSign !== 0 && lateralEffectFraction > 0
+        ? lateralSign * lateralModeSign * (
+            MODEL_PARAMETERS.trajectory.activeTurnBaseDegPerStep * lateralEffectFraction
+            + lateralEffect * MODEL_PARAMETERS.trajectory.activeTurnGainDegPerStep
+          )
+        : jitter(random, MODEL_PARAMETERS.trajectory.headingJitterScaleDeg);
+    }
     const speed = takeoffMode
       ? MODEL_PARAMETERS.trajectory.baseStepModelMm + drive * MODEL_PARAMETERS.escapeTakeoff.trajectoryForwardGainModelMm
       : MODEL_PARAMETERS.trajectory.baseStepModelMm + drive * MODEL_PARAMETERS.trajectory.driveStepGainModelMm;
-    x += Math.sin((heading * Math.PI) / 180) * speed
-      + (lateralSign || 1) * jitter(random, MODEL_PARAMETERS.trajectory.positionJitterScaleModelMm);
-    y += direction * Math.cos((heading * Math.PI) / 180) * speed + jitter(random, MODEL_PARAMETERS.trajectory.positionJitterScaleModelMm);
-    if (takeoffMode && motorOutputActive) z += drive * MODEL_PARAMETERS.escapeTakeoff.trajectoryLiftGainModelMm;
-    points.push({ t: Math.round(t), x, y, z, heading, active, motorOutputActive });
+    if (motorOutputActive) {
+      x += Math.sin((heading * Math.PI) / 180) * speed
+        + (lateralEffectFraction > 0 ? lateralSign || 1 : 1)
+          * jitter(random, MODEL_PARAMETERS.trajectory.positionJitterScaleModelMm);
+      y += direction * Math.cos((heading * Math.PI) / 180) * speed
+        + jitter(random, MODEL_PARAMETERS.trajectory.positionJitterScaleModelMm);
+      if (takeoffMode) z += drive * MODEL_PARAMETERS.escapeTakeoff.trajectoryLiftGainModelMm;
+    } else if (takeoffMode) {
+      z = 0;
+    }
+    points.push({
+      t: Math.round(t),
+      x,
+      y,
+      z,
+      heading,
+      active,
+      motorOutputActive,
+      state: motorOutputActive ? takeoffMode ? 'airborne' : 'reverse_walk' : 'stance',
+      groundContact: !takeoffMode || !motorOutputActive,
+      legExtension: motorOutputActive ? clamp(drive, 0, 1) : 0,
+      wingDeployment: motorOutputActive && takeoffMode ? clamp(drive, 0, 1) : 0,
+      bodyPitchDeg: motorOutputActive && takeoffMode
+        ? MODEL_PARAMETERS.stateTrajectory.illustrativeCompatibilityPose.takeoffPitchDeg
+        : 0,
+      bodyRollDeg: 0,
+      premotorDriveIndex: drive,
+      stanceStability: motorOutputActive && takeoffMode
+        ? MODEL_PARAMETERS.stateTrajectory.illustrativeCompatibilityPose.airborneStanceStability
+        : MODEL_PARAMETERS.stanceStability.baseline,
+    });
   }
   return points;
 }
@@ -1735,6 +1989,7 @@ interface PairedReplicateDraws {
   legNoise: number;
   headingNoise: number;
   stanceNoise: number;
+  recoveryNoise: number;
 }
 
 function pairedReplicateDraws(seed: number): PairedReplicateDraws {
@@ -1749,16 +2004,172 @@ function pairedReplicateDraws(seed: number): PairedReplicateDraws {
     legNoise: jitter(random),
     headingNoise: jitter(random),
     stanceNoise: jitter(random),
+    recoveryNoise: jitter(random),
   };
 }
 
 interface RunTrajectoryInputs {
-  responseInitiated: boolean;
-  responseLatencyMs: number | null;
-  signedSpeedMmS: number;
+  eventTimeline: EmbodiedEventTimeline;
+  targetSignedSpeedMmS: number;
   backwardDistanceScale: number;
-  headingChangeDeg: number;
-  verticalDisplacementMm: number;
+  targetHeadingChangeDeg: number;
+  targetBodyRollChangeDeg: number;
+  targetVerticalDisplacementMm: number;
+  targetWingRecruitment: number;
+  targetLegRecruitment: number;
+  baselineStanceStability: number;
+  targetStanceStability: number;
+}
+
+function buildEmbodiedEventTimeline(
+  experiment: Pick<Experiment, 'motorMap' | 'onsetMs' | 'trialDurationMs'>,
+  motorDrive: number,
+  responseDisposition: ReplicateResult['responseDisposition'],
+  responseLatencyMs: number | null,
+  candidateResponseLatencyMs: number | null,
+  recoveryNoise: number,
+): EmbodiedEventTimeline {
+  const takeoffMode = experiment.motorMap.responseMode === 'takeoff';
+  if (responseDisposition !== 'expressed' || responseLatencyMs === null) {
+    const thresholdCrossed = responseDisposition === 'censored';
+    return {
+      responseInitiated: false,
+      responseDisposition,
+      thresholdCrossed,
+      stimulusOnsetMs: experiment.onsetMs,
+      candidateMovementOnsetMs: candidateResponseLatencyMs === null
+        ? null
+        : experiment.onsetMs + candidateResponseLatencyMs,
+      controllerThresholdMs: null,
+      movementOnsetMs: null,
+      groundReleaseMs: null,
+      wingDeploymentMs: null,
+      recoveryMs: null,
+      sourceConstraint: takeoffMode
+        ? MODEL_PARAMETERS.escapeTakeoff.eventTiming.boundary
+        : 'MDN event timing remains hand-authored and unfitted.',
+      provenance: ['simulation_predicted'],
+      boundary: thresholdCrossed
+        ? 'The seeded response threshold was crossed, but the complete declared body transition could not fit inside the trial window; the run is censored and expressed appendage recruitment remains absent.'
+        : 'No modeled response crossed threshold; body-state transitions and expressed appendage recruitment remain absent even when premotor drive is nonzero.',
+    };
+  }
+
+  const movementOnsetMs = clamp(
+    experiment.onsetMs + responseLatencyMs,
+    experiment.onsetMs,
+    experiment.trialDurationMs,
+  );
+  if (!takeoffMode) {
+    return {
+      responseInitiated: true,
+      responseDisposition: 'expressed',
+      thresholdCrossed: true,
+      stimulusOnsetMs: experiment.onsetMs,
+      candidateMovementOnsetMs: movementOnsetMs,
+      controllerThresholdMs: Math.max(
+        experiment.onsetMs,
+        movementOnsetMs - Math.min(
+          MODEL_PARAMETERS.stateTrajectory.reverseControllerLead.maximumMs,
+          responseLatencyMs * MODEL_PARAMETERS.stateTrajectory.reverseControllerLead.latencyFraction,
+        ),
+      ),
+      movementOnsetMs,
+      groundReleaseMs: null,
+      wingDeploymentMs: null,
+      recoveryMs: experiment.trialDurationMs,
+      sourceConstraint: 'MDN event timing remains hand-authored and unfitted.',
+      provenance: ['simulation_predicted'],
+      boundary: 'Versioned reduced-order retreat-state timing; not measured neural, joint, or contact timing.',
+    };
+  }
+
+  const timing = MODEL_PARAMETERS.escapeTakeoff.eventTiming;
+  const controllerThresholdMs = Math.max(experiment.onsetMs, movementOnsetMs - timing.controllerLeadMs);
+  const groundReleaseMs = Math.min(experiment.trialDurationMs, movementOnsetMs + timing.groundReleaseDelayMs);
+  const wingDeploymentMs = Math.min(experiment.trialDurationMs, groundReleaseMs + timing.wingDelayAfterGroundReleaseMs);
+  const recoveryDurationMs = Math.max(
+    1,
+    timing.recoveryBaseMs
+      + motorDrive * timing.recoveryDriveGainMs
+      + recoveryNoise * timing.recoveryJitterScaleMs,
+  );
+  const recoveryMs = Math.min(experiment.trialDurationMs, wingDeploymentMs + recoveryDurationMs);
+  return {
+    responseInitiated: true,
+    responseDisposition: 'expressed',
+    thresholdCrossed: true,
+    stimulusOnsetMs: experiment.onsetMs,
+    candidateMovementOnsetMs: movementOnsetMs,
+    controllerThresholdMs,
+    movementOnsetMs,
+    groundReleaseMs,
+    wingDeploymentMs,
+    recoveryMs,
+    sourceConstraint: timing.boundary,
+    provenance: ['simulation_predicted'],
+    boundary: 'Literature-constrained event order with hand-authored, unfitted controller-to-body amplitudes and recovery duration; not a direct replay of any animal trial.',
+  };
+}
+
+function trajectorySampleTimes(experiment: Experiment, timeline: EmbodiedEventTimeline) {
+  const times = new Set<number>();
+  const steps = MODEL_PARAMETERS.trajectory.steps;
+  for (let step = 0; step <= steps; step += 1) {
+    times.add(Number(((experiment.trialDurationMs * step) / steps).toFixed(6)));
+  }
+  const epsilon = MODEL_PARAMETERS.stateTrajectory.eventSamplingBoundaryEpsilonMs;
+  const protocolBoundaries = [
+    experiment.onsetMs,
+    Math.min(experiment.trialDurationMs, experiment.onsetMs + experiment.durationMs),
+  ];
+  for (const boundary of protocolBoundaries) {
+    times.add(boundary);
+    if (boundary > 0) times.add(Math.max(0, boundary - epsilon));
+    if (boundary < experiment.trialDurationMs) times.add(Math.min(experiment.trialDurationMs, boundary + epsilon));
+  }
+  const events = [
+    timeline.controllerThresholdMs,
+    timeline.movementOnsetMs,
+    timeline.groundReleaseMs,
+    timeline.wingDeploymentMs,
+    timeline.recoveryMs,
+  ].filter((value): value is number => value !== null);
+  events.forEach((eventTime, index) => {
+    times.add(eventTime);
+    if (eventTime > 0) times.add(Math.max(
+      0,
+      eventTime - epsilon,
+    ));
+    if (eventTime < experiment.trialDurationMs) times.add(Math.min(
+      experiment.trialDurationMs,
+      eventTime + epsilon,
+    ));
+    const next = events[index + 1];
+    if (next !== undefined && next > eventTime) times.add((eventTime + next) / 2);
+  });
+  return [...times].sort((left, right) => left - right);
+}
+
+function embodiedStateAtTime(
+  timeline: EmbodiedEventTimeline,
+  takeoffMode: boolean,
+  timeMs: number,
+): EmbodiedBehaviorState {
+  if (!timeline.responseInitiated || timeline.controllerThresholdMs === null || timeline.movementOnsetMs === null) return 'stance';
+  if (timeMs < timeline.controllerThresholdMs) return 'stance';
+  if (timeMs < timeline.movementOnsetMs) return 'preparation';
+  if (!takeoffMode) return timeline.recoveryMs !== null && timeMs >= timeline.recoveryMs ? 'recovery' : 'reverse_walk';
+  if (timeline.groundReleaseMs === null || timeline.wingDeploymentMs === null || timeline.recoveryMs === null) return 'stance';
+  if (timeMs < timeline.groundReleaseMs) return 'jump';
+  if (timeMs < timeline.wingDeploymentMs) return 'wing_deployment';
+  if (timeMs < timeline.recoveryMs) return 'airborne';
+  return 'recovery';
+}
+
+function stateProgress(timeMs: number, startMs: number | null, endMs: number | null) {
+  if (startMs === null || endMs === null || endMs <= startMs) return 0;
+  return clamp((timeMs - startMs) / (endMs - startMs), 0, 1);
 }
 
 function simulateRunTrajectory(
@@ -1768,63 +2179,488 @@ function simulateRunTrajectory(
   seed: number,
   outcome: RunTrajectoryInputs,
 ): TrajectoryPoint[] {
-  const random = mulberry32(seed);
+  const trajectoryRandom = mulberry32(seed);
+  const trajectoryDistanceScale = MODEL_PARAMETERS.stateTrajectory.distanceScale.minimum
+    + trajectoryRandom() * MODEL_PARAMETERS.stateTrajectory.distanceScale.range;
   const points: TrajectoryPoint[] = [];
-  const steps = MODEL_PARAMETERS.trajectory.steps;
-  const stepDurationSeconds = experiment.trialDurationMs / steps / 1000;
-  const responseStartMs = outcome.responseLatencyMs === null
-    ? Number.POSITIVE_INFINITY
-    : experiment.onsetMs + outcome.responseLatencyMs;
-  const headingWindowMs = Math.max(1, experiment.trialDurationMs - experiment.onsetMs);
-  const responseWindowMs = Math.max(1, experiment.trialDurationMs - responseStartMs);
-  const lateralMirror = condition.laterality === 'left' ? -1 : 1;
   const takeoffMode = experiment.motorMap.responseMode === 'takeoff';
   let x = 0;
   let y = 0;
+  let priorTimeMs = 0;
 
-  for (let step = 0; step <= steps; step += 1) {
-    const t = (experiment.trialDurationMs * step) / steps;
-    const inProtocolWindow = t >= experiment.onsetMs && t <= experiment.onsetMs + experiment.durationMs;
+  for (const t of trajectorySampleTimes(experiment, outcome.eventTimeline)) {
+    const protocolOffsetMs = Math.min(experiment.trialDurationMs, experiment.onsetMs + experiment.durationMs);
+    const inProtocolWindow = t >= experiment.onsetMs && t < protocolOffsetMs;
     const active = condition.kind === 'perturbation' && inProtocolWindow;
-    const motorOutputActive = inProtocolWindow && motorDrive > MODEL_PARAMETERS.trajectory.reverseDriveThreshold;
-    const headingProgress = clamp((t - experiment.onsetMs) / headingWindowMs, 0, 1);
-    const heading = outcome.headingChangeDeg * headingProgress;
-    const responseProgress = !outcome.responseInitiated
-      ? 0
-      : responseStartMs >= experiment.trialDurationMs
-        ? Number(t >= responseStartMs)
-        : clamp((t - responseStartMs) / responseWindowMs, 0, 1);
-    const z = takeoffMode ? outcome.verticalDisplacementMm * responseProgress : 0;
-
-    if (step > 0) {
-      const midpointMs = t - experiment.trialDurationMs / steps / 2;
-      const responseMotionActive = outcome.responseInitiated && midpointMs >= responseStartMs;
-      const backwardMotionActive = !takeoffMode && responseMotionActive && outcome.signedSpeedMmS < 0;
-      const forwardSpeedMmS = outcome.signedSpeedMmS > 0
-        ? outcome.signedSpeedMmS
-        : MODEL_PARAMETERS.signedSpeed.forwardBaselineMmS;
-      const speedMmS = backwardMotionActive ? -outcome.signedSpeedMmS : forwardSpeedMmS;
-      const direction = backwardMotionActive ? -1 : 1;
-      const distanceScale = backwardMotionActive ? outcome.backwardDistanceScale : 1;
-      const distance = speedMmS * stepDurationSeconds * distanceScale;
-      x += Math.sin((heading * Math.PI) / 180) * distance
-        + lateralMirror * jitter(random, MODEL_PARAMETERS.trajectory.positionJitterScaleModelMm);
-      y += direction * Math.cos((heading * Math.PI) / 180) * distance
-        + jitter(random, MODEL_PARAMETERS.trajectory.positionJitterScaleModelMm);
+    const state = embodiedStateAtTime(outcome.eventTimeline, takeoffMode, t);
+    const motorOutputActive = state === 'reverse_walk'
+      || state === 'jump'
+      || state === 'wing_deployment'
+      || state === 'airborne';
+    const movementStartMs = outcome.eventTimeline.movementOnsetMs;
+    const movementEndMs = outcome.eventTimeline.recoveryMs;
+    const movementProgress = stateProgress(t, movementStartMs, movementEndMs);
+    const heading = movementProgress === 0 ? 0 : outcome.targetHeadingChangeDeg * movementProgress;
+    const movementIntervalStartMs = movementStartMs === null
+      ? t
+      : Math.max(priorTimeMs, movementStartMs);
+    const movementIntervalEndMs = movementEndMs === null
+      ? movementIntervalStartMs
+      : Math.min(t, movementEndMs);
+    const elapsedSeconds = Math.max(0, movementIntervalEndMs - movementIntervalStartMs) / 1000;
+    if (elapsedSeconds > 0) {
+      const speedMagnitude = Math.abs(outcome.targetSignedSpeedMmS);
+      const reverse = !takeoffMode && outcome.targetSignedSpeedMmS < 0;
+      const distanceScale = reverse ? outcome.backwardDistanceScale : 1;
+      const distance = speedMagnitude * elapsedSeconds * distanceScale * trajectoryDistanceScale;
+      x += Math.sin((heading * Math.PI) / 180) * distance;
+      y += (reverse ? -1 : 1) * Math.cos((heading * Math.PI) / 180) * distance;
     }
-    points.push({ t: Math.round(t), x, y, z, heading, active, motorOutputActive });
+
+    let z = 0;
+    let legExtension = 0;
+    let wingDeployment = 0;
+    let bodyPitchDeg = 0;
+    if (takeoffMode) {
+      const jumpProgress = stateProgress(t, outcome.eventTimeline.movementOnsetMs, outcome.eventTimeline.groundReleaseMs);
+      const wingProgress = stateProgress(t, outcome.eventTimeline.groundReleaseMs, outcome.eventTimeline.wingDeploymentMs);
+      const airborneProgress = stateProgress(t, outcome.eventTimeline.wingDeploymentMs, outcome.eventTimeline.recoveryMs);
+      if (state === 'jump') {
+        legExtension = outcome.targetLegRecruitment * Math.sin(jumpProgress * Math.PI / 2);
+        bodyPitchDeg = MODEL_PARAMETERS.stateTrajectory.takeoffPose.jumpPitchDeg * jumpProgress;
+      }
+      if (state === 'wing_deployment') {
+        legExtension = outcome.targetLegRecruitment * (
+          1 - wingProgress * MODEL_PARAMETERS.stateTrajectory.takeoffPose.wingDeploymentLegDecayFraction
+        );
+        wingDeployment = outcome.targetWingRecruitment * wingProgress;
+        bodyPitchDeg = MODEL_PARAMETERS.stateTrajectory.takeoffPose.jumpPitchDeg
+          + MODEL_PARAMETERS.stateTrajectory.takeoffPose.wingDeploymentPitchDeltaDeg * wingProgress;
+      }
+      if (state === 'airborne') {
+        legExtension = outcome.targetLegRecruitment
+          * MODEL_PARAMETERS.stateTrajectory.takeoffPose.airborneLegRetentionFraction;
+        wingDeployment = outcome.targetWingRecruitment;
+        bodyPitchDeg = MODEL_PARAMETERS.stateTrajectory.takeoffPose.airborneRecoveryPitchDeg
+          * (1 - airborneProgress);
+      }
+      if (outcome.eventTimeline.groundReleaseMs !== null && outcome.eventTimeline.recoveryMs !== null
+        && t >= outcome.eventTimeline.groundReleaseMs && t < outcome.eventTimeline.recoveryMs) {
+        const flightProgress = stateProgress(t, outcome.eventTimeline.groundReleaseMs, outcome.eventTimeline.recoveryMs);
+        z = outcome.targetVerticalDisplacementMm * Math.sin(Math.PI * flightProgress);
+      }
+    } else if (state === 'reverse_walk') {
+      legExtension = outcome.targetLegRecruitment;
+    }
+
+    const groundContact = !takeoffMode || (state !== 'wing_deployment' && state !== 'airborne');
+    const stanceStability = state === 'stance' || state === 'recovery'
+      ? outcome.baselineStanceStability
+      : state === 'preparation'
+        ? clamp(
+            outcome.baselineStanceStability
+              - MODEL_PARAMETERS.stateTrajectory.stanceStability.preparationPenalty,
+            0,
+            1,
+          )
+        : takeoffMode
+          ? state === 'jump'
+            ? MODEL_PARAMETERS.stateTrajectory.stanceStability.jump
+            : state === 'wing_deployment'
+              ? MODEL_PARAMETERS.stateTrajectory.stanceStability.wingDeployment
+              : MODEL_PARAMETERS.stateTrajectory.stanceStability.airborne
+          : clamp(
+              outcome.targetStanceStability
+                - MODEL_PARAMETERS.stateTrajectory.stanceStability.reverseWalkPenalty,
+              0,
+              1,
+            );
+    points.push({
+      t,
+      x,
+      y,
+      z,
+      heading,
+      active,
+      motorOutputActive,
+      state,
+      groundContact,
+      legExtension,
+      wingDeployment,
+      bodyPitchDeg,
+      bodyRollDeg: movementProgress === 0 ? 0 : outcome.targetBodyRollChangeDeg * movementProgress,
+      premotorDriveIndex: inProtocolWindow ? motorDrive : 0,
+      stanceStability,
+    });
+    priorTimeMs = t;
   }
   return points;
 }
 
+function summarizeRunTrajectory(
+  trajectory: TrajectoryPoint[],
+  timeline: EmbodiedEventTimeline,
+  takeoffMode: boolean,
+) {
+  const first = trajectory[0];
+  const last = trajectory.at(-1);
+  const movementDurationSeconds = timeline.movementOnsetMs === null || timeline.recoveryMs === null
+    ? 0
+    : Math.max(0, timeline.recoveryMs - timeline.movementOnsetMs) / 1000;
+  const backwardDistanceMm = Math.max(0, ...trajectory.map((point) => -point.y));
+  const planarDistanceMm = first && last ? Math.hypot(last.x - first.x, last.y - first.y) : 0;
+  const signedSpeedMmS = movementDurationSeconds > 0
+    ? takeoffMode
+      ? planarDistanceMm / movementDurationSeconds
+      : backwardDistanceMm > 0 ? -(backwardDistanceMm / movementDurationSeconds) : 0
+    : 0;
+  let stanceArea = 0;
+  for (let index = 1; index < trajectory.length; index += 1) {
+    const previous = trajectory[index - 1]!;
+    const current = trajectory[index]!;
+    stanceArea += previous.stanceStability * Math.max(0, current.t - previous.t);
+  }
+  const traceDurationMs = first && last ? Math.max(0, last.t - first.t) : 0;
+  return {
+    backwardDistanceMm,
+    signedSpeedMmS,
+    headingChangeDeg: first && last ? last.heading - first.heading : 0,
+    stanceStability: traceDurationMs > 0 ? stanceArea / traceDurationMs : first?.stanceStability ?? 0,
+    verticalDisplacementMm: Math.max(0, ...trajectory.map((point) => point.z)),
+    wingRecruitment: Math.max(0, ...trajectory.map((point) => point.wingDeployment)),
+    legRecruitment: Math.max(0, ...trajectory.map((point) => point.legExtension)),
+    takeoffSuccess: trajectory.some((point) => point.state === 'airborne' && !point.groundContact),
+  };
+}
+
+function numericallyEqual(left: number, right: number) {
+  return Math.abs(left - right) <= 1e-12;
+}
+
+export function validateSimulationBatch(batch: SimulationBatch): void {
+  const expectedMotorMap = motorMapForCircuit(batch.protocol.targetCircuitId);
+  const conditionIds = batch.conditionRuns.map((condition) => condition.conditionId);
+  const protocolConditionIds = batch.protocol.conditions.map((condition) => condition.id);
+  const identity = batch.conditionRuns.flatMap((condition) => condition.replicates.map((replicate) => ({
+    runId: replicate.id,
+    trajectoryId: replicate.trajectoryId,
+  })));
+  if (batch.experimentId !== batch.protocol.experimentId
+    || batch.targetCircuitId !== batch.protocol.targetCircuitId
+    || batch.behavior !== batch.protocol.behavior
+    || batch.motorMap.id !== batch.protocol.motorMapId
+    || !expectedMotorMap
+    || JSON.stringify(batch.motorMap) !== JSON.stringify(expectedMotorMap)
+    || batch.protocol.metricMethodVersion !== METRIC_METHOD_VERSION
+    || JSON.stringify(batch.model) !== JSON.stringify(MODEL_MANIFEST)
+    || batch.runHash !== `fnv1a:${stableHash(identity)}`
+    || batch.runHashScope !== 'run_and_trajectory_ids_only'
+    || batch.runHashSerialization !== 'FNV-1a(JSON.stringify([{ runId, trajectoryId }]))'
+    || batch.runContentHash !== computeSimulationRunContentHash(batch.protocol, batch.model, batch.conditionRuns)
+    || batch.runContentHashScope !== 'protocol_model_and_complete_condition_runs'
+    || batch.runContentHashSerialization !== 'SHA-256(JSON.stringify({ protocol, model, conditionRuns }))'
+    || batch.id !== `batch_${deterministicSha256Hex({ experiment: batch.protocol.experimentId, identity })}`
+    || conditionIds.length !== protocolConditionIds.length
+    || new Set(conditionIds).size !== conditionIds.length
+    || conditionIds.some((conditionId, index) => conditionId !== protocolConditionIds[index])) {
+    throw new RangeError(`Simulation batch ${batch.id} contradicts its protocol, model, condition, or identity manifest.`);
+  }
+  const takeoffMode = batch.motorMap.responseMode === 'takeoff';
+  for (const condition of batch.conditionRuns) {
+    const protocolCondition = batch.protocol.conditions.find((item) => item.id === condition.conditionId);
+    if (!protocolCondition) {
+      throw new RangeError(`Simulation condition ${condition.conditionId} is absent from the protocol snapshot.`);
+    }
+    const expectedDriveDerivation = deriveConditionMotorDrive(protocolCondition, batch.protocol);
+    if (condition.label !== protocolCondition.label
+      || condition.laterality !== protocolCondition.laterality
+      || condition.effectiveMotorDrive !== expectedDriveDerivation.effectiveMotorDrive
+      || JSON.stringify(condition.driveDerivation) !== JSON.stringify(expectedDriveDerivation)
+      || condition.replicates.length !== batch.protocol.replicates) {
+      throw new RangeError(`Simulation condition ${condition.conditionId} contradicts its protocol drive or replicate manifest.`);
+    }
+    if (condition.runIds.length !== condition.replicates.length
+      || condition.runIds.some((runId, index) => runId !== condition.replicates[index]?.id)) {
+      throw new RangeError(`Simulation condition ${condition.conditionId} has an inconsistent run-ID manifest.`);
+    }
+    for (const [replicateIndex, replicate] of condition.replicates.entries()) {
+      const expectedSeed = replicateSeedFromPolicy(batch.protocol.seedPolicy, batch.protocol.seed, replicateIndex);
+      const expectedTrajectorySeed = runTrajectorySeedFromPolicy(batch.protocol.seedPolicy, expectedSeed);
+      const expectedRunId = `run_${deterministicSha256Hex({
+        experiment: batch.protocol.experimentId,
+        condition: condition.conditionId,
+        replicateIndex,
+        seed: expectedSeed,
+      })}`;
+      const expectedTrajectoryId = `trajectory_${deterministicSha256Hex({
+        run: expectedRunId,
+        seed: expectedTrajectorySeed,
+        method: 'flylab.per-run-state-trajectory.v2',
+      })}`;
+      const draws = pairedReplicateDraws(expectedSeed);
+      const responseParameters = takeoffMode
+        ? MODEL_PARAMETERS.escapeTakeoff.responseProbability
+        : MODEL_PARAMETERS.reverseProbability;
+      const expectedResponseThresholdProbability = clamp(
+        responseParameters.baseline + condition.effectiveMotorDrive * responseParameters.driveGain,
+        responseParameters.minimum,
+        responseParameters.maximum,
+      );
+      const expectedThresholdCrossed = draws.responseUniform < expectedResponseThresholdProbability;
+      const latencyParameters = takeoffMode
+        ? MODEL_PARAMETERS.escapeTakeoff.responseLatency
+        : MODEL_PARAMETERS.responseLatency;
+      const expectedCandidateLatencyMs = expectedThresholdCrossed
+        ? Math.max(
+            latencyParameters.minimumClampMs,
+            latencyParameters.interceptMs
+              + (1 - condition.effectiveMotorDrive) * latencyParameters.inverseDriveGainMs
+              + draws.latencyNoise * latencyParameters.jitterScaleMs,
+          )
+        : null;
+      const requiredPostMovementMs = takeoffMode
+        ? MODEL_PARAMETERS.escapeTakeoff.eventTiming.groundReleaseDelayMs
+          + MODEL_PARAMETERS.escapeTakeoff.eventTiming.wingDelayAfterGroundReleaseMs
+        : 0;
+      const responseWindowMs = Math.max(0, batch.protocol.trialDurationMs - batch.protocol.onsetMs);
+      const expectedResponseInitiated = expectedCandidateLatencyMs !== null
+        && expectedCandidateLatencyMs + requiredPostMovementMs < responseWindowMs;
+      const expectedDisposition: ReplicateResult['responseDisposition'] = !expectedThresholdCrossed
+        ? 'not_crossed'
+        : expectedResponseInitiated
+          ? 'expressed'
+          : 'censored';
+      const expectedBackwardDistanceScale = MODEL_PARAMETERS.backwardDistanceScale.minimum
+        + draws.backwardDistanceUniform * (
+          MODEL_PARAMETERS.backwardDistanceScale.maximum - MODEL_PARAMETERS.backwardDistanceScale.minimum
+        );
+      if (replicate.id !== expectedRunId
+        || replicate.conditionId !== condition.conditionId
+        || replicate.seed !== expectedSeed
+        || replicate.trajectorySeed !== expectedTrajectorySeed
+        || replicate.trajectoryId !== expectedTrajectoryId
+        || replicate.effectiveMotorDrive !== condition.effectiveMotorDrive
+        || replicate.premotorDriveIndex !== condition.effectiveMotorDrive
+        || JSON.stringify(replicate.driveDerivation) !== JSON.stringify(expectedDriveDerivation)
+        || replicate.responseThresholdProbability !== expectedResponseThresholdProbability
+        || replicate.responseThresholdCrossed !== expectedThresholdCrossed
+        || replicate.candidateResponseLatencyMs !== expectedCandidateLatencyMs
+        || replicate.responseInitiated !== expectedResponseInitiated
+        || replicate.responseDisposition !== expectedDisposition
+        || replicate.backwardDistanceScale !== expectedBackwardDistanceScale) {
+        throw new RangeError(`Simulation run ${replicate.id} contradicts its seeded common-random-number record.`);
+      }
+      const timeline = replicate.eventTimeline;
+      const expectedTimeline = buildEmbodiedEventTimeline(
+        {
+          motorMap: batch.motorMap,
+          onsetMs: batch.protocol.onsetMs,
+          trialDurationMs: batch.protocol.trialDurationMs,
+        },
+        condition.effectiveMotorDrive,
+        expectedDisposition,
+        expectedResponseInitiated ? expectedCandidateLatencyMs : null,
+        expectedCandidateLatencyMs,
+        draws.recoveryNoise,
+      );
+      if (JSON.stringify(timeline) !== JSON.stringify(expectedTimeline)) {
+        throw new RangeError(`Simulation run ${replicate.id} event timeline contradicts its seeded response record.`);
+      }
+      const summary = summarizeRunTrajectory(replicate.trajectory, timeline, takeoffMode);
+      const numericSummaries = [
+        ['backwardDistanceMm', replicate.backwardDistanceMm, summary.backwardDistanceMm],
+        ['signedSpeedMmS', replicate.signedSpeedMmS, summary.signedSpeedMmS],
+        ['headingChangeDeg', replicate.headingChangeDeg, summary.headingChangeDeg],
+        ['stanceStability', replicate.stanceStability, summary.stanceStability],
+        ['verticalDisplacementMm', replicate.verticalDisplacementMm, summary.verticalDisplacementMm],
+        ['wingRecruitment', replicate.wingRecruitment, summary.wingRecruitment],
+        ['legRecruitment', replicate.legRecruitment, summary.legRecruitment],
+      ] as const;
+      for (const [field, recorded, recomputed] of numericSummaries) {
+        if (!numericallyEqual(recorded, recomputed)) {
+          throw new RangeError(
+            `Simulation run ${replicate.id} field ${field} contradicts its authoritative state trajectory.`,
+          );
+        }
+      }
+      if (replicate.takeoffSuccess !== summary.takeoffSuccess) {
+        throw new RangeError(`Simulation run ${replicate.id} takeoffSuccess contradicts its authoritative state trajectory.`);
+      }
+      if (replicate.responseInitiated !== timeline.responseInitiated
+        || replicate.responseDisposition !== timeline.responseDisposition
+        || replicate.responseThresholdCrossed !== timeline.thresholdCrossed) {
+        throw new RangeError(`Simulation run ${replicate.id} response fields contradict its event timeline.`);
+      }
+      const expectedCandidateMovementOnsetMs = replicate.candidateResponseLatencyMs === null
+        ? null
+        : batch.protocol.onsetMs + replicate.candidateResponseLatencyMs;
+      if (timeline.candidateMovementOnsetMs !== expectedCandidateMovementOnsetMs) {
+        throw new RangeError(`Simulation run ${replicate.id} candidate response timing contradicts its event timeline.`);
+      }
+      const expectedReverseInitiated = !takeoffMode && replicate.responseInitiated;
+      const expectedShortModeInitiated = takeoffMode && replicate.responseInitiated;
+      if (replicate.reverseInitiated !== expectedReverseInitiated
+        || replicate.shortModeEscapeInitiated !== expectedShortModeInitiated) {
+        throw new RangeError(`Simulation run ${replicate.id} response-mode flags are inconsistent.`);
+      }
+      if (replicate.responseDisposition === 'expressed') {
+        if (!replicate.responseThresholdCrossed
+          || !replicate.responseInitiated
+          || replicate.responseLatencyMs === null
+          || replicate.candidateResponseLatencyMs !== replicate.responseLatencyMs
+          || timeline.movementOnsetMs !== batch.protocol.onsetMs + replicate.responseLatencyMs) {
+          throw new RangeError(`Simulation run ${replicate.id} has an incoherent expressed-response record.`);
+        }
+      } else if (replicate.responseInitiated
+        || replicate.responseLatencyMs !== null
+        || timeline.movementOnsetMs !== null
+        || (replicate.responseDisposition === 'censored') !== replicate.responseThresholdCrossed
+        || (replicate.responseDisposition === 'censored' && replicate.candidateResponseLatencyMs === null)
+        || (replicate.responseDisposition === 'not_crossed' && replicate.candidateResponseLatencyMs !== null)) {
+        throw new RangeError(`Simulation run ${replicate.id} has an incoherent absent or censored response record.`);
+      }
+      if (!replicate.trajectory.length) {
+        throw new RangeError(`Simulation run ${replicate.id} has no authoritative state trajectory.`);
+      }
+      let previousTime = -Infinity;
+      for (const point of replicate.trajectory) {
+        const numericPointFields = [
+          point.t,
+          point.x,
+          point.y,
+          point.z,
+          point.heading,
+          point.legExtension,
+          point.wingDeployment,
+          point.bodyPitchDeg,
+          point.bodyRollDeg,
+          point.premotorDriveIndex,
+          point.stanceStability,
+        ];
+        if (numericPointFields.some((value) => !Number.isFinite(value))
+          || point.t < 0
+          || point.t > batch.protocol.trialDurationMs
+          || point.t <= previousTime
+          || point.z < 0
+          || point.legExtension < 0
+          || point.legExtension > 1
+          || point.wingDeployment < 0
+          || point.wingDeployment > 1
+          || point.stanceStability < 0
+          || point.stanceStability > 1) {
+          throw new RangeError(`Simulation run ${replicate.id} has an invalid trajectory sample at ${point.t} ms.`);
+        }
+        previousTime = point.t;
+        const protocolOffsetMs = Math.min(
+          batch.protocol.trialDurationMs,
+          batch.protocol.onsetMs + batch.protocol.durationMs,
+        );
+        const inProtocolWindow = point.t >= batch.protocol.onsetMs && point.t < protocolOffsetMs;
+        const expectedActive = protocolCondition.kind === 'perturbation' && inProtocolWindow;
+        const expectedPremotorDrive = inProtocolWindow ? replicate.effectiveMotorDrive : 0;
+        if (point.active !== expectedActive || point.premotorDriveIndex !== expectedPremotorDrive) {
+          throw new RangeError(`Simulation run ${replicate.id} contradicts the exact protocol window at ${point.t} ms.`);
+        }
+        const expectedState = embodiedStateAtTime(timeline, takeoffMode, point.t);
+        const expectedMotorOutput = expectedState === 'reverse_walk'
+          || expectedState === 'jump'
+          || expectedState === 'wing_deployment'
+          || expectedState === 'airborne';
+        const expectedGroundContact = !takeoffMode
+          || (expectedState !== 'wing_deployment' && expectedState !== 'airborne');
+        if (point.state !== expectedState
+          || point.motorOutputActive !== expectedMotorOutput
+          || point.groundContact !== expectedGroundContact) {
+          throw new RangeError(`Simulation run ${replicate.id} contains a state/contact contradiction at ${point.t} ms.`);
+        }
+        if ((expectedState === 'stance' || expectedState === 'preparation')
+          && (point.x !== 0
+            || point.y !== 0
+            || point.z !== 0
+            || point.heading !== 0
+            || point.legExtension !== 0
+            || point.wingDeployment !== 0
+            || point.bodyPitchDeg !== 0
+            || point.bodyRollDeg !== 0)) {
+          throw new RangeError(`Simulation run ${replicate.id} expresses body output before movement at ${point.t} ms.`);
+        }
+        if (replicate.responseDisposition !== 'expressed'
+          && (point.x !== 0
+            || point.y !== 0
+            || point.z !== 0
+            || point.heading !== 0
+            || point.legExtension !== 0
+            || point.wingDeployment !== 0
+            || point.bodyPitchDeg !== 0
+            || point.bodyRollDeg !== 0
+            || point.motorOutputActive)) {
+          throw new RangeError(`Simulation run ${replicate.id} expresses body output without an expressed response.`);
+        }
+      }
+      if (replicate.trajectory[0]?.t !== 0
+        || replicate.trajectory.at(-1)?.t !== batch.protocol.trialDurationMs) {
+        throw new RangeError(`Simulation run ${replicate.id} does not span the complete trial window.`);
+      }
+      const requiredSampleTimes = [
+        batch.protocol.onsetMs,
+        Math.min(batch.protocol.trialDurationMs, batch.protocol.onsetMs + batch.protocol.durationMs),
+        timeline.controllerThresholdMs,
+        timeline.movementOnsetMs,
+        timeline.groundReleaseMs,
+        timeline.wingDeploymentMs,
+        timeline.recoveryMs,
+      ].filter((value): value is number => value !== null);
+      if (requiredSampleTimes.some((timeMs) => !replicate.trajectory.some((point) => point.t === timeMs))) {
+        throw new RangeError(`Simulation run ${replicate.id} omits an exact protocol or body-event sample.`);
+      }
+    }
+  }
+  const regeneratedBatch = simulateExperiment({
+    id: batch.protocol.experimentId,
+    hypothesisId: batch.protocol.hypothesisId,
+    targetCircuitId: batch.protocol.targetCircuitId,
+    behavior: batch.protocol.behavior,
+    motorMap: batch.motorMap,
+    perturbation: batch.protocol.perturbation,
+    primaryLaterality: batch.protocol.primaryLaterality,
+    activationLevel: batch.protocol.activationLevel,
+    onsetMs: batch.protocol.onsetMs,
+    durationMs: batch.protocol.durationMs,
+    trialDurationMs: batch.protocol.trialDurationMs,
+    replicates: batch.protocol.replicates,
+    seed: batch.protocol.seed,
+    seedPolicy: batch.protocol.seedPolicy,
+    metricMethodVersion: batch.protocol.metricMethodVersion,
+    conditions: batch.protocol.conditions,
+    approved: true,
+    model: MODEL_MANIFEST,
+    assumptions: batch.protocol.assumptions,
+    provenance: ['agent_hypothesized'],
+  });
+  if (JSON.stringify(batch) !== JSON.stringify(regeneratedBatch)) {
+    throw new RangeError(
+      `Simulation batch ${batch.id} does not exactly reproduce from its protocol, seed policy, and versioned generator.`,
+    );
+  }
+}
+
+export function computeSimulationRunContentHash(
+  protocol: ExperimentProtocolSnapshot,
+  model: typeof MODEL_MANIFEST,
+  conditionRuns: ConditionRun[],
+): `sha256:${string}` {
+  return `sha256:${deterministicSha256Hex({ protocol, model, conditionRuns })}`;
+}
+
 export function simulateExperiment(experiment: Experiment): SimulationBatch {
   const conditionRuns = experiment.conditions.map((condition): ConditionRun => {
-    const motorDrive = conditionMotorDrive(condition, experiment);
+    const driveDerivation = deriveConditionMotorDrive(condition, experiment);
+    const motorDrive = driveDerivation.effectiveMotorDrive;
     const takeoffMode = experiment.motorMap.responseMode === 'takeoff';
     const replicates = Array.from({ length: experiment.replicates }, (_, replicateIndex): ReplicateResult => {
       const seed = replicateSeedFromPolicy(experiment.seedPolicy, experiment.seed, replicateIndex);
       const draws = pairedReplicateDraws(seed);
-      const responseProbability = takeoffMode
+      const responseThresholdProbability = takeoffMode
         ? clamp(
             MODEL_PARAMETERS.escapeTakeoff.responseProbability.baseline + motorDrive * MODEL_PARAMETERS.escapeTakeoff.responseProbability.driveGain,
             MODEL_PARAMETERS.escapeTakeoff.responseProbability.minimum,
@@ -1835,54 +2671,61 @@ export function simulateExperiment(experiment: Experiment): SimulationBatch {
             MODEL_PARAMETERS.reverseProbability.minimum,
             MODEL_PARAMETERS.reverseProbability.maximum,
           );
-      const responseInitiated = draws.responseUniform < responseProbability;
+      const responseWindowMs = Math.max(0, experiment.trialDurationMs - experiment.onsetMs);
+      const responseLatencyParameters = takeoffMode ? MODEL_PARAMETERS.escapeTakeoff.responseLatency : MODEL_PARAMETERS.responseLatency;
+      const responseThresholdCrossed = draws.responseUniform < responseThresholdProbability;
+      const candidateResponseLatencyMs = responseThresholdCrossed
+        ? Math.max(
+            responseLatencyParameters.minimumClampMs,
+            responseLatencyParameters.interceptMs
+              + (1 - motorDrive) * responseLatencyParameters.inverseDriveGainMs
+              + draws.latencyNoise * responseLatencyParameters.jitterScaleMs,
+          )
+        : null;
+      const requiredPostMovementMs = takeoffMode
+        ? MODEL_PARAMETERS.escapeTakeoff.eventTiming.groundReleaseDelayMs
+          + MODEL_PARAMETERS.escapeTakeoff.eventTiming.wingDelayAfterGroundReleaseMs
+        : 0;
+      const responseInitiated = candidateResponseLatencyMs !== null
+        && candidateResponseLatencyMs + requiredPostMovementMs < responseWindowMs;
+      const responseDisposition: ReplicateResult['responseDisposition'] = !responseThresholdCrossed
+        ? 'not_crossed'
+        : responseInitiated
+          ? 'expressed'
+          : 'censored';
+      const responseLatencyMs = responseInitiated ? candidateResponseLatencyMs : null;
       const reverseInitiated = !takeoffMode && responseInitiated;
       const shortModeEscapeInitiated = takeoffMode && responseInitiated;
-      const signedSpeedMmS = reverseInitiated
+      const targetSignedSpeedMmS = reverseInitiated
         ? -Math.max(
             Number.EPSILON,
             MODEL_PARAMETERS.signedSpeed.reverseInterceptMmS
             + motorDrive * MODEL_PARAMETERS.signedSpeed.reverseDriveGainMmS
             + draws.speedNoise * MODEL_PARAMETERS.signedSpeed.jitterScaleMmS,
           )
-        : Math.max(
-            0,
-            MODEL_PARAMETERS.signedSpeed.forwardBaselineMmS
-              + (takeoffMode ? motorDrive * MODEL_PARAMETERS.escapeTakeoff.forwardSpeedGainModelMmS : -motorDrive * MODEL_PARAMETERS.signedSpeed.forwardDrivePenaltyMmS)
-              + draws.speedNoise * MODEL_PARAMETERS.signedSpeed.forwardJitterScaleMmS,
-          );
-      const responseWindowMs = Math.max(0, experiment.trialDurationMs - experiment.onsetMs);
-      const responseLatencyParameters = takeoffMode ? MODEL_PARAMETERS.escapeTakeoff.responseLatency : MODEL_PARAMETERS.responseLatency;
-      const responseLatencyMs = responseInitiated
-        ? clamp(
-            responseLatencyParameters.interceptMs
-              + (1 - motorDrive) * responseLatencyParameters.inverseDriveGainMs
-              + draws.latencyNoise * responseLatencyParameters.jitterScaleMs,
-            Math.min(responseLatencyParameters.minimumClampMs, responseWindowMs),
-            responseWindowMs,
-          )
-        : null;
-      const reverseSeconds = responseLatencyMs === null
-        ? 0
-        : Math.max(0, responseWindowMs - responseLatencyMs) / 1000;
+        : responseInitiated
+          ? Math.max(
+              0,
+              MODEL_PARAMETERS.signedSpeed.forwardBaselineMmS
+                + (takeoffMode ? motorDrive * MODEL_PARAMETERS.escapeTakeoff.forwardSpeedGainModelMmS : -motorDrive * MODEL_PARAMETERS.signedSpeed.forwardDrivePenaltyMmS)
+                + draws.speedNoise * MODEL_PARAMETERS.signedSpeed.forwardJitterScaleMmS,
+            )
+          : 0;
       const backwardDistanceScale = MODEL_PARAMETERS.backwardDistanceScale.minimum
         + draws.backwardDistanceUniform * (
           MODEL_PARAMETERS.backwardDistanceScale.maximum - MODEL_PARAMETERS.backwardDistanceScale.minimum
         );
-      const backwardDistanceMm = reverseInitiated
-        ? Math.max(0, -signedSpeedMmS) * reverseSeconds * backwardDistanceScale
-        : 0;
-      const verticalDisplacementMm = shortModeEscapeInitiated
+      const targetVerticalDisplacementMm = shortModeEscapeInitiated
         ? Math.max(0, MODEL_PARAMETERS.escapeTakeoff.verticalDisplacement.interceptModelMm
           + motorDrive * MODEL_PARAMETERS.escapeTakeoff.verticalDisplacement.driveGainModelMm
           + draws.verticalNoise * MODEL_PARAMETERS.escapeTakeoff.verticalDisplacement.jitterScaleModelMm)
         : 0;
-      const wingRecruitment = takeoffMode
+      const targetWingRecruitment = takeoffMode
         ? clamp(MODEL_PARAMETERS.escapeTakeoff.wingRecruitment.baseline
           + motorDrive * MODEL_PARAMETERS.escapeTakeoff.wingRecruitment.driveGain
           + draws.wingNoise * MODEL_PARAMETERS.escapeTakeoff.wingRecruitment.jitterScale, 0, 1)
         : 0;
-      const legRecruitment = clamp(
+      const targetLegRecruitment = clamp(
         (takeoffMode ? MODEL_PARAMETERS.escapeTakeoff.legRecruitment.baseline : MODEL_PARAMETERS.reverseWalk.legRecruitment.baseline)
           + motorDrive * (takeoffMode ? MODEL_PARAMETERS.escapeTakeoff.legRecruitment.driveGain : MODEL_PARAMETERS.reverseWalk.legRecruitment.driveGain)
           + draws.legNoise * (takeoffMode ? MODEL_PARAMETERS.escapeTakeoff.legRecruitment.jitterScale : MODEL_PARAMETERS.reverseWalk.legRecruitment.jitterScale),
@@ -1894,15 +2737,33 @@ export function simulateExperiment(experiment: Experiment): SimulationBatch {
       const lateralEffect = experiment.perturbation === 'silence'
         ? MODEL_PARAMETERS.silencingReferenceMotorDrive - motorDrive
         : motorDrive;
-      const headingChangeDeg = lateralSign === 0
-        ? draws.headingNoise * MODEL_PARAMETERS.heading.bilateralJitterScaleDeg
-        : lateralSign * (
-            lateralModeSign * (
-              MODEL_PARAMETERS.heading.baseDeg + lateralEffect * MODEL_PARAMETERS.heading.driveGainDeg
-            )
-            + draws.headingNoise * MODEL_PARAMETERS.heading.unilateralJitterScaleDeg
-          );
-      const stanceStability = clamp(
+      const lateralEffectFraction = clamp(
+        Math.abs(lateralEffect) / MODEL_PARAMETERS.silencingReferenceMotorDrive,
+        0,
+        1,
+      );
+      const bilateralHeadingNoise = draws.headingNoise * MODEL_PARAMETERS.heading.bilateralJitterScaleDeg;
+      const unilateralHeading = lateralSign * (
+        lateralModeSign * (
+          MODEL_PARAMETERS.heading.baseDeg + lateralEffect * MODEL_PARAMETERS.heading.driveGainDeg
+        )
+        + draws.headingNoise * MODEL_PARAMETERS.heading.unilateralJitterScaleDeg
+      );
+      const targetHeadingChangeDeg = lateralSign === 0
+        ? bilateralHeadingNoise
+        : (1 - lateralEffectFraction) * bilateralHeadingNoise
+          + lateralEffectFraction * unilateralHeading;
+      const targetBodyRollChangeDeg = lateralSign === 0 || lateralEffectFraction === 0
+        ? 0
+        : lateralEffectFraction * unilateralHeading
+          * MODEL_PARAMETERS.stateTrajectory.takeoffPose.unilateralBodyRollPerHeading;
+      const baselineStanceStability = clamp(
+        MODEL_PARAMETERS.stanceStability.baseline
+          + draws.stanceNoise * MODEL_PARAMETERS.stanceStability.jitterScale,
+        MODEL_PARAMETERS.stanceStability.minimum,
+        MODEL_PARAMETERS.stanceStability.maximum,
+      );
+      const targetStanceStability = clamp(
         MODEL_PARAMETERS.stanceStability.baseline
           - motorDrive * MODEL_PARAMETERS.stanceStability.drivePenalty
           + draws.stanceNoise * MODEL_PARAMETERS.stanceStability.jitterScale,
@@ -1911,10 +2772,18 @@ export function simulateExperiment(experiment: Experiment): SimulationBatch {
       );
       const id = `run_${deterministicSha256Hex({ experiment: experiment.id, condition: condition.id, replicateIndex, seed })}`;
       const trajectorySeed = runTrajectorySeedFromPolicy(experiment.seedPolicy, seed);
+      const eventTimeline = buildEmbodiedEventTimeline(
+        experiment,
+        motorDrive,
+        responseDisposition,
+        responseLatencyMs,
+        candidateResponseLatencyMs,
+        draws.recoveryNoise,
+      );
       const trajectoryId = `trajectory_${deterministicSha256Hex({
         run: id,
         seed: trajectorySeed,
-        method: 'flylab.per-run-trajectory.v1',
+        method: 'flylab.per-run-state-trajectory.v2',
       })}`;
       const trajectory = simulateRunTrajectory(
         condition,
@@ -1922,33 +2791,45 @@ export function simulateExperiment(experiment: Experiment): SimulationBatch {
         motorDrive,
         trajectorySeed,
         {
-          responseInitiated,
-          responseLatencyMs,
-          signedSpeedMmS,
+          eventTimeline,
+          targetSignedSpeedMmS,
           backwardDistanceScale,
-          headingChangeDeg,
-          verticalDisplacementMm,
+          targetHeadingChangeDeg,
+          targetBodyRollChangeDeg,
+          targetVerticalDisplacementMm,
+          targetWingRecruitment,
+          targetLegRecruitment,
+          baselineStanceStability,
+          targetStanceStability,
         },
       );
+      const summary = summarizeRunTrajectory(trajectory, eventTimeline, takeoffMode);
       return {
         id,
         status: 'complete',
         conditionId: condition.id,
         seed,
         effectiveMotorDrive: motorDrive,
-        responseProbability,
+        driveDerivation,
+        premotorDriveIndex: motorDrive,
+        responseThresholdProbability,
+        responseThresholdCrossed,
+        responseDisposition,
+        candidateResponseLatencyMs,
         reverseInitiated,
         responseInitiated,
         shortModeEscapeInitiated,
-        backwardDistanceMm,
+        backwardDistanceMm: summary.backwardDistanceMm,
         backwardDistanceScale,
-        signedSpeedMmS,
+        signedSpeedMmS: summary.signedSpeedMmS,
         responseLatencyMs,
-        headingChangeDeg,
-        stanceStability,
-        verticalDisplacementMm,
-        wingRecruitment,
-        legRecruitment,
+        headingChangeDeg: summary.headingChangeDeg,
+        stanceStability: summary.stanceStability,
+        verticalDisplacementMm: summary.verticalDisplacementMm,
+        wingRecruitment: summary.wingRecruitment,
+        legRecruitment: summary.legRecruitment,
+        takeoffSuccess: summary.takeoffSuccess,
+        eventTimeline,
         trajectoryId,
         trajectorySeed,
         trajectoryRole: 'per_run_simulated_trajectory',
@@ -1970,6 +2851,7 @@ export function simulateExperiment(experiment: Experiment): SimulationBatch {
       laterality: condition.laterality,
       status: 'complete',
       effectiveMotorDrive: motorDrive,
+      driveDerivation,
       runIds: replicates.map((replicate) => replicate.id),
       replicates,
       trajectoryId,
@@ -1994,6 +2876,15 @@ export function simulateExperiment(experiment: Experiment): SimulationBatch {
     status: 'complete',
     conditionRuns,
     runHash: `fnv1a:${stableHash(identity)}`,
+    runHashScope: 'run_and_trajectory_ids_only',
+    runHashSerialization: 'FNV-1a(JSON.stringify([{ runId, trajectoryId }]))',
+    runContentHash: computeSimulationRunContentHash(
+      snapshotExperimentProtocol(experiment),
+      MODEL_MANIFEST,
+      conditionRuns,
+    ),
+    runContentHashScope: 'protocol_model_and_complete_condition_runs',
+    runContentHashSerialization: 'SHA-256(JSON.stringify({ protocol, model, conditionRuns }))',
     protocol: snapshotExperimentProtocol(experiment),
     model: MODEL_MANIFEST,
     provenance: ['simulation_predicted'],
@@ -2010,6 +2901,15 @@ export function analyzeBatch(
   analysisStartMs = 0,
   analysisEndMs = batch.protocol.trialDurationMs,
 ): Analysis {
+  const recomputedRunContentHash = computeSimulationRunContentHash(
+    batch.protocol,
+    batch.model,
+    batch.conditionRuns,
+  );
+  if (recomputedRunContentHash !== batch.runContentHash) {
+    throw new RangeError(`Simulation batch ${batch.id} content does not match its recorded SHA-256 digest.`);
+  }
+  validateSimulationBatch(batch);
   if (analysisStartMs !== 0 || analysisEndMs !== batch.protocol.trialDurationMs) {
     throw new RangeError(
       `${batch.protocol.metricMethodVersion} supports only the full-trial analysis window [0, ${batch.protocol.trialDurationMs}] ms.`,
@@ -2021,46 +2921,60 @@ export function analyzeBatch(
     return definitions;
   }, {});
   const conditions = batch.conditionRuns.map((run): ConditionAnalysis => {
-    const responsive = run.replicates.filter(
-      (replicate): replicate is ReplicateResult & { responseLatencyMs: number } => (
-        (batch.motorMap.responseMode === 'takeoff' ? replicate.shortModeEscapeInitiated : replicate.reverseInitiated)
-        && replicate.responseLatencyMs !== null
+    const traceDerived = run.replicates.map((replicate) => ({
+      replicate,
+      summary: summarizeRunTrajectory(
+        replicate.trajectory,
+        replicate.eventTimeline,
+        batch.motorMap.responseMode === 'takeoff',
+      ),
+    }));
+    const responsive = traceDerived.filter(
+      (item): item is typeof item & { replicate: ReplicateResult & { responseLatencyMs: number } } => (
+        item.replicate.responseInitiated && item.replicate.responseLatencyMs !== null
       ),
     );
     const signedSpeedContributors = batch.motorMap.responseMode === 'takeoff'
-      ? run.replicates
-      : run.replicates.filter((replicate) => replicate.backwardDistanceMm > 0);
+      ? traceDerived
+      : traceDerived.filter((item) => item.summary.backwardDistanceMm > 0);
     return {
       conditionId: run.conditionId,
       label: run.label,
       n: run.replicates.length,
       reverseInitiationProbability: mean(run.replicates.map((replicate) => replicate.reverseInitiated ? 1 : 0)),
+      thresholdCrossingProbability: mean(run.replicates.map((replicate) => replicate.responseThresholdCrossed ? 1 : 0)),
+      thresholdCrossedN: run.replicates.filter((replicate) => replicate.responseThresholdCrossed).length,
+      censoredN: run.replicates.filter((replicate) => replicate.responseDisposition === 'censored').length,
       responseInitiationProbability: mean(run.replicates.map((replicate) => replicate.responseInitiated ? 1 : 0)),
-      shortModeEscapeProbability: mean(run.replicates.map((replicate) => replicate.shortModeEscapeInitiated ? 1 : 0)),
-      backwardDistanceMm: mean(run.replicates.map((replicate) => replicate.backwardDistanceMm)),
+      shortModeEscapeProbability: mean(traceDerived.map((item) => item.summary.takeoffSuccess ? 1 : 0)),
+      backwardDistanceMm: mean(traceDerived.map((item) => item.summary.backwardDistanceMm)),
       signedSpeedMmS: signedSpeedContributors.length
-        ? mean(signedSpeedContributors.map((replicate) => replicate.signedSpeedMmS))
+        ? mean(signedSpeedContributors.map((item) => item.summary.signedSpeedMmS))
         : 0,
-      responseLatencyMs: responsive.length ? mean(responsive.map((replicate) => replicate.responseLatencyMs)) : null,
+      responseLatencyMs: responsive.length
+        ? mean(responsive.map((item) => item.replicate.responseLatencyMs))
+        : null,
       responsiveN: responsive.length,
-      headingChangeDeg: Math.abs(mean(run.replicates.map((replicate) => replicate.headingChangeDeg))),
-      stanceStability: mean(run.replicates.map((replicate) => replicate.stanceStability)),
-      verticalDisplacementMm: mean(run.replicates.map((replicate) => replicate.verticalDisplacementMm)),
-      wingRecruitment: mean(run.replicates.map((replicate) => replicate.wingRecruitment)),
-      legRecruitment: mean(run.replicates.map((replicate) => replicate.legRecruitment)),
+      headingChangeDeg: Math.abs(mean(traceDerived.map((item) => item.summary.headingChangeDeg))),
+      stanceStability: mean(traceDerived.map((item) => item.summary.stanceStability)),
+      verticalDisplacementMm: mean(traceDerived.map((item) => item.summary.verticalDisplacementMm)),
+      wingRecruitment: mean(traceDerived.map((item) => item.summary.wingRecruitment)),
+      legRecruitment: mean(traceDerived.map((item) => item.summary.legRecruitment)),
     };
   });
   return {
-    id: `analysis_${deterministicSha256Hex({ batch: batch.id, metrics: canonicalMetrics, analysisStartMs, analysisEndMs })}`,
+    id: `analysis_${deterministicSha256Hex({ batch: batch.id, batchRunContentHash: batch.runContentHash, metrics: canonicalMetrics, analysisStartMs, analysisEndMs })}`,
     batchId: batch.id,
+    batchRunContentHash: batch.runContentHash,
     metrics: canonicalMetrics,
     metricDefinitions,
     responseInitiationSummaryDefinition: RESPONSE_INITIATION_SUMMARY_DEFINITION,
+    responseObservationSummaryDefinition: RESPONSE_OBSERVATION_SUMMARY_DEFINITION,
     conditions,
     windowMs: { start: analysisStartMs, end: analysisEndMs },
     methodVersion: batch.protocol.metricMethodVersion,
     provenance: ['derived', 'simulation_predicted'],
-    warning: 'These full-trial estimates summarize common-random-number-paired simulator variation. Response initiation is a separately declared summary; response latency is a simulated delay from nominal onset and is null when no seeded run responds. Values are not biological confidence intervals or new experimental evidence.',
+    warning: 'These full-trial estimates summarize common-random-number-paired simulator variation. Threshold crossing and censoring are separately exposed from expressed response initiation. Response latency is a simulated delay from nominal onset and is null when no threshold is crossed, a candidate is right-censored, or no seeded run expresses the response. Values are not biological confidence intervals or new experimental evidence.',
   };
 }
 

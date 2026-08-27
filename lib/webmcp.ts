@@ -259,7 +259,7 @@ export const flyLabToolContracts = [
   {
     name: 'design_stimulation_trial',
     title: 'Design stimulation trial',
-    description: 'Create and display a controlled adult-fly perturbation protocol for a saved hypothesis. Returns baseline, sham and perturbation conditions, timing, seeds and model assumptions; human approval is still required before execution.',
+    description: 'Create and display a controlled adult-fly perturbation protocol for a saved hypothesis. Returns baseline, sham and perturbation conditions, visible effective-drive derivations, timing, seeds and model assumptions; operator approval is still required before execution.',
     annotations: { readOnlyHint: false, untrustedContentHint: false },
     inputSchema: objectSchema({
       ...mutationContextProperties,
@@ -280,19 +280,19 @@ export const flyLabToolContracts = [
   {
     name: 'run_fly_simulation',
     title: 'Run fly simulation',
-    description: 'Execute one approved, bounded FlyLab experiment and animate its conditions in the shared arena. The caller must echo the approved_protocol_hash from the visible human gate; any protocol or seed-manifest change revokes authorization. Returns exact model, controller, seed and per-run IDs with field-level attribution.',
+    description: 'Execute one approved, bounded FlyLab experiment and make exact seeded runs replayable in the shared arena. The caller must echo the approved_protocol_hash from the visible operator gate; any protocol or seed-manifest change revokes authorization. Returns effective-drive derivations, state/event timelines, complete per-run trajectories, model/controller identities, legacy lineage hash, and SHA-256 content hash with field-level attribution.',
     annotations: { readOnlyHint: false, untrustedContentHint: false },
     inputSchema: objectSchema({
       ...mutationContextProperties,
       experiment_id: { type: 'string', minLength: 1, maxLength: 100 },
-      approved_protocol_hash: { type: 'string', minLength: 71, maxLength: 71, pattern: '^sha256:[a-f0-9]{64}$', description: 'Exact protocol hash returned after visible human approval and exposed by inspect_flylab_state.' },
+      approved_protocol_hash: { type: 'string', minLength: 71, maxLength: 71, pattern: '^sha256:[a-f0-9]{64}$', description: 'Exact protocol hash returned after visible operator approval and exposed by inspect_flylab_state.' },
       operation_id: { type: 'string', minLength: 1, maxLength: 120, description: 'Stable caller-generated ID for one logical simulation operation. Retry the same operation with the same ID.' },
     }, [...mutationContextRequired, 'experiment_id', 'approved_protocol_hash', 'operation_id']),
   },
   {
     name: 'analyze_fly_behavior',
     title: 'Analyze fly behavior',
-    description: 'Compute and save the selected motor map\'s complete five-metric panel by aggregating simulation-generated per-run summaries. The required metric IDs are returned on the circuit motor map and simulation batch. The displayed condition replay is illustrative and separate; outputs are not wet-lab evidence.',
+    description: 'Compute and save the selected motor map\'s complete five-metric panel from summaries derived from each run\'s authoritative state trajectory. The required metric IDs are returned on the circuit motor map and simulation batch. The shared arena can replay the exact selected seeded run; a legacy condition illustration remains compatibility-only and excluded from analysis. Outputs are not wet-lab evidence.',
     annotations: { readOnlyHint: false, untrustedContentHint: false },
     inputSchema: objectSchema({
       ...mutationContextProperties,
@@ -315,7 +315,7 @@ export const flyLabToolContracts = [
   {
     name: 'save_fly_evidence',
     title: 'Save fly evidence',
-    description: 'Commit a complete FlyLab hypothesis, experiment, runs, analyses, comparison, citations, model versions and seeds to the visible browser-local evidence ledger. Returns the stable bundle metadata and exact portable evidence-export envelope, including its manifest hash.',
+    description: 'Commit a complete FlyLab hypothesis, experiment, runs, analyses, comparison, citations, model versions and seeds to the visible browser-local evidence ledger. Verifies the simulation content hash and returns stable bundle metadata, the exact portable evidence-export envelope, its manifest hash, media type, and published JSON Schema URL.',
     annotations: { readOnlyHint: false, untrustedContentHint: true },
     inputSchema: objectSchema({
       ...mutationContextProperties,
@@ -363,15 +363,15 @@ export const flyLabToolOutputContracts = {
     operational_paths: ['/experiment/approved', '/approval_required', '/agent_status', '/blocked_by', '/agent_actionable', '/human_gate', '/next_action'],
   },
   run_fly_simulation: {
-    required_data_fields: ['id', 'experimentId', 'targetCircuitId', 'behavior', 'motorMap', 'status', 'conditionRuns', 'runHash', 'protocol', 'approval', 'model', 'provenance', 'boundary', 'next_action'],
+    required_data_fields: ['id', 'experimentId', 'targetCircuitId', 'behavior', 'motorMap', 'status', 'conditionRuns', 'runHash', 'runHashScope', 'runHashSerialization', 'runContentHash', 'runContentHashScope', 'runContentHashSerialization', 'protocol', 'approval', 'model', 'provenance', 'boundary', 'next_action'],
     produced_artifacts: ['simulation_batch', 'simulation_run', 'per_run_trajectory', 'illustrative_trajectory', 'experiment_approval', 'embodied_motor_map'],
     scientific_paths: ['', '/motorMap', '/conditionRuns', '/protocol', '/approval/protocol', '/approval/seed_manifest', '/model', '/model/controllerMapping', '/boundary'],
     operational_paths: ['/status', '/approval/approved_at', '/approval/protocol_hash', '/approval/seed_manifest_hash', '/next_action'],
   },
   analyze_fly_behavior: {
-    required_data_fields: ['analysis', 'metric_definitions', 'response_initiation_summary_definition', 'per_run_results', 'unit_boundary', 'next_action'],
+    required_data_fields: ['analysis', 'metric_definitions', 'response_initiation_summary_definition', 'response_observation_summary_definition', 'per_run_results', 'unit_boundary', 'next_action'],
     produced_artifacts: ['behavior_analysis', 'simulation_run_summary'],
-    scientific_paths: ['/analysis', '/metric_definitions', '/response_initiation_summary_definition', '/per_run_results', '/unit_boundary'],
+    scientific_paths: ['/analysis', '/metric_definitions', '/response_initiation_summary_definition', '/response_observation_summary_definition', '/per_run_results', '/unit_boundary'],
     operational_paths: ['/next_action'],
   },
   compare_fly_trials: {
@@ -381,10 +381,10 @@ export const flyLabToolOutputContracts = {
     operational_paths: ['/execution_authorized', '/next_action'],
   },
   save_fly_evidence: {
-    required_data_fields: ['bundle', 'evidence_export', 'export_media_type', 'export_filename', 'local_reference', 'storage_scope', 'next_action'],
+    required_data_fields: ['bundle', 'evidence_export', 'export_media_type', 'export_schema_url', 'export_filename', 'local_reference', 'storage_scope', 'next_action'],
     produced_artifacts: ['evidence_bundle', 'portable_evidence_export'],
     scientific_paths: ['/bundle', '/evidence_export'],
-    operational_paths: ['/export_media_type', '/export_filename', '/local_reference', '/storage_scope', '/next_action'],
+    operational_paths: ['/export_media_type', '/export_schema_url', '/export_filename', '/local_reference', '/storage_scope', '/next_action'],
   },
 } as const satisfies Record<(typeof flyLabToolContracts)[number]['name'], {
   required_data_fields: readonly string[];
@@ -664,7 +664,7 @@ function recoveryFor(tool: string, error: FlyLabDomainError) {
     return {
       tool: 'inspect_flylab_state',
       input: {},
-      reason: 'Use the visible human approval control for the exact protocol, then inspect state to obtain its approved protocol hash and current revision.',
+      reason: 'Use the visible operator approval control for the exact protocol, then inspect state to obtain its approved protocol hash and current revision.',
     };
   }
   if (error.code === 'INVALID_INPUT') {

@@ -5,17 +5,17 @@
 | Field | Value |
 |---|---|
 | Model | `FlyLab mapped-motor embodiment model` |
-| Version | `0.2.0` |
-| Controller | `mapped-circuit-to-body-adapter.v1` |
-| Environment | `open-field-model-scale.v2` |
-| Parameter set | `flylab.mapped-motor-parameters.v2` |
+| Version | `0.3.0` |
+| Controller | `state-coherent-mapped-circuit-adapter.v2` |
+| Environment | `stateful-open-field-model-scale.v3` |
+| Parameter set | `flylab.mapped-motor-parameters.v3` |
 | Seed policy | `flylab.seed-policy.v2` |
-| Metric method | `flylab.behavior-metrics.v4` |
+| Metric method | `flylab.behavior-metrics.v5` |
 | Parameter provenance | `agent_hypothesized` |
 | Batch provenance | `simulation_predicted` |
 | Analysis provenance | `derived`, `simulation_predicted` |
 
-This is a deterministic, hand-authored challenge model with separate MDN reverse-walk and giant-fiber short-mode escape motor maps. Its constants were not fitted to the cited fly assays, connectome contact counts, neural recordings, or FlyGym output. It does not execute FlyGym, connectome neurons, electrical or chemical synapses, neural dynamics, biomechanics, contacts, muscles, aerodynamics, or a wet-lab protocol. Distances and speeds use declared **model-scale millimeter units**. They are internally consistent within FlyLab but are not calibrated biological effect sizes.
+This is a deterministic challenge model with separate MDN reverse-walk and giant-fiber short-mode escape motor maps. GF state-transition order and approximate event intervals are constrained by cited adult escape measurements, but probabilities, amplitudes, gains, MDN dynamics, and recovery remain hand-authored and unfitted. It does not execute FlyGym, connectome neurons, electrical or chemical synapses, neural dynamics, biomechanics, muscles, aerodynamics, or a wet-lab protocol. Distances and speeds use declared **model-scale millimeter units**. They are internally consistent within FlyLab but are not calibrated biological effect sizes.
 
 FlyGym v2.1.0 is a pinned embodiment reference only. The FlyLab controller and equations below are local implementation choices, not results from FlyGym.
 
@@ -26,9 +26,10 @@ The block below is machine-checked against the exported runtime object. A parame
 <!-- MODEL_PARAMETERS_JSON_START -->
 ```json
 {
-  "name": "flylab.mapped-motor-parameters.v2",
+  "name": "flylab.mapped-motor-parameters.v3",
   "provenance": "agent_hypothesized",
-  "calibration": "Hand-authored for deterministic challenge demonstration; not fitted to the cited fly assays, BANC contact counts, neural recordings, or FlyGym output.",
+  "calibration": "State-transition order and approximate GF event intervals are constrained by cited adult escape measurements; probabilities, amplitudes, controller gains, recovery timing and dynamics, and MDN dynamics remain hand-authored and are not fitted to held-out data.",
+  "calibrationStatus": "literature_constrained_event_order_unfitted_amplitudes",
   "unitBoundary": "Distances and speeds use declared model-scale millimeter units. They are internally consistent but are not biologically calibrated effect sizes.",
   "durationReferenceMs": 1800,
   "durationGainBounds": [
@@ -91,10 +92,22 @@ The block below is machine-checked against the exported runtime object. A parame
       "maximum": 0.98
     },
     "responseLatency": {
-      "interceptMs": 165,
-      "inverseDriveGainMs": 510,
-      "jitterScaleMs": 90,
-      "minimumClampMs": 55
+      "interceptMs": 1.4,
+      "inverseDriveGainMs": 3.2,
+      "jitterScaleMs": 0.4,
+      "minimumClampMs": 1.4
+    },
+    "eventTiming": {
+      "controllerLeadMs": 0.6,
+      "groundReleaseDelayMs": 1.1,
+      "wingDelayAfterGroundReleaseMs": 1.5,
+      "recoveryBaseMs": 180,
+      "recoveryDriveGainMs": 120,
+      "recoveryJitterScaleMs": 20,
+      "sourceIds": [
+        "SRC-GAITANIDIS-PLOS-BIOLOGY-2025"
+      ],
+      "boundary": "The order and approximate millisecond intervals are literature-constrained calibration targets across distinct direct-GF and light-off paradigms; they are not a fitted equivalence to FlyLab unitless drive."
     },
     "verticalDisplacement": {
       "interceptModelMm": 0.42,
@@ -124,6 +137,37 @@ The block below is machine-checked against the exported runtime object. A parame
     "headingJitterScaleDeg": 0.08,
     "activeTurnBaseDegPerStep": 0.32,
     "activeTurnGainDegPerStep": 0.34
+  },
+  "stateTrajectory": {
+    "protocolWindowSemantics": "[onset_ms, min(trial_duration_ms, onset_ms + duration_ms))",
+    "distanceScale": {
+      "minimum": 0.98,
+      "range": 0.04
+    },
+    "eventSamplingBoundaryEpsilonMs": 0.001,
+    "reverseControllerLead": {
+      "latencyFraction": 0.2,
+      "maximumMs": 60
+    },
+    "stanceStability": {
+      "preparationPenalty": 0.05,
+      "reverseWalkPenalty": 0.1,
+      "jump": 0.35,
+      "wingDeployment": 0.25,
+      "airborne": 0.5
+    },
+    "takeoffPose": {
+      "jumpPitchDeg": -14,
+      "wingDeploymentPitchDeltaDeg": 20,
+      "airborneRecoveryPitchDeg": 6,
+      "wingDeploymentLegDecayFraction": 0.75,
+      "airborneLegRetentionFraction": 0.2,
+      "unilateralBodyRollPerHeading": 0.2
+    },
+    "illustrativeCompatibilityPose": {
+      "takeoffPitchDeg": 10,
+      "airborneStanceStability": 0.6
+    }
   }
 }
 ```
@@ -170,17 +214,17 @@ d_perturbation = 0.72 × (1 − suppression_fraction)
 
 This makes suppression magnitude operational rather than silently discarding it. It is still only a model assumption. Baseline and sham in a silencing trial represent an unsuppressed motor-program reference, not measured endogenous circuit activity or a physical assay.
 
-## Seeded replicate summaries
+## Seeded, state-coherent replicate model
 
 For zero-based replicate index `r`, every condition reuses the same seed:
 
 ```text
 replicate_seed = base_seed + r × 37
 per_run_trajectory_seed = replicate_seed + 104729
-illustrative_condition_trajectory_seed = base_seed + 130363
+illustrative_condition_trajectory_seed = base_seed + 130363  (legacy compatibility only)
 ```
 
-This is a common-random-number design: replicate `r` reuses the same latent draws across arms, so equal effective drives are exactly paired and differing drives are compared under the same draw sequence. The seeded generator is Mulberry32. The helper below appears in several equations:
+This is a common-random-number design: replicate `r` reuses the same latent draws across arms, so equal effective drives are exactly paired and differing drives are compared under the same draw sequence. The seeded generator is Mulberry32. A second Mulberry32 stream, seeded by `per_run_trajectory_seed`, applies a small common distance scale in `[0.98, 1.02)`. The helper below appears in several target-value equations:
 
 ```text
 jitter(scale) = ((u1 + u2 + u3 + u4) / 4 − 0.5) × scale
@@ -188,52 +232,58 @@ jitter(scale) = ((u1 + u2 + u3 + u4) / 4 − 0.5) × scale
 
 where each `u` is the next seeded uniform draw on `[0, 1)`.
 
-### Reverse initiation
+The `illustrative_condition_trajectory_seed` remains in the serialized seed policy for compatibility with older consumers. Its condition-level trace is labeled `illustrative_condition_replay`, is excluded from analysis, and is not the arena's authoritative replay. The current arena selects and replays an exact seeded `per_run_simulated_trajectory` from the batch.
+
+### Response threshold, candidate latency, and expression
+
+The first paired draw is compared with the applicable model probability:
 
 ```text
 p_reverse = clamp(0.08 + 0.79 × d, 0.02, 0.97)
-reverse_initiated = next_uniform_draw < p_reverse
+p_short_mode_escape = clamp(0.04 + 0.90 × d, 0.01, 0.98)
+response_threshold_crossed = next_uniform_draw < applicable_probability
 ```
 
-### Signed model-scale speed
+These probabilities and their dose relationship are hand-authored model assumptions. The per-run record distinguishes the probability from what happened in that seeded run with `responseThresholdProbability` and `responseThresholdCrossed`.
 
-If reverse initiation occurs:
+Only a crossed threshold produces a candidate latency. The candidate is lower-bounded but deliberately not upper-clamped to the observation window:
 
 ```text
-signed_speed_model_mm_s = −(0.62 + 2.25 × d + jitter(0.36))
+candidate_mdn_latency_ms = max(180, 540 + (1 − d) × 1320 + jitter(260))
+candidate_gf_latency_ms = max(1.4, 1.4 + (1 − d) × 3.2 + jitter(0.4))
+response_window_ms = trial_duration_ms − onset_ms
 ```
 
-Otherwise:
+The model then assigns one of three dispositions:
+
+- `not_crossed`: the response draw did not cross the threshold;
+- `censored`: the threshold crossed, but the motor map's required expression gate did not fit before the trial boundary; or
+- `expressed`: the required expression gate fit and its modeled body sequence appears in the state trajectory.
+
+For MDN, expression requires `candidate_mdn_latency_ms < response_window_ms`. For GF, expression requires the candidate movement onset plus the `1.1 ms` ground-release delay and `1.5 ms` wing-deployment delay to fit strictly inside the response window. A non-crossed or censored run has JSON `null` for `responseLatencyMs`, remains in stance, and has zero expressed displacement, leg deployment, wing deployment, and takeoff even when its premotor drive is nonzero. A censored candidate remains available separately as `candidateResponseLatencyMs`; trial duration is never substituted as an observed response.
+
+### Target values for expressed runs
+
+An expressed MDN run receives the hand-authored target speed:
 
 ```text
-signed_speed_model_mm_s = 0.92 − 0.25 × d + jitter(0.28)
+target_signed_speed_model_mm_s = −(0.62 + 2.25 × d + jitter(0.36))
 ```
 
-### Response latency
-
-For a responsive run, with `response_window_ms = trial_duration_ms − onset_ms`:
+An expressed GF run receives the hand-authored target values:
 
 ```text
-latency_ms = clamp(
-  540 + (1 − d) × 1320 + jitter(260),
-  min(180, response_window_ms),
-  response_window_ms
-)
+target_signed_speed_model_mm_s = max(0, 0.92 + 0.70 × d + jitter(0.28))
+target_vertical_displacement_model_mm = max(0, 0.42 + 2.60 × d + jitter(0.24))
+target_wing_recruitment = clamp(0.05 + 0.90 × d + jitter(0.08), 0, 1)
+target_leg_recruitment = clamp(0.06 + 0.92 × d + jitter(0.08), 0, 1)
 ```
 
-For a non-responsive run, latency is JSON `null`; FlyLab never substitutes trial duration.
-
-### Backward distance
+MDN leg recruitment uses:
 
 ```text
-reverse_seconds = max(response_window_ms − latency_ms, 0) / 1000
-distance_scale = 0.72 + next_uniform_draw × (0.92 − 0.72)
-backward_distance_model_mm = abs(signed_speed_model_mm_s) × reverse_seconds × distance_scale
+target_leg_recruitment = clamp(0.18 + 0.72 × d + jitter(0.06), 0, 1)
 ```
-
-Non-responsive runs receive zero backward distance.
-
-### Heading change
 
 `lateral_sign` is `−1` for left, `+1` for right, and `0` for controls or bilateral conditions. `mode_sign` is `+1` for activation and `−1` for suppression. The lateral effect is `d` for activation and `0.72 − d` for suppression.
 
@@ -244,70 +294,78 @@ heading_change_deg = lateral_sign × mode_sign × (11 + 34 × lateral_effect)
 
 The sign convention and magnitude are hand-authored display/model choices, not a fit to Sen et al.'s laterality assay.
 
-### Stance-stability index
+Baseline and target stance indices are also seeded, synthetic controller values:
 
 ```text
-stance_stability = clamp(0.91 − 0.08 × d + jitter(0.06), 0.62, 0.98)
+baseline_stance_stability = clamp(0.91 + jitter(0.06), 0.62, 0.98)
+target_stance_stability = clamp(0.91 − 0.08 × d + jitter(0.06), 0.62, 0.98)
 ```
 
-The per-run record also carries a non-panel reverse-walk leg-recruitment index for embodiment traces:
+All amplitudes, probabilities, gains, heading rules, stance values, and MDN dynamics in this section are unfitted model assumptions. They are not measured activation, biological effect sizes, or uncertainty estimates.
+
+## Authoritative state trajectory
+
+Each replicate produces a complete `flylab.per-run-state-trajectory.v2` trace. Its possible states are:
 
 ```text
-leg_recruitment = clamp(0.18 + 0.72 × d + jitter(0.06), 0, 1)
+stance → preparation → reverse_walk → recovery
+stance → preparation → jump → wing_deployment → airborne → recovery
 ```
 
-It is a synthetic controller summary, not a measured activation or one of the MDN analysis panel's five metrics.
+The first sequence applies to an expressed MDN run and the second to an expressed GF run. Non-crossed and censored runs remain in `stance`. `preparation` can carry premotor drive but no displacement or expressed leg/wing output. Each trajectory point includes exact modeled time, position, heading, state, ground contact, leg extension, wing deployment, body pitch, body roll, premotor drive, motor-output status, and stance stability.
 
-This is a synthetic unitless model index. It does not derive from foot contacts, forces, joint kinematics, or a validated gait-stability measure.
+The trace contains the 81 uniform samples implied by the configured 80 intervals plus exact event times, immediate `±0.001 ms` neighbors, and between-event midpoints. Position is integrated only between modeled movement onset and recovery. Appendage deployment, lift, pitch, ground contact, and `motorOutputActive` are derived from the same state at the same timestamp. The Three.js arena uses the selected replicate's exact trace and seed; it does not synthesize a separate visual response.
 
-## Giant-fiber short-mode escape adapter
+### GF timing calibration boundary
 
-The giant-fiber profile uses the same bounded unitless motor drive `d`, but routes it to a separate response model. The cited literature supports the adult GF short-mode escape pathway and its TTM jump-leg and PSI/DLM wing branches; it does not supply the following numeric gains.
+For expressed GF runs, the event timeline is:
 
 ```text
-p_short_mode_escape = clamp(0.04 + 0.90 × d, 0.01, 0.98)
-latency_ms = clamp(165 + (1 − d) × 510 + jitter(90), min(55, response_window_ms), response_window_ms)
-signed_speed_model_mm_s = 0.92 + 0.70 × d + jitter(0.28)
-vertical_displacement_model_mm = max(0, 0.42 + 2.60 × d + jitter(0.24))
-wing_recruitment = clamp(0.05 + 0.90 × d + jitter(0.08), 0, 1)
-leg_recruitment = clamp(0.06 + 0.92 × d + jitter(0.08), 0, 1)
+controller_threshold = movement_onset − 0.6 ms
+ground_release = movement_onset + 1.1 ms
+wing_deployment = ground_release + 1.5 ms
+recovery_duration = max(1, 180 + 120 × d + jitter(20)) ms
+recovery = min(trial_duration, wing_deployment + recovery_duration)
 ```
 
-Non-responsive runs receive zero vertical displacement. These outputs are seeded reduced-order indices and model-scale motion, not wingbeat amplitude, muscle force, aerodynamic lift, a synaptic response, or a fit to the sub-millisecond physiological timing reported in giant-fiber experiments. GF silencing uses the same hand-authored reference-drive convention as MDN silencing; it is not a model of the parallel long-mode escape pathway.
+[Gaitanidis et al. (2025)](https://doi.org/10.1371/journal.pbio.3003553) constrains only the state-transition order and selected approximate millisecond targets: the `1.4 ms` candidate-latency floor/intercept references its direct-GF DLM short-latency response; the `1.1 ms` ground-release delay reflects the representative light-off interval from first movement at about `3.4 ms` to airborne at about `4.5 ms`; and `1.5 ms` is the midpoint of its reported additional `1–2 ms` to wing extension/beating. Direct-GF electrophysiology and light-off behavior are distinct paradigms, not a single dose-response dataset. The `0.6 ms` controller lead, candidate-latency drive gain and jitter, threshold probability, motion and recruitment amplitudes, body-controller gains, and recovery dynamics remain hand-authored and unfitted. MDN state timing is entirely hand-authored and unfitted. GF silencing uses the same reference-drive convention as MDN silencing; the parallel long-mode escape pathway is not modeled.
 
-## Per-run and illustrative trajectories
+### Trace-derived run summaries
 
-Every replicate has a complete `per_run_simulated_trajectory` generated from its recorded trajectory seed. Its response onset, direction, speed, heading, and vertical displacement are consistent with that run's scalar result. The simulation response returns the full trace; the analysis response returns its ID, seed, role, completion status, and point count for audit.
+Run summaries are calculated from the authoritative per-run state trajectory rather than generated independently:
 
-The Three.js condition replay is generated separately from the replicate summaries above. It is labeled `illustrative_condition_replay`, is not any run trajectory, and is never used to calculate metric cards.
+- backward distance is the maximum backward-axis displacement;
+- signed speed uses movement-onset-to-recovery duration and the realized trace displacement;
+- heading change is final minus initial trace heading;
+- stance stability is a left-continuous, time-weighted mean over the full trace;
+- vertical displacement, leg recruitment, and wing recruitment are trace maxima; and
+- takeoff success requires an `airborne` point with `groundContact=false`.
 
-The replay has 80 equal time steps. The MDN reverse-walk program uses:
-
-```text
-step_model_mm = 0.018 + 0.036 × d
-```
-
-and backward direction when `d > 0.12`. The bilateral GF short-mode escape program never applies that reversal and instead uses:
-
-```text
-forward_step_model_mm = 0.018 + 0.018 × d
-vertical_step_model_mm = 0.035 × d during the active target window
-```
-
-Both programs use position jitter scale `0.006` model mm and out-of-target heading jitter scale `0.08` degrees. During a supported unilateral MDN perturbation target window, the per-step heading increment is:
-
-```text
-lateral_sign × mode_sign × (0.32 + 0.34 × lateral_effect)
-```
-
-The `active` flag and circuit/body glow indicate only that a perturbation arm is in its target window. The separate `motorOutputActive` flag controls modeled appendage motion and lift. Baseline and sham remain unilluminated even when a silencing trial's reference drive produces a modeled motor response.
+The simulation output contains every per-run trace. Analysis returns per-run audit rows linked to those trace IDs. The compatibility-only `illustrative_condition_replay` is generated by the older condition-level 80-step routine and remains explicitly excluded from the arena, run summaries, condition metrics, and scientific interpretation.
 
 ## Analysis
 
-`flylab.behavior-metrics.v4` reports condition means across the seeded replicate summaries. Each motor map declares its complete five-metric panel. Every metric publishes a machine-readable formula, unit, sign convention, aggregation, null rule, full-trial window semantics, method version, provenance, and interpretation boundary. Response initiation has a separately declared summary definition. MDN additionally reports reverse initiation and GF reports short-mode escape probability—not total takeoff probability. Heading change is returned and displayed as the absolute condition-mean magnitude. Response latency is averaged over responsive runs only and reports both `responsiveN` and total `n`; a no-response condition is JSON `null`. The response also exposes per-run audit rows linked to trajectory IDs. FlyLab does not claim a formal preregistration artifact.
+`flylab.behavior-metrics.v5` reports condition means from those trace-derived run summaries. Each motor map declares its complete five-metric panel. Every metric publishes a machine-readable formula, unit, sign convention, aggregation, null rule, full-trial window semantics, method version, provenance, and interpretation boundary. Response initiation is a separately declared expressed-body summary. MDN additionally reports reverse initiation. GF short-mode escape probability counts runs whose trace actually reaches `airborne` without ground contact; it is not the threshold probability and not total takeoff probability. Heading change is the absolute condition-mean signed change. Response latency is averaged over expressed responsive runs only and reports both `responsiveN` and total `n`; a no-response or wholly censored condition is JSON `null`. FlyLab does not claim a formal preregistration artifact.
+
+The analysis tool serializes its formal threshold/censoring method block as `response_observation_summary_definition`, with the definition ID `response_threshold_and_censoring_summary`. All three fields use the full-trial window and are never null:
+
+- `thresholdCrossingProbability = thresholdCrossedN / n`, the empirical fraction of seeded runs whose draw crossed its threshold;
+- `thresholdCrossedN = sum(I(responseThresholdCrossed))`, the integer number of threshold-crossing runs; and
+- `censoredN = sum(I(responseDisposition = 'censored'))`, the integer number of threshold-crossing candidates whose complete declared body transition did not fit inside the trial window.
+
+`thresholdCrossingProbability` summarizes realized seeded draws. It is distinct from each run's `responseThresholdProbability`, which is the hand-authored generator probability used before the draw. Neither quantity, nor either count, is a biological response rate or a survival-analysis estimate.
 
 The comparison ranks those model-derived condition summaries by the requested objective and proposes nearby nominal control levels. The ranking remains `derived` plus `simulation_predicted`; the follow-up proposal remains `agent_hypothesized` and is never executed automatically.
 
 ## Reproducibility and change control
 
-The authoritative numeric parameter object is `MODEL_PARAMETERS` in `lib/flylab.ts`; the equations above mirror that object. Model, controller, environment, seed-policy, metric-method, and parameter-set identifiers are serialized into experiments, batches, approvals, and evidence exports. A change to model behavior requires a version change, updated tests, this model card, and a newly verified release candidate.
+The authoritative numeric parameter object is `MODEL_PARAMETERS` in `lib/flylab.ts`; the equations above mirror that object. Model, controller, environment, seed-policy, metric-method, and parameter-set identifiers are serialized into experiments, batches, approvals, and evidence exports.
+
+The batch carries two hashes with deliberately different scopes:
+
+- legacy `runHash` is FNV-1a over only the ordered `{ runId, trajectoryId }` pairs and is retained as an identity summary for compatibility; and
+- `runContentHash` is SHA-256 over `JSON.stringify({ protocol, model, conditionRuns })`, covering the exact protocol, model manifest, complete run records, event timelines, and trajectories.
+
+Analysis recomputes `runContentHash`, rejects a mismatch, records it as `batchRunContentHash`, and binds it into the analysis ID. Approval protocol and seed-manifest commitments use SHA-256 independently of both batch hashes. Portable evidence exports use schema version `3`; the advertised JSON Schema is [flylab-evidence-export-v3.schema.json](https://flylab-neuroethology.d-lougen.chatgpt.site/schemas/flylab-evidence-export-v3.schema.json). A schema or digest validates structure or byte-level consistency only; neither is a digital signature, biological validation, or proof of authorship.
+
+A change to model behavior requires a version change, updated tests, this model card, and a newly verified release candidate. This card describes the implementation; it does not by itself assert that v0.3.0 has passed a particular live-browser or production-release check.

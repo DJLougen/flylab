@@ -2,7 +2,7 @@
 
 FlyLab defines eight native site tools through `document.modelContext.registerTool(...)`: one read-only inspector plus seven scientific workflow mutations. This document distinguishes source-level checks, page registration, browser-mediated invocation, and a completed supported-runtime workflow. They are different evidence levels.
 
-The repository retains a [local Chrome 151 report](release-evidence/chrome-151-v24.json) from the automated, flag-enabled native WebMCP protocol verifier and a separate [public-deployment report](release-evidence/public-chrome-151-v24.json). Together they record clean source binding, the exact browser version, eight registered and invoked tools, a fresh-session reload, the completed GF workflow, browser export parity, negative guards, and the evidence audit locally and on the public URL. They are not ChatGPT agent transcripts; a ChatGPT Sol/Terra claim requires separate retained evidence.
+The repository retains a [local Chrome 151 report](release-evidence/chrome-151-v24.json) from the automated, flag-enabled native WebMCP protocol verifier and a separate [public-deployment report](release-evidence/public-chrome-151-v24.json). Together they record clean source binding, the exact browser version, eight registered and invoked tools, a fresh-session reload, the completed GF workflow, browser export parity, negative guards, and the evidence audit for the earlier v24/`0.2.0` release. They are historical prior-release evidence, not verification of the current `0.3.0` source and not ChatGPT agent transcripts. The current candidate requires fresh local and deployed reports; a ChatGPT Sol/Terra claim requires its own retained evidence.
 
 ## Evidence levels
 
@@ -34,9 +34,11 @@ The source suite covers, among other contracts:
 - prepare/check/commit cancellation and stale-commit boundaries;
 - ranked discovery decisions, candidate records, rejected alternatives, evidence filters, and coverage gaps;
 - GF causal-evidence/laterality gates and the MDN secondary motor map;
-- complete per-run trajectories, separate illustrative replays, and common-random-number seed policy;
-- `flylab.behavior-metrics.v4` definitions and per-run analysis traceability;
-- experiment/mission v3 bundle formats and evidence-export schema version 3;
+- complete per-run state trajectories and body-event timelines, explicit response censoring, exact selected-run replay, compatibility-only illustrative replays, and common-random-number seed policy;
+- state-coherent nonresponse/contact/output invariants across `stance`, `preparation`, movement, `airborne`, and `recovery` states;
+- `flylab.behavior-metrics.v5` trace-derived definitions and per-run analysis traceability;
+- legacy identity-only FNV `runHash` plus SHA-256 `runContentHash` over protocol, model, and complete condition runs, with analysis hash binding;
+- experiment/mission v3 bundle formats, evidence-export schema version 3, and validation against the deployed [portable export JSON Schema](https://flylab-neuroethology.d-lougen.chatgpt.site/schemas/flylab-evidence-export-v3.schema.json);
 - field-addressed provenance, source closure, and model/scientific interpretation boundaries;
 - exact capability diagnostics when the API is absent, incomplete, or registration fails.
 
@@ -76,7 +78,9 @@ On successful exit, the full verifier is designed to assert all eight contracts,
 - a visible approval click followed by valid SHA-256 protocol/seed-manifest commitments;
 - rejection of a wrong `approved_protocol_hash`;
 - exact approved protocol snapshots and complete seed manifests in simulation output;
-- formal metric-definition fields and per-run result/trajectory audit parity;
+- exact per-condition drive derivations, explicit threshold-crossing/censoring dispositions, state-coherent per-run traces, and selected seeded-run UI parity;
+- FNV identity-hash scope, SHA-256 content-hash recomputation, and analysis binding to the verified content hash;
+- formal v5 metric-definition fields and per-run result/trajectory audit parity;
 - a complete mission-scope v3 export, including discovery alternatives and coverage gaps;
 - mutation-free completed run/save replays under identical operation IDs;
 - `operation_id_input_mismatch` on conflicting reuse;
@@ -115,18 +119,26 @@ An identical completed operation retry may use the newer inspected revision beca
 
 ## Approval verification
 
-Visible approval creates a detached, deeply frozen `flylab.experiment-approval` record. Its SHA-256 `protocol_hash` binds the complete experiment protocol, model version, seed policy, and metric method. Its separate `seed_manifest_hash` binds every condition, illustrative trajectory seed, replicate seed, and per-run trajectory seed. The timestamp is metadata outside both hashes.
+Visible approval creates a detached, deeply frozen `flylab.experiment-approval` record. Its SHA-256 `protocol_hash` binds the complete experiment protocol, model version, seed policy, metric method, and declared condition-drive derivations. Its separate `seed_manifest_hash` binds every condition, compatibility replay seed, replicate seed, and per-run trajectory seed. The timestamp is metadata outside both hashes.
 
 The run caller must echo the protocol hash. Before simulation, FlyLab recomputes and compares both stored commitments with the current experiment. Any protocol, model, method, or seed change invalidates authorization. Approval is deliberately absent from WebMCP and requires the visible page control; it is not an identity-authentication claim against general browser automation.
 
 ## Metric and bundle verification
 
-`analyze_fly_behavior` must return `flylab.behavior-metrics.v4`. For each metric, verify formula, unit, sign convention, aggregation, null rule, full-trial window semantics, method version, provenance, and boundary. Verify the separate response-initiation summary definition and the `per_run_results` mapping. The run response contains full per-run trajectories; the analysis response carries their IDs, seeds, roles, status, and point counts. The illustrative condition replay must never be treated as a raw run trace.
+`run_fly_simulation` must identify model `0.3.0`, controller `state-coherent-mapped-circuit-adapter.v2`, environment `stateful-open-field-model-scale.v3`, and calibration status `literature_constrained_event_order_unfitted_amplitudes`. GF event order and approximate intervals are literature-constrained; response probabilities, amplitudes, controller gains, recovery timing, and MDN dynamics remain hand-authored and unfitted.
+
+For each replicate, verify the exact selected seeded trajectory carries state, ground contact, leg/wing expression, pose, premotor drive, and stance stability. Verify `responseThresholdCrossed` separately from `responseDisposition`; a late candidate is `censored`, has null expressed latency, and remains grounded with zero expressed body output. Expressed GF runs must order preparation, movement onset, ground release, wing deployment, airborne state, and recovery without pre-movement body output. The legacy `illustrative_condition_replay` remains a compatibility artifact only and must not be used as a raw run trace, analysis input, or primary arena replay.
+
+The batch's FNV-1a `runHash` is scoped to run/trajectory IDs and is not content integrity. Recompute SHA-256 `runContentHash` over `JSON.stringify({ protocol, model, conditionRuns })`; `analyze_fly_behavior` must reject mismatched content and return the same value as `batchRunContentHash`.
+
+`analyze_fly_behavior` must return `flylab.behavior-metrics.v5`. For each metric, verify formula, unit, sign convention, aggregation, null rule, full-trial window semantics, method version, provenance, and boundary. Verify the separate response-initiation and threshold/censoring summary definitions and the `per_run_results` mapping. Condition summaries must recompute from the authoritative per-run state trajectories.
 
 `save_fly_evidence` must return the exact portable `flylab.evidence-export` schema-version-`3` envelope:
 
 - `scope: experiment` → `flylab.experiment-evidence-bundle.v3`;
 - `scope: mission` → `flylab.mission-evidence-bundle.v3`, including goal, discovery decision, considered/rejected alternatives, exclusions, and coverage gaps.
+
+The save result must expose media type `application/vnd.flylab.evidence+json` and schema URL `https://flylab-neuroethology.d-lougen.chatgpt.site/schemas/flylab-evidence-export-v3.schema.json`. Validate the downloaded envelope against that schema in addition to recomputing its payload checksum.
 
 The payload checksum detects change. It is not a digital signature, proof of authorship, or guarantee of immutability. Browser-local storage is best-effort convenience only.
 

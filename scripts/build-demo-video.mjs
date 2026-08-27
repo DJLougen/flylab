@@ -5,9 +5,9 @@ import { copyFile, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 
-const framesDirectory = resolve(process.env.FLYLAB_DEMO_FRAMES ?? 'outputs/demo/v24/frames');
-const finalOutputDirectory = resolve(process.env.FLYLAB_DEMO_OUTPUT ?? 'outputs/demo/v24');
-const narrationDirectory = resolve(process.env.FLYLAB_NARRATION_DIR ?? 'outputs/demo/v24/narration');
+const framesDirectory = resolve(process.env.FLYLAB_DEMO_FRAMES ?? 'outputs/demo/candidate/frames');
+const finalOutputDirectory = resolve(process.env.FLYLAB_DEMO_OUTPUT ?? 'outputs/demo/candidate');
+const narrationDirectory = resolve(process.env.FLYLAB_NARRATION_DIR ?? 'outputs/demo/candidate/narration');
 const ffmpeg = process.env.FFMPEG_BIN ?? '/opt/homebrew/bin/ffmpeg';
 const ffprobe = process.env.FFPROBE_BIN ?? '/opt/homebrew/bin/ffprobe';
 const uiApproved = process.env.FLYLAB_UI_APPROVED === '1';
@@ -21,8 +21,8 @@ const finalOutputContactSheet = join(finalOutputDirectory, 'FlyLab-WebMCP-Demo-c
 const finalGalleryDirectory = join(finalOutputDirectory, 'gallery');
 
 const demoMetadata = {
-  schema_version: 'flylab.demo-release.v24',
-  release: 'v24',
+  schema_version: 'flylab.demo-release.v03',
+  release: 'model-0.3.0-candidate',
   workflow: 'native-webmcp-client-gf-rapid-escape',
   hero_goal: 'Investigate how the adult fruit-fly brain coordinates leg and wing output during rapid escape. Separate measured findings from connectome inference and simulation assumptions, draft a falsifiable hypothesis, and design a controlled experiment. Stop for my approval, then continue, analyze every metric, compare conditions, and save the complete evidence bundle.',
   webmcp: {
@@ -42,21 +42,24 @@ const demoMetadata = {
     condition_ids: ['condition_baseline', 'condition_sham', 'condition_bilateral'],
     replicates_per_arm: 12,
     total_seeded_runs: 36,
-    approval: 'visible-human-only exact protocol hash plus seed-manifest hash',
+    approval: 'visible operator approval control binding the exact protocol hash and seed-manifest hash; approval is not a WebMCP tool',
   },
   visualization: {
     subject: 'literature-schematic giant-fiber leg-and-wing branches',
+    behavior_replay: 'selected seeded state trajectory',
     invented_connectome_ids: false,
     boundary: 'The 3D view is a literature-backed schematic and model-selection display, not a specimen reconstruction, connectome import, or measured neural activity.',
   },
   analysis: {
-    metric_method_version: 'flylab.behavior-metrics.v4',
+    metric_method_version: 'flylab.behavior-metrics.v5',
     exact_per_run_records_required: true,
     biological_measurement: false,
   },
   export: {
     format: 'flylab.mission-evidence-bundle.v3',
     source_closed: true,
+    schema_url: 'https://flylab-neuroethology.d-lougen.chatgpt.site/schemas/flylab-evidence-export-v3.schema.json',
+    content_integrity: 'SHA-256 over protocol, model, and complete condition runs',
   },
 };
 
@@ -82,8 +85,8 @@ const segments = [
     narration: 'It designs exactly three arms—baseline, model sham, and bilateral perturbation—and twelve replicates each, yielding thirty-six deterministic virtual trials in a complete seed manifest.',
   },
   {
-    frame: '04-human-approved.png',
-    narration: 'Approval is not a WebMCP tool. The capture activates the visible control, committing the protocol hash and seed-manifest hash; a judged run requires the person’s review and click.',
+    frame: '04-operator-approved.png',
+    narration: 'Approval is not a WebMCP tool. The capture activates the visible operator control, committing the protocol hash and seed-manifest hash; a judged run requires operator review and click.',
   },
   {
     frame: 'proof-approval-hash-guard.png',
@@ -91,7 +94,7 @@ const segments = [
   },
   {
     frame: '05-simulation-replay.png',
-    narration: 'The client echoes the approved hash and runs all thirty-six trials. Every run has a deterministic seed and trajectory ID in the reduced-order model.',
+    narration: 'The client echoes the approved hash and runs all thirty-six trials. Every run has a deterministic seed and trajectory ID; Three.js replays the selected seeded state trajectory.',
   },
   {
     frame: '06-circuit-bilateral-active.png',
@@ -107,7 +110,7 @@ const segments = [
   },
   {
     frame: '09-evidence-saved.png',
-    narration: 'The save tool creates a source-closed mission version-three bundle with discovery decision, rejected alternative, source catalog, approval commitments, thirty-six runs, analysis, comparison, and manifest hash.',
+    narration: 'The save tool creates a source-closed mission version-three bundle with the complete lineage, published export schema, and SHA-256 content integrity over protocol, model, and all condition runs.',
   },
   {
     frame: 'proof-idempotent-retry.png',
@@ -304,7 +307,7 @@ try {
   const media = [
     ['06-circuit-bilateral-active.png', outputThumbnail],
     ['proof-webmcp-tools.png', join(galleryDirectory, '01-eight-webmcp-tools.png')],
-    ['03-protocol-locked.png', join(galleryDirectory, '02-human-approval-gate.png')],
+    ['03-protocol-locked.png', join(galleryDirectory, '02-operator-approval-gate.png')],
     ['06-circuit-bilateral-active.png', join(galleryDirectory, '03-gf-literature-schematic.png')],
     ['07-behavior-analysis.png', join(galleryDirectory, '04-behavior-analysis.png')],
     ['09-evidence-saved.png', join(galleryDirectory, '05-evidence-ledger.png')],

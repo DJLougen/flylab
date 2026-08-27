@@ -74,11 +74,14 @@ describe('FlyLab submission assets', () => {
     assert.match(builder, /FLYLAB_NARRATION_RIGHTS_CONFIRMED/);
     assert.match(builder, /externally_supplied_per_segment/);
     assert.match(builder, /ui_approval/);
-    assert.match(builder, /outputs\/demo\/v24/);
+    assert.match(builder, /outputs\/demo\/candidate/);
+    assert.doesNotMatch(builder, /outputs\/demo\/v24/);
     assert.doesNotMatch(builder, /rm\(finalOutputReport/);
     assert.match(attestation, /not a completed attestation/i);
     assert.match(attestation, /00\.wav/);
     assert.match(attestation, /14\.wav/);
+    assert.match(attestation, /outputs\/demo\/candidate\/narration/);
+    assert.doesNotMatch(attestation, /outputs\/demo\/v24/);
     assert.match(attestation, /\[complete before release\]/i);
     assert.doesNotMatch(attestation, /commercial-publication permission verified:\s*\*\*yes\*\*/i);
   });
@@ -120,6 +123,7 @@ describe('FlyLab submission assets', () => {
       schema_version: string;
       demo: {
         schema_version: string;
+        release: string;
         workflow: string;
         webmcp: {
           registered_tools: number;
@@ -129,16 +133,17 @@ describe('FlyLab submission assets', () => {
         };
         discovery: { selected_circuit_id: string; rejected_alternative_circuit_id: string };
         protocol: { experiment_arms: number; replicates_per_arm: number; total_seeded_runs: number };
-        visualization: { invented_connectome_ids: boolean };
+        visualization: { behavior_replay: string; invented_connectome_ids: boolean };
         analysis: { metric_method_version: string; exact_per_run_records_required: boolean; biological_measurement: boolean };
-        export: { format: string; source_closed: boolean };
+        export: { format: string; source_closed: boolean; schema_url: string; content_integrity: string };
       };
       segment_count: number;
       segments: Array<{ audio_file: string; frame: string; narration: string; word_count: number }>;
     };
 
     assert.equal(plan.schema_version, 'flylab.demo-narration-plan.v2');
-    assert.equal(plan.demo.schema_version, 'flylab.demo-release.v24');
+    assert.equal(plan.demo.schema_version, 'flylab.demo-release.v03');
+    assert.equal(plan.demo.release, 'model-0.3.0-candidate');
     assert.equal(plan.demo.workflow, 'native-webmcp-client-gf-rapid-escape');
     assert.equal(plan.demo.webmcp.registered_tools, 8);
     assert.equal(plan.demo.webmcp.native_invocation_proof_required, true);
@@ -149,12 +154,17 @@ describe('FlyLab submission assets', () => {
     assert.equal(plan.demo.protocol.experiment_arms, 3);
     assert.equal(plan.demo.protocol.replicates_per_arm, 12);
     assert.equal(plan.demo.protocol.total_seeded_runs, 36);
+    assert.match(JSON.stringify(plan.demo.protocol), /visible operator approval control/i);
+    assert.match(JSON.stringify(plan.demo.protocol), /approval is not a WebMCP tool/i);
+    assert.equal(plan.demo.visualization.behavior_replay, 'selected seeded state trajectory');
     assert.equal(plan.demo.visualization.invented_connectome_ids, false);
-    assert.equal(plan.demo.analysis.metric_method_version, 'flylab.behavior-metrics.v4');
+    assert.equal(plan.demo.analysis.metric_method_version, 'flylab.behavior-metrics.v5');
     assert.equal(plan.demo.analysis.exact_per_run_records_required, true);
     assert.equal(plan.demo.analysis.biological_measurement, false);
     assert.equal(plan.demo.export.format, 'flylab.mission-evidence-bundle.v3');
     assert.equal(plan.demo.export.source_closed, true);
+    assert.equal(plan.demo.export.schema_url, 'https://flylab-neuroethology.d-lougen.chatgpt.site/schemas/flylab-evidence-export-v3.schema.json');
+    assert.equal(plan.demo.export.content_integrity, 'SHA-256 over protocol, model, and complete condition runs');
     assert.equal(plan.segment_count, 15);
     assert.equal(plan.segments[0]?.frame, 'proof-webmcp-tools.png');
     assert.equal(plan.segments[6]?.frame, 'proof-approval-hash-guard.png');
@@ -172,9 +182,13 @@ describe('FlyLab submission assets', () => {
     assert.match(narration, /exactly three arms/i);
     assert.match(narration, /thirty-six deterministic virtual trials/i);
     assert.match(narration, /protocol hash and seed-manifest hash/i);
+    assert.match(narration, /visible operator control/i);
+    assert.match(narration, /selected seeded state trajectory/i);
     assert.match(narration, /invents no connectome neuron IDs/i);
     assert.match(narration, /formal versioned metric definitions/i);
     assert.match(narration, /source-closed mission version-three bundle/i);
+    assert.match(narration, /published export schema/i);
+    assert.match(narration, /SHA-256 content integrity/i);
     assert.match(narration, /deliberately wrong protocol hash returns EVIDENCE MISMATCH/i);
     assert.match(narration, /idempotent replay, creates zero artifacts/i);
     assert.match(narration, /revokes both approval hashes/i);

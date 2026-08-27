@@ -2,7 +2,7 @@
 
 This is the direct Chrome protocol path for judges who want to inspect every request and response without a conversational agent. It uses Chrome's WebMCP debugging panel to call the same eight page-registered tools. It is a supported WebMCP execution surface, not a DOM or manifest fallback.
 
-A [tracked automated Chrome 151 report](release-evidence/chrome-151-v24.json) records one successful local native-protocol run for the source revision named inside it. This manual sequence lets judges reproduce and inspect the calls themselves. The automated report is not a ChatGPT agent transcript, an identified-human approval record, or proof of the public deployment.
+A [tracked automated Chrome 151 report](release-evidence/chrome-151-v24.json) records one successful local native-protocol run for the earlier v24/`0.2.0` source revision named inside it. This manual sequence is the required fresh test for the current `0.3.0` candidate. The historical report is not verification of this candidate, a ChatGPT agent transcript, an identified-human approval record, or proof of the current public deployment.
 
 ## Setup
 
@@ -11,7 +11,7 @@ A [tracked automated Chrome 151 report](release-evidence/chrome-151-v24.json) re
 3. Enable `chrome://flags/#enable-webmcp-testing` and `chrome://flags/#devtools-webmcp-support`, then relaunch Chrome.
 4. Open FlyLab in a fresh tab.
 5. Open **DevTools → Application → WebMCP**.
-6. Confirm **Available Tools** contains exactly the eight names in [Judge testing instructions](JUDGE_TESTING.md#native-tool-inventory). Human approval must not appear as a ninth tool.
+6. Confirm **Available Tools** contains exactly the eight names in [Judge testing instructions](JUDGE_TESTING.md#native-tool-inventory). Operator approval must not appear as a ninth tool.
 7. Before creating state, require a console-clean default 3D fly, then switch once to **3D brain** and back. If an older restored tab references a retired hashed visual module, open the current deployment in a fresh tab; do not reload a mutated page session without exporting it first.
 
 ### If the inventory is absent
@@ -134,13 +134,13 @@ Call `design_stimulation_trial`:
 }
 ```
 
-Copy `data.experiment.id` as `EXPERIMENT_ID` and update `REVISION`. The visible protocol must show exactly three GF arms: baseline, model-sham, and bilateral perturbation. GF unilateral routing is unsupported and must fail rather than inventing left/right arms.
+Copy `data.experiment.id` as `EXPERIMENT_ID` and update `REVISION`. The visible protocol must show exactly three GF arms: baseline, model-sham, and bilateral perturbation. GF unilateral routing is unsupported and must fail rather than inventing left/right arms. Confirm the protocol exposes the exact per-arm drive derivations, including nominal control level, bounded duration gain, laterality gain, formula, and effective motor drive before approval.
 
 Inspect again with `{}`. Confirm `waiting_for_human`, `blocked_by: human_approval`, `next_tool: null`, no approval artifact, and no batch.
 
 An optional negative test may call `run_fly_simulation` with current session/revision, a new `operation_id`, `EXPERIMENT_ID`, and a syntactically valid but incorrect 64-hex SHA-256 string. Before approval it must return `APPROVAL_REQUIRED` and publish no batch.
 
-## 5. Commit the person-owned approval
+## 5. Commit the operator-owned approval
 
 In the FlyLab page—not through WebMCP—review the complete visible protocol and click **Approve this exact experiment**. Approval is intentionally not a tool.
 
@@ -172,9 +172,17 @@ Copy `data.id` as `BATCH_ID` and update `REVISION`. Confirm:
 
 - the returned approval has matching protocol and seed-manifest hashes;
 - every condition and run is `complete`;
-- every run exposes its seed, effective motor drive, response probability, scalar outputs, trajectory ID, trajectory seed, trajectory role, and full trajectory;
-- each condition's separate trajectory is labeled `illustrative_condition_replay` and explicitly excluded from metric calculation;
+- `data.model.version` is `0.3.0`, its controller is `state-coherent-mapped-circuit-adapter.v2`, its environment is `stateful-open-field-model-scale.v3`, and its calibration status is `literature_constrained_event_order_unfitted_amplitudes`;
+- every run exposes its seed, effective motor drive and derivation, premotor drive, `responseThresholdProbability`, `responseThresholdCrossed`, `responseDisposition`, optional candidate/expressed latency, scalar outputs, event timeline, trajectory ID, trajectory seed, trajectory role, and full state trajectory;
+- every state point exposes time, position, heading, protocol activity, motor-output activity, embodied state, ground contact, leg extension, wing deployment, body pitch/roll, premotor drive, and stance stability;
+- non-crossed and censored runs remain grounded with zero expressed body output; a censored run retains its candidate latency but has JSON `null` expressed latency;
+- the Three.js arena identifies and renders the exact selected seeded run. Use **Replay this run** on at least one responder and one nonresponder and confirm the visible run ID, seed, state, contact, pose, and trajectory agree with the selected record;
+- each condition's separate `illustrative_condition_replay` is labeled compatibility-only, excluded from metric calculation, and not used as the primary arena replay;
+- `data.runHash` is prefixed `fnv1a:` and declares scope `run_and_trajectory_ids_only`;
+- `data.runContentHash` is prefixed `sha256:` and declares scope `protocol_model_and_complete_condition_runs`;
 - `operation_id` is echoed and `idempotent_replay` is false on the first commit.
+
+For expressed GF runs, confirm the exact event/state order is preparation, movement/jump, ground release, wing deployment, airborne, then recovery, with no leg/wing/pose expression before movement. A threshold crossing too late to express the required sequence inside the trial window must be `censored`, not forced into an end-of-trial response. GF order and approximate intervals are literature-constrained; probabilities, amplitudes, controller gains, recovery timing, and MDN dynamics remain hand-authored and unfitted.
 
 A wrong approval hash must return `EVIDENCE_MISMATCH` without changing state.
 
@@ -199,11 +207,15 @@ Call `analyze_fly_behavior`:
 
 Copy `data.analysis.id` as `ANALYSIS_ID` and update `REVISION`. Confirm:
 
-- `data.analysis.methodVersion` is `flylab.behavior-metrics.v4`;
+- `data.analysis.methodVersion` is `flylab.behavior-metrics.v5`;
+- `data.analysis.batchRunContentHash` exactly matches `data.runContentHash` from the batch;
 - every requested entry in `data.metric_definitions` provides formula, unit, sign convention, aggregation, null rule, window semantics, method version, provenance, and boundary;
 - `data.response_initiation_summary_definition` is separately declared;
+- `data.response_observation_summary_definition.id` is `response_threshold_and_censoring_summary`, with `thresholdCrossingProbability = thresholdCrossedN / n`, `thresholdCrossedN = count(responseThresholdCrossed=true)`, and `censoredN = count(responseDisposition='censored')`; all three use the full trial and are never null;
+- `thresholdCrossingProbability` is the empirical fraction of realized seeded crossings, distinct from each run's generator `responseThresholdProbability`; neither these summaries nor their counts are biological response rates or survival-analysis estimates;
 - `data.per_run_results` enumerates every run and its trajectory audit fields;
-- a condition with no responses has JSON `null` latency, never trial duration;
+- threshold crossing, censoring, and expressed response counts remain distinct; a condition with no expressed responses has JSON `null` latency, never trial duration;
+- metric summaries recompute from the authoritative per-run state trajectories rather than the compatibility replay or independent scalar-only animation;
 - the only supported analysis window is the full trial.
 
 ## 8. Compare conditions without executing a follow-up
@@ -245,6 +257,8 @@ Confirm:
 - `data.bundle.scope` is `mission`;
 - `data.evidence_export.schemaVersion` is `3`;
 - `data.evidence_export.payload.format` is `flylab.mission-evidence-bundle.v3`;
+- `data.export_media_type` is `application/vnd.flylab.evidence+json`;
+- `data.export_schema_url` is `https://flylab-neuroethology.d-lougen.chatgpt.site/schemas/flylab-evidence-export-v3.schema.json` and the saved envelope validates against that deployed schema;
 - the display title is deterministic system metadata and `payload.annotation` is `null` because no person entered an administrative title or note;
 - the mission section preserves the untrusted goal, discovery decision, all considered candidates, rejected alternatives, evidence/source context, and coverage boundary;
 - the selected lineage contains the exact approval, batch, formal analysis, comparison, and non-authorized proposal;

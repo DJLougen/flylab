@@ -235,7 +235,7 @@ describe('FlyLab WebMCP contracts', () => {
         definitions?: Record<string, string>;
       };
       provenance_labels?: string[];
-      supervisor_gate?: { webmcp_tool?: boolean; blocks?: string };
+      operator_gate?: { webmcp_tool?: boolean; blocks?: string };
       hypothesis_evidence_gate?: {
         required_role?: string;
         required_support_kind?: string;
@@ -268,8 +268,8 @@ describe('FlyLab WebMCP contracts', () => {
     assert.match(manifest.provenance?.untrusted_annotation_boundary ?? '', /excluded from scientific provenance counts/i);
     assert.deepEqual(manifest.provenance?.definitions, PROVENANCE_DEFINITIONS);
     assert.deepEqual(manifest.provenance_labels, Object.keys(PROVENANCE_DEFINITIONS));
-    assert.equal(manifest.supervisor_gate?.webmcp_tool, false);
-    assert.equal(manifest.supervisor_gate?.blocks, 'run_fly_simulation');
+    assert.equal(manifest.operator_gate?.webmcp_tool, false);
+    assert.equal(manifest.operator_gate?.blocks, 'run_fly_simulation');
     assert.deepEqual(manifest.hypothesis_evidence_gate, {
       required_role: 'hypothesis_support',
       required_support_kind: 'perturbation_effect',
@@ -625,7 +625,7 @@ describe('FlyLab WebMCP registration lifecycle', () => {
     assert.match(operationConflict.structuredContent?.recovery?.reason ?? '', /new operation_id/i);
 
     actions.run_fly_simulation = async () => {
-      throw new FlyLabDomainError('APPROVAL_REQUIRED', 'human approval required', false, {
+      throw new FlyLabDomainError('APPROVAL_REQUIRED', 'operator approval required', false, {
         blocked_by: 'human_approval',
       });
     };
@@ -638,7 +638,7 @@ describe('FlyLab WebMCP registration lifecycle', () => {
     };
     assert.equal(approvalRequired.isError, true);
     assert.equal(approvalRequired.structuredContent?.recovery?.tool, 'inspect_flylab_state');
-    assert.match(approvalRequired.structuredContent?.recovery?.reason ?? '', /visible human approval/i);
+    assert.match(approvalRequired.structuredContent?.recovery?.reason ?? '', /visible operator approval/i);
 
     const invalidInspection = await inspector.tool.execute({ unexpected: true }) as {
       isError?: boolean;

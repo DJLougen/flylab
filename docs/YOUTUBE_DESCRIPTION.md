@@ -2,7 +2,7 @@
 
 ## Publication status
 
-Do not upload or describe the video as complete until the v3 GF-first frames are approved, a supported native WebMCP run is recorded, rights-cleared narration exists, the delivery report passes, and signed-out playback is verified. Replace every bracketed value only from retained evidence.
+Do not upload or describe the video as complete until the current `0.3.0` GF-first frames are approved, a fresh source-bound supported native WebMCP run is recorded locally and on the submitted deployment, rights-cleared narration exists, the delivery report passes, and signed-out playback is verified. Historical v24 reports verify the earlier `0.2.0` release only. Replace every bracketed value only from current retained evidence.
 
 **Title**
 
@@ -58,13 +58,15 @@ Competition prompt:
 
 The agent begins by inspecting the current page-session ID and revision. Every mutation must echo both, so a stale tab or human edit fails closed. It ranks source-backed circuits, persists the discovery alternatives and coverage gaps, drafts a falsifiable Giant Fiber/DNp01 short-mode escape hypothesis, and prepares a bilateral three-arm virtual protocol.
 
-Execution stops at a visible human approval control that is not a WebMCP tool. Approval commits an immutable protocol snapshot and complete seed manifest with SHA-256 hashes. The simulation caller must echo the exact approved protocol hash. Run and evidence-save operations use caller-generated operation IDs, so identical retries replay without another mutation and conflicting reuse is rejected.
+Execution stops at a visible operator approval control that is not a WebMCP tool. Approval commits an immutable protocol snapshot and complete seed manifest with SHA-256 hashes. The simulation caller must echo the exact approved protocol hash. Run and evidence-save operations use caller-generated operation IDs, so identical retries replay without another mutation and conflicting reuse is rejected.
 
-Each seeded run exposes its own ID, seed, trajectory ID, trajectory seed, and simulated trajectory. The condition-level Three.js replay is a separate illustration and is never used to calculate metric cards. FlyLab behavior-metrics v4 publishes the formula, unit, sign, aggregation, null rule, analysis window, provenance, and boundary for every GF metric, plus per-run audit rows.
+Each seeded run exposes its own ID, seed, drive derivation, threshold/censoring disposition, event timeline, trajectory ID, trajectory seed, and full simulated state trajectory. The Three.js arena renders the exact selected run, including state, contact, leg/wing expression, and pose. The legacy condition-level `illustrative_condition_replay` is compatibility-only and excluded from analysis and the primary visual audit. FlyLab behavior-metrics v5 derives condition summaries from the authoritative per-run trajectories and publishes the formula, unit, sign, aggregation, null rule, analysis window, provenance, and boundary for every GF metric, plus per-run audit rows.
 
-The final mission v3 evidence bundle preserves the goal, discovery decision, considered and rejected circuits, exclusions, coverage gaps, exact human approval, simulation, formal analysis, comparison, and proposal. The proposal is not authorized or executed. The export checksum detects payload changes; it is not a digital signature.
+The explicit state model uses stance → preparation → reverse walk → recovery for MDN and stance → preparation → jump → wing deployment → airborne → recovery for GF. Threshold crossings that occur too late to express the required body sequence are labeled censored and remain grounded with zero body output. The legacy FNV-1a runHash covers run/trajectory identities only; SHA-256 runContentHash covers the protocol, model, and complete condition runs and is bound into analysis.
 
-The Giant Fiber leg/wing path is a literature schematic, not a BANC or FANC reconstruction. The simulation is a deterministic, hand-authored, uncalibrated reduced-order model. It is not FlyGym, connectome execution, neural dynamics, biomechanics, aerodynamics, or a wet-lab result. Purple indicates selected model targets, never measured neural activity.
+The final mission v3 evidence bundle preserves the goal, discovery decision, considered and rejected circuits, exclusions, coverage gaps, exact operator approval record, simulation, formal analysis, comparison, and proposal. The proposal is not authorized or executed. The export checksum detects payload changes; it is not a digital signature. Portable exports use application/vnd.flylab.evidence+json and are documented by the deployed schema at https://flylab-neuroethology.d-lougen.chatgpt.site/schemas/flylab-evidence-export-v3.schema.json.
+
+The Giant Fiber leg/wing path is a literature schematic, not a BANC or FANC reconstruction. FlyLab uses mapped-motor model 0.3.0, state-coherent controller v2, stateful environment v3, and behavior-metrics v5. GF event order and approximate intervals are literature-constrained, but response probabilities, body amplitudes, controller gains, recovery timing, and all MDN dynamics remain hand-authored and unfitted. It is not FlyGym, connectome execution, neural dynamics, biomechanics, aerodynamics, or a wet-lab result. Purple indicates selected model targets, never measured neural activity.
 
 Supported demonstration runtime: [CHATGPT_DESKTOP_SOL_OR_TERRA_OR_CHROME_149_PLUS]
 Verified target, client version, and timestamp: [RUNTIME_EVIDENCE]
@@ -79,7 +81,7 @@ Chapters:
 
 - Match runtime and chapters to the passing delivery report.
 - Confirm the video shows the exact eight-tool inventory and native invocation history.
-- Confirm session/revision guards, approval hashes, operation replay, formal metrics, per-run inspection, and mission v3 export are legible.
+- Confirm session/revision guards, approval hashes, operation replay, explicit state/censoring, exact selected-run replay, identity/content hash scopes, formal v5 metrics, per-run inspection, and mission v3 schema URL are legible.
 - Confirm the runtime line identifies the actually recorded supported client, version, URL, and timestamp.
 - Upload the `.srt` and verify technical terms in both embedded and platform captions.
 - Confirm public playback with audio in a signed-out browser.

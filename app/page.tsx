@@ -18,12 +18,15 @@ import {
   METRIC_LABELS,
   MODEL_MANIFEST,
   RESPONSE_INITIATION_SUMMARY_DEFINITION,
+  RESPONSE_OBSERVATION_SUMMARY_DEFINITION,
   SOURCES,
   analyzeBatch,
   circuitSupportsBehavior,
   conditionMetricValue,
   compareAnalyses,
+  computeSimulationRunContentHash,
   deterministicSha256Hex,
+  deriveConditionMotorDrive,
   designExperiment,
   embodimentCoverageForCircuits,
   evidenceBundleTitle,
@@ -38,6 +41,7 @@ import {
   simulateExperiment,
   stableHash,
   takeRankedMatchesWithTies,
+  validateSimulationBatch,
   type Analysis,
   type Comparison,
   type Experiment,
@@ -69,6 +73,7 @@ import {
 } from '@/lib/webmcp';
 import {
   EVIDENCE_EXPORT_MEDIA_TYPE,
+  EVIDENCE_EXPORT_SCHEMA_URL,
   createEvidenceExportEnvelope,
   evidenceExportFilename,
   serializeEvidenceExport,
@@ -198,7 +203,7 @@ const DATASET_MANIFEST_SOURCE_IDS = [
   'SRC-JURGENS-GENETICS-2024',
   'SRC-CHUN-ELIFE-2021',
 ];
-const DATASET_MANIFEST_ARTIFACT_ID = 'flylab_dataset_manifest_v24';
+const DATASET_MANIFEST_ARTIFACT_ID = 'flylab_dataset_manifest_v3';
 
 function Badge({ kind, compact = false }: { kind: ProvenanceLabel; compact?: boolean }) {
   const meta = provenanceMeta[kind];
@@ -266,12 +271,36 @@ function sourceIdsForEvidence(ids: string[]) {
   return uniqueStrings(evidenceRecordsForIds(ids).flatMap((record) => record.sourceIds));
 }
 
+const MODEL_METHOD_EVIDENCE_IDS = ['E-FLYLAB-MODEL-004', 'E-GF-SEQUENCE-013'];
+const MODEL_METHOD_SOURCE_IDS = [
+  'SRC-FLYLAB-MODEL-CARD',
+  'SRC-FLYGYM-NM-2024',
+  'SRC-FLYGYM-CODE-V210',
+  ...MODEL_MANIFEST.parameterization.escapeTakeoff.eventTiming.sourceIds,
+];
+
 function buildArtifactManifest(current: LabState) {
   const circuit = CIRCUITS.find((record) => record.id === current.selectedCircuitId) ?? null;
   const discoveredEvidence = evidenceRecordsForIds(current.discoveredEvidenceIds);
   const hypothesisSourceIds = current.hypothesis ? sourceIdsForEvidence(current.hypothesis.evidenceIds) : [];
-  const modelSourceIds = ['SRC-FLYLAB-MODEL-CARD', 'SRC-FLYGYM-NM-2024', 'SRC-FLYGYM-CODE-V210'];
+  const modelSourceIds = MODEL_METHOD_SOURCE_IDS;
   return {
+    model: {
+      id: `${MODEL_MANIFEST.name}@${MODEL_MANIFEST.version}`,
+      artifact_type: 'model_manifest',
+      provenance: ['derived'] as ProvenanceLabel[],
+      parent_ids: [],
+      evidence_ids: MODEL_METHOD_EVIDENCE_IDS,
+      source_ids: MODEL_METHOD_SOURCE_IDS,
+      name: MODEL_MANIFEST.name,
+      version: MODEL_MANIFEST.version,
+      controller: MODEL_MANIFEST.controller,
+      environment: MODEL_MANIFEST.environment,
+      calibration_status: MODEL_MANIFEST.calibrationStatus,
+      calibration_summary: MODEL_MANIFEST.calibrationSummary,
+      parameterization: MODEL_MANIFEST.parameterization,
+      boundary: MODEL_MANIFEST.boundary,
+    },
     discovery_decision: current.discoveryDecision ? {
       id: current.discoveryDecision.id,
       artifact_type: 'discovery_decision',
@@ -364,6 +393,7 @@ function buildArtifactManifest(current: LabState) {
         version: current.experiment.model.version,
         controller: current.experiment.model.controller,
         environment: current.experiment.model.environment,
+        parameterization: current.experiment.model.parameterization,
         provenance: ['derived'],
         controller_mapping_provenance: ['agent_hypothesized'],
         boundary: current.experiment.model.boundary,
@@ -377,7 +407,7 @@ function buildArtifactManifest(current: LabState) {
       evidence_ids: current.hypothesis?.evidenceIds ?? [],
       source_ids: hypothesisSourceIds,
       ...current.approval,
-      boundary: 'Visible human authorization for this exact virtual protocol and seed manifest; not scientific evidence or wet-lab approval.',
+      boundary: 'Authorization recorded through the visible operator approval control for this exact virtual protocol and seed manifest; not scientific evidence or wet-lab approval.',
     } : null,
     batch: current.batch ? {
       id: current.batch.id,
@@ -391,6 +421,9 @@ function buildArtifactManifest(current: LabState) {
       behavior: current.batch.behavior,
       motor_map_id: current.batch.motorMap.id,
       run_hash: current.batch.runHash,
+      run_hash_scope: current.batch.runHashScope,
+      run_content_hash: current.batch.runContentHash,
+      run_content_hash_scope: current.batch.runContentHashScope,
       protocol: current.batch.protocol,
       protocol_provenance: ['agent_hypothesized'],
       condition_ids: current.batch.conditionRuns.map((run) => run.conditionId),
@@ -402,6 +435,7 @@ function buildArtifactManifest(current: LabState) {
         version: current.batch.model.version,
         controller: current.batch.model.controller,
         environment: current.batch.model.environment,
+        parameterization: current.batch.model.parameterization,
         provenance: ['derived'],
         controller_mapping_provenance: ['agent_hypothesized'],
         boundary: current.batch.model.boundary,
@@ -411,15 +445,17 @@ function buildArtifactManifest(current: LabState) {
       id: analysis.id,
       artifact_type: 'behavior_analysis',
       provenance: analysis.provenance,
-      parent_ids: [analysis.batchId],
+      parent_ids: [analysis.batchId, analysis.batchRunContentHash],
       evidence_ids: current.hypothesis?.evidenceIds ?? [],
       source_ids: uniqueStrings([...hypothesisSourceIds, ...modelSourceIds]),
       batch_id: analysis.batchId,
+      batch_run_content_hash: analysis.batchRunContentHash,
       method_version: analysis.methodVersion,
       window_ms: analysis.windowMs,
       metrics: analysis.metrics,
       metric_definitions: analysis.metricDefinitions,
       response_initiation_summary_definition: analysis.responseInitiationSummaryDefinition,
+      response_observation_summary_definition: analysis.responseObservationSummaryDefinition,
       condition_ids: analysis.conditions.map((condition) => condition.conditionId),
     })),
     comparison: current.comparison ? {
@@ -493,6 +529,65 @@ function provenanceEntry(
     source_ids: uniqueStrings(sourceIds),
     boundary,
   };
+}
+
+function modelTimingProvenanceEntries(prefix: string, parentIds: string[]) {
+  const timing = MODEL_MANIFEST.parameterization.escapeTakeoff.eventTiming;
+  const methodEvidenceIds = ['E-FLYLAB-MODEL-004'];
+  const methodSourceIds = ['SRC-FLYLAB-MODEL-CARD'];
+  const handAuthoredTimingFields = [
+    'controllerLeadMs',
+    'recoveryBaseMs',
+    'recoveryDriveGainMs',
+    'recoveryJitterScaleMs',
+  ];
+  const handAuthoredLatencyFields = ['inverseDriveGainMs', 'jitterScaleMs'];
+  return [
+    provenanceEntry(
+      `${prefix}/eventTiming`,
+      null,
+      'literature_constrained_event_timing',
+      'container',
+      ['derived', 'agent_hypothesized'],
+      parentIds,
+      ['E-GF-SEQUENCE-013'],
+      [...timing.sourceIds],
+      timing.boundary,
+    ),
+    ...handAuthoredTimingFields.map((field) => provenanceEntry(
+      `${prefix}/eventTiming/${field}`,
+      null,
+      'unfitted_timing_parameter',
+      'record',
+      ['agent_hypothesized'],
+      parentIds,
+      methodEvidenceIds,
+      methodSourceIds,
+      'Hand-authored FlyLab timing constant; it is not measured, fitted, or calibrated by the cited GF experiments.',
+    )),
+    provenanceEntry(
+      `${prefix}/responseLatency`,
+      null,
+      'literature_constrained_response_latency',
+      'container',
+      ['derived', 'agent_hypothesized'],
+      parentIds,
+      ['E-GF-SEQUENCE-013'],
+      [...timing.sourceIds],
+      'The 1.4 ms floor/intercept is a calibration target from the direct-GF DLM short-latency response, not a fitted behavioral latency law; narrower fields override the hand-authored drive gain and jitter.',
+    ),
+    ...handAuthoredLatencyFields.map((field) => provenanceEntry(
+      `${prefix}/responseLatency/${field}`,
+      null,
+      'unfitted_latency_parameter',
+      'record',
+      ['agent_hypothesized'],
+      parentIds,
+      methodEvidenceIds,
+      methodSourceIds,
+      'Hand-authored FlyLab latency parameter; it is not measured or fitted by the cited GF experiments.',
+    )),
+  ];
 }
 
 function motorMapEvidenceIds(map: Experiment['motorMap']) {
@@ -577,6 +672,12 @@ function buildCurrentLineageProvenanceEntries(current: LabState, prefix: string)
   const entries: FlyLabProvenanceManifestEntry[] = [];
   const circuit = CIRCUITS.find((record) => record.id === current.selectedCircuitId) ?? null;
   const discoveredEvidence = evidenceRecordsForIds(current.discoveredEvidenceIds);
+  entries.push(
+    provenanceEntry(`${prefix}/model`, `${MODEL_MANIFEST.name}@${MODEL_MANIFEST.version}`, 'model_manifest', 'container', ['derived'], [], MODEL_METHOD_EVIDENCE_IDS, MODEL_METHOD_SOURCE_IDS, MODEL_MANIFEST.boundary),
+    provenanceEntry(`${prefix}/model/controller_mapping_provenance`, null, 'controller_mapping', 'record', ['agent_hypothesized'], [], ['E-FLYLAB-MODEL-004'], ['SRC-FLYLAB-MODEL-CARD'], MODEL_MANIFEST.controllerMapping.statement),
+    provenanceEntry(`${prefix}/model/parameterization`, null, 'hand_authored_model_parameterization', 'container', ['agent_hypothesized'], [], ['E-FLYLAB-MODEL-004'], ['SRC-FLYLAB-MODEL-CARD'], 'Hand-authored constants and declared model-unit boundaries; narrower GF timing and response-latency fields carry cited calibration constraints, with deeper overrides for every unfitted constant.'),
+    ...modelTimingProvenanceEntries(`${prefix}/model/parameterization/escapeTakeoff`, []),
+  );
   if (current.discoveryDecision) entries.push(provenanceEntry(
     `${prefix}/discovery_decision`,
     current.discoveryDecision.id,
@@ -592,9 +693,10 @@ function buildCurrentLineageProvenanceEntries(current: LabState, prefix: string)
   discoveredEvidence.forEach((record, index) => entries.push(provenanceEntry(`${prefix}/discovered_evidence/${index}`, record.id, 'evidence_record', 'record', [record.provenance], circuit ? [circuit.id] : [], [], record.sourceIds, record.caution)));
   if (current.hypothesis) entries.push(provenanceEntry(`${prefix}/hypothesis`, current.hypothesis.id, 'hypothesis', 'artifact', [current.hypothesis.provenance], [current.hypothesis.circuitId, ...current.hypothesis.evidenceIds], current.hypothesis.evidenceIds, sourceIdsForEvidence(current.hypothesis.evidenceIds), 'Agent-authored falsifiable proposal; not evidence.'));
   if (current.experiment) {
-    entries.push(provenanceEntry(`${prefix}/experiment`, current.experiment.id, 'experiment', 'artifact', current.experiment.provenance, [current.experiment.hypothesisId, current.experiment.targetCircuitId], current.hypothesis?.evidenceIds ?? [], sourceIdsForEvidence(current.hypothesis?.evidenceIds ?? []), 'Human-reviewable virtual protocol; not a wet-lab protocol or biological dose.'));
+    entries.push(provenanceEntry(`${prefix}/experiment`, current.experiment.id, 'experiment', 'artifact', current.experiment.provenance, [current.experiment.hypothesisId, current.experiment.targetCircuitId], current.hypothesis?.evidenceIds ?? [], sourceIdsForEvidence(current.hypothesis?.evidenceIds ?? []), 'Operator-reviewable virtual protocol; not a wet-lab protocol or biological dose.'));
     entries.push(...compactMotorMapProvenanceEntries(current.experiment.motorMap, `${prefix}/experiment/motor_map`, [current.experiment.targetCircuitId, current.experiment.id]));
-    entries.push(provenanceEntry(`${prefix}/experiment/model`, null, 'model_manifest', 'container', ['derived'], [current.experiment.id], ['E-FLYLAB-MODEL-004'], ['SRC-FLYLAB-MODEL-CARD', 'SRC-FLYGYM-NM-2024', 'SRC-FLYGYM-CODE-V210'], MODEL_MANIFEST.boundary));
+    entries.push(provenanceEntry(`${prefix}/experiment/model`, null, 'model_manifest', 'container', ['derived'], [current.experiment.id], MODEL_METHOD_EVIDENCE_IDS, MODEL_METHOD_SOURCE_IDS, MODEL_MANIFEST.boundary));
+    entries.push(...modelTimingProvenanceEntries(`${prefix}/experiment/model/parameterization/escapeTakeoff`, [current.experiment.id]));
     entries.push(provenanceEntry(`${prefix}/experiment/model/controller_mapping_provenance`, null, 'controller_mapping', 'record', ['agent_hypothesized'], [current.experiment.id], ['E-FLYLAB-MODEL-004'], ['SRC-FLYLAB-MODEL-CARD'], MODEL_MANIFEST.controllerMapping.statement));
   }
   if (current.approval) entries.push(provenanceEntry(
@@ -606,17 +708,18 @@ function buildCurrentLineageProvenanceEntries(current: LabState, prefix: string)
     [current.approval.experiment_id],
     current.hypothesis?.evidenceIds ?? [],
     sourceIdsForEvidence(current.hypothesis?.evidenceIds ?? []),
-    'Visible human authorization for the exact virtual protocol and seed manifest; not scientific evidence or wet-lab approval.',
+    'Authorization recorded through the visible operator approval control for the exact virtual protocol and seed manifest; not scientific evidence or wet-lab approval.',
   ));
   if (current.batch) {
     entries.push(provenanceEntry(`${prefix}/batch`, current.batch.id, 'simulation_batch', 'artifact', current.batch.provenance, [current.batch.experimentId], current.hypothesis?.evidenceIds ?? [], sourceIdsForEvidence(current.hypothesis?.evidenceIds ?? []), current.batch.model.boundary));
     entries.push(provenanceEntry(`${prefix}/batch/motor_map_id`, current.batch.motorMap.id, 'embodied_motor_map_reference', 'record', ['derived'], [current.batch.targetCircuitId, current.batch.id], motorMapEvidenceIds(current.batch.motorMap), sourceIdsForEvidence(motorMapEvidenceIds(current.batch.motorMap)), current.batch.motorMap.evidenceBoundary));
-    entries.push(provenanceEntry(`${prefix}/batch/protocol`, null, 'approved_virtual_protocol_snapshot', 'container', ['agent_hypothesized'], [current.batch.experimentId, current.batch.id], current.hypothesis?.evidenceIds ?? [], sourceIdsForEvidence(current.hypothesis?.evidenceIds ?? []), 'Snapshot of a human-approved virtual protocol; not a wet-lab protocol or biological dose.'));
+    entries.push(provenanceEntry(`${prefix}/batch/protocol`, null, 'approved_virtual_protocol_snapshot', 'container', ['agent_hypothesized'], [current.batch.experimentId, current.batch.id], current.hypothesis?.evidenceIds ?? [], sourceIdsForEvidence(current.hypothesis?.evidenceIds ?? []), 'Snapshot authorized through the visible operator approval control; not a wet-lab protocol or biological dose.'));
     entries.push(provenanceEntry(`${prefix}/batch/protocol_provenance`, null, 'protocol_provenance_label', 'record', ['agent_hypothesized'], [current.batch.experimentId, current.batch.id], [], [], 'Explicit provenance label for the compact protocol snapshot.'));
-    entries.push(provenanceEntry(`${prefix}/batch/model`, null, 'model_manifest', 'container', ['derived'], [current.batch.id], ['E-FLYLAB-MODEL-004'], ['SRC-FLYLAB-MODEL-CARD', 'SRC-FLYGYM-NM-2024', 'SRC-FLYGYM-CODE-V210'], MODEL_MANIFEST.boundary));
+    entries.push(provenanceEntry(`${prefix}/batch/model`, null, 'model_manifest', 'container', ['derived'], [current.batch.id], MODEL_METHOD_EVIDENCE_IDS, MODEL_METHOD_SOURCE_IDS, MODEL_MANIFEST.boundary));
+    entries.push(...modelTimingProvenanceEntries(`${prefix}/batch/model/parameterization/escapeTakeoff`, [current.batch.id]));
     entries.push(provenanceEntry(`${prefix}/batch/model/controller_mapping_provenance`, null, 'controller_mapping', 'record', ['agent_hypothesized'], [current.batch.id], ['E-FLYLAB-MODEL-004'], ['SRC-FLYLAB-MODEL-CARD'], MODEL_MANIFEST.controllerMapping.statement));
   }
-  current.analyses.forEach((analysis, index) => entries.push(provenanceEntry(`${prefix}/analyses/${index}`, analysis.id, 'behavior_analysis', 'artifact', analysis.provenance, [analysis.batchId], current.hypothesis?.evidenceIds ?? [], sourceIdsForEvidence(current.hypothesis?.evidenceIds ?? []), analysis.warning)));
+  current.analyses.forEach((analysis, index) => entries.push(provenanceEntry(`${prefix}/analyses/${index}`, analysis.id, 'behavior_analysis', 'artifact', analysis.provenance, [analysis.batchId, analysis.batchRunContentHash], current.hypothesis?.evidenceIds ?? [], sourceIdsForEvidence(current.hypothesis?.evidenceIds ?? []), analysis.warning)));
   if (current.comparison) {
     entries.push(provenanceEntry(`${prefix}/comparison`, current.comparison.id, 'trial_comparison', 'artifact', current.comparison.provenance, current.comparison.analysisIds, current.hypothesis?.evidenceIds ?? [], sourceIdsForEvidence(current.hypothesis?.evidenceIds ?? []), 'Ranking of simulation-derived analyses; not biological evidence.'));
     entries.push(provenanceEntry(`${prefix}/comparison/proposal`, current.comparison.proposal.id, 'follow_up_proposal', 'artifact', [current.comparison.proposal.provenance], [current.comparison.id], current.hypothesis?.evidenceIds ?? [], sourceIdsForEvidence(current.hypothesis?.evidenceIds ?? []), 'Proposal only; execution is not authorized.'));
@@ -632,7 +735,7 @@ function batchFieldProvenanceEntries(
   includeRoot = true,
 ) {
   const hypothesisSourceIds = sourceIdsForEvidence(evidenceIds);
-  const modelSourceIds = ['SRC-FLYLAB-MODEL-CARD', 'SRC-FLYGYM-NM-2024', 'SRC-FLYGYM-CODE-V210'];
+  const modelSourceIds = MODEL_METHOD_SOURCE_IDS;
   const entries: FlyLabProvenanceManifestEntry[] = [];
   if (includeRoot) {
     entries.push(provenanceEntry(
@@ -658,7 +761,7 @@ function batchFieldProvenanceEntries(
       [batch.id],
       evidenceIds,
       uniqueStrings([...hypothesisSourceIds, ...modelSourceIds]),
-      'Seeded reduced-order model outputs and illustrative replay trajectories; not observations from animals.',
+      'Authoritative seeded per-run state trajectories and their summaries, plus separately labeled compatibility-only condition illustrations; not observations from animals.',
     ),
     provenanceEntry(
       `${prefix}/protocol`,
@@ -669,7 +772,7 @@ function batchFieldProvenanceEntries(
       [batch.experimentId, batch.id],
       evidenceIds,
       hypothesisSourceIds,
-      'Snapshot of a human-approved virtual protocol; not a wet-lab protocol or biological dose.',
+      'Snapshot authorized through the visible operator approval control; not a wet-lab protocol or biological dose.',
     ),
     provenanceEntry(
       `${prefix}/model`,
@@ -678,7 +781,7 @@ function batchFieldProvenanceEntries(
       'container',
       ['derived'],
       [batch.id],
-      ['E-FLYLAB-MODEL-004'],
+      MODEL_METHOD_EVIDENCE_IDS,
       modelSourceIds,
       MODEL_MANIFEST.boundary,
     ),
@@ -702,8 +805,9 @@ function batchFieldProvenanceEntries(
       [batch.id],
       ['E-FLYLAB-MODEL-004'],
       ['SRC-FLYLAB-MODEL-CARD'],
-      'Hand-authored, uncalibrated constants and declared model-unit boundaries; not fitted biological measurements.',
+      'Hand-authored constants and declared model-unit boundaries; only the narrower GF timing and response-latency fields carry cited calibration constraints, with deeper overrides for every unfitted constant.',
     ),
+    ...modelTimingProvenanceEntries(`${prefix}/model/parameterization/escapeTakeoff`, [batch.id]),
     provenanceEntry(
       `${prefix}/boundary`,
       null,
@@ -781,6 +885,7 @@ export default function Home() {
   const completedOperationsRef = useRef(new Map<string, CompletedOperation>());
   const [notice, setNotice] = useState(`Mission published at r${initialState.revision}. Agent should inspect fresh state.`);
   const [selectedConditionId, setSelectedConditionId] = useState('condition_bilateral');
+  const [selectedReplicateId, setSelectedReplicateId] = useState<string | null>(null);
   const [playhead, setPlayhead] = useState(0);
   const playheadRef = useRef(playhead);
   const [playing, setPlaying] = useState(false);
@@ -879,11 +984,12 @@ export default function Home() {
       evidenceExport: null,
     }, {
       title: 'New mission started',
-      detail: 'The supervisor committed a new goal; prior scientific artifacts were cleared while the activity trail was retained.',
+      detail: 'The operator committed a new goal; prior scientific artifacts were cleared while the activity trail was retained.',
       status: 'complete',
       actor: 'human_ui',
     }));
     setSelectedConditionId('condition_bilateral');
+    setSelectedReplicateId(null);
     setPlayhead(0);
     setPlaying(false);
     setNotice('New mission committed. The agent should inspect the new revision before discovery.');
@@ -1547,7 +1653,7 @@ export default function Home() {
         title: 'Controlled trial designed',
         detail: preservesLineage
           ? `${experiment.id} already exists; its approval and downstream lineage remain intact.`
-          : `${experiment.conditions.length} arms · ${experiment.replicates} replicates each · awaiting human approval.`,
+          : `${experiment.conditions.length} arms · ${experiment.replicates} replicates each · awaiting operator approval.`,
         status: preservesLineage ? 'complete' : 'waiting',
         actor,
         toolName: 'design_stimulation_trial',
@@ -1556,9 +1662,10 @@ export default function Home() {
       const persistedExperiment = next.experiment ?? experiment;
       const postContext = getAgentContext(next);
       setSelectedConditionId(persistedExperiment.conditions.find((condition) => condition.laterality === persistedExperiment.primaryLaterality)?.id ?? persistedExperiment.conditions[0].id);
+      setSelectedReplicateId(null);
       setNotice(preservesLineage
         ? 'The identical protocol was returned; approval and later artifacts remain intact.'
-        : 'Protocol is ready for human review. The agent cannot run it until you approve.');
+        : 'Protocol is ready for operator review. The agent cannot run it until the visible control is approved.');
       const designProvenanceEntries = [
         provenanceEntry(
           '/experiment',
@@ -1569,7 +1676,7 @@ export default function Home() {
           [persistedExperiment.hypothesisId, persistedExperiment.targetCircuitId],
           current.hypothesis.evidenceIds,
           sourceIdsForEvidence(current.hypothesis.evidenceIds),
-          'Human-reviewable virtual protocol with a unitless model control; not a wet-lab protocol or biological dose.',
+          'Operator-reviewable virtual protocol with a unitless model control; not a wet-lab protocol or biological dose.',
         ),
         ...motorMapProvenanceEntries(persistedExperiment.motorMap, '/experiment/motorMap', [persistedExperiment.targetCircuitId, persistedExperiment.id]),
         provenanceEntry(
@@ -1579,8 +1686,8 @@ export default function Home() {
           'container',
           ['derived'],
           [persistedExperiment.id],
-          ['E-FLYLAB-MODEL-004'],
-          ['SRC-FLYLAB-MODEL-CARD', 'SRC-FLYGYM-NM-2024', 'SRC-FLYGYM-CODE-V210'],
+          MODEL_METHOD_EVIDENCE_IDS,
+          MODEL_METHOD_SOURCE_IDS,
           MODEL_MANIFEST.boundary,
         ),
         provenanceEntry(
@@ -1603,15 +1710,16 @@ export default function Home() {
           [persistedExperiment.id],
           ['E-FLYLAB-MODEL-004'],
           ['SRC-FLYLAB-MODEL-CARD'],
-          'Hand-authored, uncalibrated constants and declared model-unit boundaries; not fitted biological measurements.',
+          'Hand-authored constants and declared model-unit boundaries; only the narrower GF timing and response-latency fields carry cited calibration constraints, with deeper overrides for every unfitted constant.',
         ),
+        ...modelTimingProvenanceEntries('/experiment/model/parameterization/escapeTakeoff', [persistedExperiment.id]),
       ];
       const designProvenance = [...new Set(designProvenanceEntries.flatMap((entry) => entry.labels))];
       const targetCircuit = CIRCUITS.find((circuit) => circuit.id === persistedExperiment.targetCircuitId)!;
       return {
         summary: preservesLineage
           ? `Returned the existing controlled ${targetCircuit.abbreviation} perturbation experiment without regressing its lineage.`
-          : `Created a controlled ${targetCircuit.abbreviation} perturbation experiment that requires human approval.`,
+          : `Created a controlled ${targetCircuit.abbreviation} perturbation experiment that requires visible operator approval.`,
         data: {
           experiment: persistedExperiment,
           approval_required: !persistedExperiment.approved,
@@ -1631,7 +1739,7 @@ export default function Home() {
         createdArtifactIds: preservesLineage ? [] : [persistedExperiment.id, ...persistedExperiment.conditions.map((condition) => condition.id)],
         verification: {
           selector: '.protocol-controls',
-          description: 'Review the exact visible protocol; only the human approval control can unlock execution.',
+          description: 'Review the exact visible protocol; only the operator approval control can unlock execution.',
         },
       };
     },
@@ -1689,7 +1797,7 @@ export default function Home() {
       }
       const experiment = current.experiment;
       if (!current.experiment.approved || !current.approval) {
-        throw new FlyLabDomainError('APPROVAL_REQUIRED', 'A supervisor must approve the visible protocol before the simulation can run.', false, {
+        throw new FlyLabDomainError('APPROVAL_REQUIRED', 'The operator must approve the visible protocol before the simulation can run.', false, {
           experiment_id: current.experiment.id,
           state_revision: current.revision,
           blocked_by: 'human_approval',
@@ -1750,7 +1858,7 @@ export default function Home() {
         [approval.experiment_id],
         current.hypothesis?.evidenceIds ?? [],
         sourceIdsForEvidence(current.hypothesis?.evidenceIds ?? []),
-        'Visible human authorization for the exact virtual protocol and seed manifest; not scientific evidence or wet-lab approval.',
+        'Authorization recorded through the visible operator approval control for the exact virtual protocol and seed manifest; not scientific evidence or wet-lab approval.',
       );
       if (current.batch?.experimentId === current.experiment.id) {
         const postContext = getAgentContext(current);
@@ -1821,7 +1929,7 @@ export default function Home() {
             );
             const next = commit((state) => pushActivity({ ...state, stage: 'analyze', batch }, {
               title: 'Simulation batch complete',
-              detail: `${batch.conditionRuns.reduce((count, run) => count + run.replicates.length, 0)} runs · ${batch.runHash}`,
+              detail: `${batch.conditionRuns.reduce((count, run) => count + run.replicates.length, 0)} runs · ${batch.runContentHash}`,
               status: 'complete',
               actor,
               toolName: 'run_fly_simulation',
@@ -1942,6 +2050,7 @@ export default function Home() {
           analysis,
           metric_definitions: analysis.metricDefinitions,
           response_initiation_summary_definition: analysis.responseInitiationSummaryDefinition,
+          response_observation_summary_definition: analysis.responseObservationSummaryDefinition,
           per_run_results: perRunResults,
           unit_boundary: MODEL_MANIFEST.parameterization.unitBoundary,
           next_action: postContext.next_action,
@@ -1984,6 +2093,17 @@ export default function Home() {
               [],
               ['SRC-FLYLAB-MODEL-CARD'],
               RESPONSE_INITIATION_SUMMARY_DEFINITION.boundary,
+            ),
+            provenanceEntry(
+              '/response_observation_summary_definition',
+              null,
+              'analysis_summary_method_metadata',
+              'record',
+              ['derived'],
+              [analysis.id],
+              [],
+              ['SRC-FLYLAB-MODEL-CARD'],
+              RESPONSE_OBSERVATION_SUMMARY_DEFINITION.boundary,
             ),
             provenanceEntry(
               '/per_run_results',
@@ -2035,6 +2155,15 @@ export default function Home() {
       if (batchIds.size !== 1) {
         throw new FlyLabDomainError('INCOMPARABLE_ANALYSES', 'Selected analyses must describe the same simulation batch.', false, {
           batch_ids: [...batchIds],
+        });
+      }
+      const batchRunContentHashes = new Set(analyses.map((analysis) => analysis.batchRunContentHash));
+      if (batchRunContentHashes.size !== 1
+        || !current.batch
+        || !batchRunContentHashes.has(current.batch.runContentHash)) {
+        throw new FlyLabDomainError('INCOMPARABLE_ANALYSES', 'Selected analyses must bind to the current simulation batch content.', false, {
+          analysis_batch_run_content_hashes: [...batchRunContentHashes],
+          current_batch_run_content_hash: current.batch?.runContentHash ?? null,
         });
       }
       const objectiveMetric = stringInput(input, 'objective_metric') as MetricName;
@@ -2224,11 +2353,34 @@ export default function Home() {
         });
       }
       const batch = current.batch;
+      const recomputedRunContentHash = computeSimulationRunContentHash(
+        batch.protocol,
+        batch.model,
+        batch.conditionRuns,
+      );
+      if (recomputedRunContentHash !== batch.runContentHash) {
+        throw new FlyLabDomainError('EVIDENCE_MISMATCH', 'The simulation batch content no longer matches its recorded SHA-256 digest.', false, {
+          batch_id: batch.id,
+          recorded_run_content_hash: batch.runContentHash,
+          recomputed_run_content_hash: recomputedRunContentHash,
+          recovery: 'Rerun the approved protocol to produce a fresh immutable batch before saving evidence.',
+        });
+      }
+      try {
+        validateSimulationBatch(batch);
+      } catch (error) {
+        throw new FlyLabDomainError('EVIDENCE_MISMATCH', 'The simulation batch contains state or metric fields that contradict its authoritative trajectories.', false, {
+          batch_id: batch.id,
+          validation_error: error instanceof Error ? error.message : String(error),
+          recovery: 'Rerun the approved protocol to produce a coherent batch before saving evidence.',
+        });
+      }
       const comparison = current.comparison;
       const selectedAnalyses = analysisIds.map((id) => current.analyses.find((analysis) => analysis.id === id));
       const comparisonAnalysisIds = new Set(comparison.analysisIds);
       if (selectedAnalyses.some((analysis) => !analysis)
         || selectedAnalyses.some((analysis) => analysis?.batchId !== batch.id)
+        || selectedAnalyses.some((analysis) => analysis?.batchRunContentHash !== batch.runContentHash)
         || analysisIds.length !== comparisonAnalysisIds.size
         || !analysisIds.every((id) => comparisonAnalysisIds.has(id))) {
         throw new FlyLabDomainError('INCOMPLETE_PROVENANCE', 'Analysis IDs must match the complete saved comparison lineage.', false, {
@@ -2257,17 +2409,25 @@ export default function Home() {
           resolved_source_ids: supportingSources.map((record) => record.id),
         });
       }
-      const methodEvidence = circuit.evidenceIds
+      const requiredMethodEvidenceIds = uniqueStrings([
+        ...circuit.evidenceIds.filter((id) => EVIDENCE.find((record) => record.id === id)?.role === 'model_context'),
+        ...MODEL_METHOD_EVIDENCE_IDS,
+      ]);
+      const methodEvidence = requiredMethodEvidenceIds
         .map((id) => EVIDENCE.find((record) => record.id === id))
         .filter((record): record is (typeof EVIDENCE)[number] => record !== undefined && record.role === 'model_context');
-      if (!methodEvidence.length) {
-        throw new FlyLabDomainError('INCOMPLETE_PROVENANCE', 'The selected model has no linked method-context evidence record.', false, {
-          required_evidence_role: 'model_context',
+      if (methodEvidence.length !== requiredMethodEvidenceIds.length) {
+        throw new FlyLabDomainError('INCOMPLETE_PROVENANCE', 'The model is not closed over every required method-context evidence record.', false, {
+          required_evidence_ids: requiredMethodEvidenceIds,
+          resolved_evidence_ids: methodEvidence.map((record) => record.id),
           circuit_id: circuit.id,
         });
       }
       const methodEvidenceIds = methodEvidence.map((record) => record.id);
-      const methodSourceIds = [...new Set(methodEvidence.flatMap((record) => record.sourceIds))];
+      const methodSourceIds = uniqueStrings([
+        ...methodEvidence.flatMap((record) => record.sourceIds),
+        ...MODEL_METHOD_SOURCE_IDS,
+      ]);
       const methodSources = methodSourceIds
         .map((id) => SOURCES.find((record) => record.id === id))
         .filter((record): record is (typeof SOURCES)[number] => Boolean(record));
@@ -2356,7 +2516,7 @@ export default function Home() {
         purpose: 'display_and_filename_metadata',
         boundary: 'Deterministic system metadata derived from the selected perturbation and behavior; it is operational rather than scientific evidence.',
       };
-      const modelSourceIds = ['SRC-FLYLAB-MODEL-CARD', 'SRC-FLYGYM-NM-2024', 'SRC-FLYGYM-CODE-V210'];
+      const modelSourceIds = MODEL_METHOD_SOURCE_IDS;
       const payloadProvenanceEntries: FlyLabProvenanceManifestEntry[] = [
         ...(bundleScope === 'mission' && current.discoveryDecision ? [
           provenanceEntry('/mission/discoveryDecision', current.discoveryDecision.id, 'discovery_decision', 'artifact', current.discoveryDecision.provenance, missionCandidateCircuitIds, missionEvidenceIds, missionSourceIds, current.discoveryDecision.coverageWarning),
@@ -2377,27 +2537,37 @@ export default function Home() {
         ...catalogSources.map((source, index) => provenanceEntry(`/catalogSources/${index}`, source.id, 'source_record', 'record', ['derived'], [DATASET_MANIFEST_ARTIFACT_ID], [], [source.id], 'Pinned dataset, software, or display-reference metadata. Inclusion does not promote this source to hypothesis support.')),
         provenanceEntry('/circuit', circuit.id, 'circuit', 'artifact', circuit.provenance, [], circuit.evidenceIds, sourceIdsForEvidence(circuit.evidenceIds), 'Derived source catalog entry; not neural activity or a biological measurement.'),
         provenanceEntry('/hypothesis', hypothesis.id, 'hypothesis', 'artifact', [hypothesis.provenance], [hypothesis.circuitId, ...hypothesis.evidenceIds], hypothesis.evidenceIds, supportingSourceIds, 'Agent-authored falsifiable proposal; not evidence.'),
-        provenanceEntry('/experiment', experiment.id, 'experiment', 'artifact', experiment.provenance, [experiment.hypothesisId, experiment.targetCircuitId], hypothesis.evidenceIds, uniqueStrings([...supportingSourceIds, ...modelSourceIds]), 'Human-approved virtual protocol; activation level is a unitless model control, not a biological dose.'),
-        provenanceEntry('/approval', approval.protocol_hash, 'experiment_approval', 'artifact', ['agent_hypothesized'], [approval.experiment_id], hypothesis.evidenceIds, supportingSourceIds, 'Visible human authorization for this exact virtual protocol and seed manifest; not scientific evidence or wet-lab approval.'),
+        provenanceEntry('/experiment', experiment.id, 'experiment', 'artifact', experiment.provenance, [experiment.hypothesisId, experiment.targetCircuitId], hypothesis.evidenceIds, uniqueStrings([...supportingSourceIds, ...modelSourceIds]), 'Operator-authorized virtual protocol; activation level is a unitless model control, not a biological dose.'),
+        provenanceEntry('/approval', approval.protocol_hash, 'experiment_approval', 'artifact', ['agent_hypothesized'], [approval.experiment_id], hypothesis.evidenceIds, supportingSourceIds, 'Authorization recorded through the visible operator approval control for this exact virtual protocol and seed manifest; not scientific evidence or wet-lab approval.'),
         ...motorMapProvenanceEntries(experiment.motorMap, '/experiment/motorMap', [experiment.targetCircuitId, experiment.id]),
         provenanceEntry('/experiment/model', null, 'model_manifest', 'container', ['derived'], [experiment.id], methodEvidenceIds, methodSourceIds, MODEL_MANIFEST.boundary),
-        provenanceEntry('/experiment/model/controllerMapping', null, 'controller_mapping', 'container', ['agent_hypothesized'], [experiment.id], methodEvidenceIds, methodSourceIds, MODEL_MANIFEST.controllerMapping.statement),
-        provenanceEntry('/experiment/model/parameterization', null, 'hand_authored_model_parameterization', 'container', ['agent_hypothesized'], [experiment.id], methodEvidenceIds, ['SRC-FLYLAB-MODEL-CARD'], 'Hand-authored, uncalibrated constants and declared model-unit boundaries; not fitted biological measurements.'),
+        provenanceEntry('/experiment/model/controllerMapping', null, 'controller_mapping', 'container', ['agent_hypothesized'], [experiment.id], ['E-FLYLAB-MODEL-004'], ['SRC-FLYLAB-MODEL-CARD'], MODEL_MANIFEST.controllerMapping.statement),
+        provenanceEntry('/experiment/model/parameterization', null, 'hand_authored_model_parameterization', 'container', ['agent_hypothesized'], [experiment.id], ['E-FLYLAB-MODEL-004'], ['SRC-FLYLAB-MODEL-CARD'], 'Hand-authored constants and declared model-unit boundaries; only the narrower GF timing and response-latency fields carry cited calibration constraints, with deeper overrides for every unfitted constant.'),
+        ...modelTimingProvenanceEntries('/experiment/model/parameterization/escapeTakeoff', [experiment.id]),
         provenanceEntry('/batch', batch.id, 'simulation_batch', 'artifact', batch.provenance, [batch.experimentId], hypothesis.evidenceIds, uniqueStrings([...supportingSourceIds, ...modelSourceIds]), batch.model.boundary),
+        provenanceEntry('/batch/approval', approval.protocol_hash, 'experiment_approval_binding', 'record', ['agent_hypothesized'], [batch.id, approval.experiment_id], hypothesis.evidenceIds, supportingSourceIds, 'Exact operator-authorized protocol and seed-manifest commitment copied into the portable batch record; not scientific evidence or wet-lab approval.'),
+        provenanceEntry('/batch/boundary', null, 'interpretation_boundary', 'record', ['derived'], [batch.id], ['E-FLYLAB-MODEL-004'], ['SRC-FLYLAB-MODEL-CARD'], MODEL_MANIFEST.boundary),
         ...motorMapProvenanceEntries(batch.motorMap, '/batch/motorMap', [batch.targetCircuitId, batch.id]),
         provenanceEntry('/batch/protocol', null, 'approved_virtual_protocol_snapshot', 'container', ['agent_hypothesized'], [experiment.id, batch.id], hypothesis.evidenceIds, supportingSourceIds, 'Snapshot of the approved virtual protocol; not a wet-lab protocol.'),
         provenanceEntry('/batch/model', null, 'model_manifest', 'container', ['derived'], [batch.id], methodEvidenceIds, methodSourceIds, MODEL_MANIFEST.boundary),
-        provenanceEntry('/batch/model/controllerMapping', null, 'controller_mapping', 'container', ['agent_hypothesized'], [batch.id], methodEvidenceIds, methodSourceIds, MODEL_MANIFEST.controllerMapping.statement),
-        provenanceEntry('/batch/model/parameterization', null, 'hand_authored_model_parameterization', 'container', ['agent_hypothesized'], [batch.id], methodEvidenceIds, ['SRC-FLYLAB-MODEL-CARD'], 'Hand-authored, uncalibrated constants and declared model-unit boundaries; not fitted biological measurements.'),
+        provenanceEntry('/batch/model/controllerMapping', null, 'controller_mapping', 'container', ['agent_hypothesized'], [batch.id], ['E-FLYLAB-MODEL-004'], ['SRC-FLYLAB-MODEL-CARD'], MODEL_MANIFEST.controllerMapping.statement),
+        provenanceEntry('/batch/model/parameterization', null, 'hand_authored_model_parameterization', 'container', ['agent_hypothesized'], [batch.id], ['E-FLYLAB-MODEL-004'], ['SRC-FLYLAB-MODEL-CARD'], 'Hand-authored constants and declared model-unit boundaries; only the narrower GF timing and response-latency fields carry cited calibration constraints, with deeper overrides for every unfitted constant.'),
+        ...modelTimingProvenanceEntries('/batch/model/parameterization/escapeTakeoff', [batch.id]),
         provenanceEntry('/batch/conditionRuns', null, 'simulation_run_collection', 'container', ['simulation_predicted'], [batch.id], hypothesis.evidenceIds, uniqueStrings([...supportingSourceIds, ...modelSourceIds]), 'Seeded model outputs; not measurements from animals.'),
-        ...lineageAnalyses.map((analysis, index) => provenanceEntry(`/analyses/${index}`, analysis.id, 'behavior_analysis', 'artifact', analysis.provenance, [analysis.batchId], hypothesis.evidenceIds, uniqueStrings([...supportingSourceIds, ...modelSourceIds]), analysis.warning)),
+        ...lineageAnalyses.map((analysis, index) => provenanceEntry(`/analyses/${index}`, analysis.id, 'behavior_analysis', 'artifact', analysis.provenance, [analysis.batchId, analysis.batchRunContentHash], hypothesis.evidenceIds, uniqueStrings([...supportingSourceIds, ...modelSourceIds]), analysis.warning)),
         provenanceEntry('/comparison', comparison.id, 'trial_comparison', 'artifact', comparison.provenance, comparison.analysisIds, hypothesis.evidenceIds, uniqueStrings([...supportingSourceIds, ...modelSourceIds]), 'Ranking of simulation-derived analyses; not biological evidence.'),
         provenanceEntry('/comparison/proposal', comparison.proposal.id, 'follow_up_proposal', 'artifact', [comparison.proposal.provenance], [comparison.id], hypothesis.evidenceIds, supportingSourceIds, 'Proposal only; execution is not authorized.'),
         provenanceEntry('/datasets', DATASET_MANIFEST_ARTIFACT_ID, 'dataset_manifest', 'artifact', ['derived'], [], [], DATASET_MANIFEST_SOURCE_IDS, 'Pinned dataset, software-reference, and visual-reference metadata. Visual references are explicitly ineligible for hypothesis support.'),
         provenanceEntry('/model', null, 'model_manifest', 'container', ['derived'], [], methodEvidenceIds, methodSourceIds, MODEL_MANIFEST.boundary),
-        provenanceEntry('/model/controllerMapping', null, 'controller_mapping', 'container', ['agent_hypothesized'], [], methodEvidenceIds, methodSourceIds, MODEL_MANIFEST.controllerMapping.statement),
-        provenanceEntry('/model/parameterization', null, 'hand_authored_model_parameterization', 'container', ['agent_hypothesized'], [], methodEvidenceIds, ['SRC-FLYLAB-MODEL-CARD'], 'Hand-authored, uncalibrated constants and declared model-unit boundaries; not fitted biological measurements.'),
+        provenanceEntry('/model/controllerMapping', null, 'controller_mapping', 'container', ['agent_hypothesized'], [], ['E-FLYLAB-MODEL-004'], ['SRC-FLYLAB-MODEL-CARD'], MODEL_MANIFEST.controllerMapping.statement),
+        provenanceEntry('/model/parameterization', null, 'hand_authored_model_parameterization', 'container', ['agent_hypothesized'], [], ['E-FLYLAB-MODEL-004'], ['SRC-FLYLAB-MODEL-CARD'], 'Hand-authored constants and declared model-unit boundaries; only the narrower GF timing and response-latency fields carry cited calibration constraints, with deeper overrides for every unfitted constant.'),
+        ...modelTimingProvenanceEntries('/model/parameterization/escapeTakeoff', []),
       ];
+      const exportedBatch = {
+        ...batch,
+        approval,
+        boundary: MODEL_MANIFEST.boundary,
+      };
       const payload = {
         format: bundleScope === 'mission'
           ? 'flylab.mission-evidence-bundle.v3'
@@ -2424,7 +2594,7 @@ export default function Home() {
         hypothesis,
         experiment,
         approval,
-        batch,
+        batch: exportedBatch,
         analyses: lineageAnalyses,
         comparison,
         datasets: DATASET_MANIFEST,
@@ -2682,6 +2852,7 @@ export default function Home() {
           bundle: completed.bundle,
           evidence_export: completed.evidenceExport,
           export_media_type: EVIDENCE_EXPORT_MEDIA_TYPE,
+          export_schema_url: EVIDENCE_EXPORT_SCHEMA_URL,
           export_filename: evidenceExportFilename(completed.bundle.id),
           local_reference: completed.bundle.id,
           storage_scope: 'best-effort browser origin',
@@ -2733,6 +2904,7 @@ export default function Home() {
             '/evidence_export/payload/batch/status',
             '/evidence_export/payload/provenanceManifest',
             '/export_media_type',
+            '/export_schema_url',
             '/export_filename',
             '/local_reference',
             '/storage_scope',
@@ -3082,7 +3254,7 @@ export default function Home() {
       const source = current.experiment;
       const updated = reviseExperiment(source, field, value);
       return pushActivity({ ...current, stage: 'design', experiment: updated, approval: null, batch: null, analyses: [], comparison: null, bundle: null, evidenceExport: null }, {
-        title: 'Human edited protocol',
+        title: 'Operator edited protocol',
         detail: `${field} updated; prior approval and downstream runs were cleared.`,
         status: 'waiting',
         actor: 'human_ui',
@@ -3102,7 +3274,7 @@ export default function Home() {
         bundle: null,
         evidenceExport: null,
       }, {
-        title: 'Human changed follow-up budget',
+        title: 'Operator changed follow-up budget',
         detail: `Next proposal is bounded to ${value} replicates; prior comparison and saved bundle were cleared.`,
         status: 'waiting',
         actor: 'human_ui',
@@ -3123,7 +3295,7 @@ export default function Home() {
     if (!lab.analyses.length) return { label: 'Analyze behavior', action: analyzeExperiment, detail: `${metricsForCircuit(lab.experiment.targetCircuitId).length} motor-map metrics` };
     if (!lab.comparison) return { label: 'Compare conditions and propose follow-up', action: compareExperiment, detail: `next-experiment replicate budget: ${lab.nextTrialBudget}` };
     if (!lab.bundle) return { label: 'Save evidence bundle', action: saveEvidence, detail: 'sources · assumptions · seeds · results' };
-    return { label: 'Replay representative trial', action: () => { setPlayhead(0); setPlaying(true); }, detail: lab.bundle.id };
+    return { label: 'Replay selected seeded run', action: () => { setPlayhead(0); setPlaying(true); }, detail: lab.bundle.id };
   }, [analyzeExperiment, cancelRunningSimulation, compareExperiment, investigate, lab, runExperiment, saveEvidence, simulationRunning]);
 
   const activeCondition = useMemo(() => {
@@ -3137,10 +3309,28 @@ export default function Home() {
     ?? null
   ), [lab.experiment, selectedConditionId]);
 
+  const activeReplicate = useMemo(() => (
+    activeCondition?.replicates.find((replicate) => replicate.id === selectedReplicateId)
+    ?? activeCondition?.replicates.find((replicate) => replicate.responseInitiated)
+    ?? activeCondition?.replicates[0]
+    ?? null
+  ), [activeCondition, selectedReplicateId]);
+
+  const activeTrajectory = useMemo(
+    () => activeReplicate?.trajectory ?? activeCondition?.trajectory ?? [],
+    [activeCondition, activeReplicate],
+  );
+
   const activePoint = useMemo(() => {
-    if (!activeCondition?.trajectory.length) return null;
-    return activeCondition.trajectory[Math.min(activeCondition.trajectory.length - 1, Math.floor(playhead * (activeCondition.trajectory.length - 1)))];
-  }, [activeCondition, playhead]);
+    if (!activeTrajectory.length) return null;
+    const targetTimeMs = playhead * playbackDurationMs;
+    let selectedPoint = activeTrajectory[0];
+    for (const point of activeTrajectory) {
+      if (point.t > targetTimeMs) break;
+      selectedPoint = point;
+    }
+    return selectedPoint;
+  }, [activeTrajectory, playbackDurationMs, playhead]);
 
   const selectedBundle = lab.bundle?.id === selectedEvidenceId ? lab.bundle : null;
   const selectedCircuit = CIRCUITS.find((record) => record.id === lab.selectedCircuitId) ?? null;
@@ -3183,7 +3373,12 @@ export default function Home() {
           <small>agent-native neuroethology</small>
         </a>
         <div className="top-status" aria-label="Laboratory versions">
-          <span className="live-dot" /> Adult · BANC v888 · model {MODEL_MANIFEST.version}
+          <span className="live-dot" /> Adult · {selectedCircuit?.id === 'circuit_mdn_adult'
+            ? 'BANC v888 MDN'
+            : selectedCircuit?.id === 'circuit_gf_adult'
+              ? 'literature-schematic GF'
+              : 'source-bounded circuits'} · model {MODEL_MANIFEST.version}
+          <span className="calibration-status" title={MODEL_MANIFEST.calibrationSummary}>event-order constrained · amplitudes unfitted</span>
         </div>
         <button className="quiet-button" type="button" onClick={() => setEvidenceOpen(true)}>
           Evidence ledger <span>{EVIDENCE.length + (lab.bundle ? 1 : 0)}</span>
@@ -3359,11 +3554,14 @@ export default function Home() {
             <span className="arena-scale">5 model mm</span>
             <div className="arena-data">
               <span>{activeCondition?.label ?? 'Awaiting protocol'}</span>
-              <strong>{activePoint?.active ? `unitless ${selectedCircuit?.abbreviation ?? 'mapped-circuit'} ${lab.experiment?.perturbation === 'silence' ? 'suppression' : 'drive'}` : lab.batch ? 'replay' : 'preview'}</strong>
+              <strong>{activeReplicate
+                ? `seed ${activeReplicate.seed} · ${(activePoint?.state ?? 'stance').replaceAll('_', ' ')}`
+                : lab.batch ? 'illustrative compatibility replay' : 'preview'}</strong>
+              {activePoint && <small>premotor {round(activePoint.premotorDriveIndex, 3)} · {activePoint.groundContact ? 'grounded' : 'airborne'}</small>}
             </div>
             {arenaView !== 'circuit' && <div className="arena-render-mode"><i /> Three.js WebGL <small>schematic external morphology</small></div>}
 
-            {arenaView !== 'circuit' && (activeCondition?.trajectory ?? []).slice(0, Math.max(1, Math.ceil(playhead * (activeCondition?.trajectory.length ?? 0)))).filter((_, index) => index % 3 === 0).map((point, index) => (
+            {arenaView !== 'circuit' && activeTrajectory.filter((point) => point.t <= playhead * playbackDurationMs).filter((_, index) => index % 3 === 0).map((point, index) => (
               <i
                 className="trail-point"
                 key={`${point.t}-${index}`}
@@ -3375,7 +3573,7 @@ export default function Home() {
               <OptionalViewerBoundary label="3D fly">
                 <FlyArena3D
                   point={activePoint}
-                  conditionLabel={activeCondition?.label ?? 'Arena orientation preview'}
+                  conditionLabel={activeReplicate ? `${activeCondition?.label ?? 'Condition'} · run ${activeReplicate.id}` : activeCondition?.label ?? 'Arena orientation preview'}
                   timeMs={Math.round(playhead * playbackDurationMs)}
                   playing={playing}
                   traceMode={arenaView === 'trace'}
@@ -3414,7 +3612,7 @@ export default function Home() {
             </div>
             <span>{playbackDurationMs.toLocaleString()} ms</span>
           </div>
-          <div className="timeline-labels"><span>{lab.experiment ? 'baseline' : 'no protocol'}</span><strong>{lab.experiment ? `unitless ${selectedCircuit?.abbreviation ?? 'mapped-circuit'} ${lab.experiment.perturbation === 'silence' ? 'suppression' : 'drive'}` : 'no model target window'}</strong><span>{lab.experiment ? 'recovery' : 'awaiting design'}</span></div>
+          <div className="timeline-labels"><span>{lab.experiment ? 'stance' : 'no protocol'}</span><strong>{activePoint ? `state: ${activePoint.state.replaceAll('_', ' ')}` : lab.experiment ? 'awaiting seeded run' : 'no model target window'}</strong><span>{lab.experiment ? 'recovery' : 'awaiting design'}</span></div>
 
           <section className="trial-queue" aria-labelledby="trial-queue-title">
             <div className="section-title-row">
@@ -3423,7 +3621,7 @@ export default function Home() {
             </div>
             <div className="condition-tabs">
               {(lab.experiment?.conditions ?? []).map((condition) => (
-                <button className={activeCondition?.conditionId === condition.id || (!lab.batch && selectedConditionId === condition.id) ? 'active' : ''} type="button" aria-pressed={activeCondition?.conditionId === condition.id || (!lab.batch && selectedConditionId === condition.id)} key={condition.id} onClick={() => { setSelectedConditionId(condition.id); setPlayhead(0); setPlaying(false); }}>
+                <button className={activeCondition?.conditionId === condition.id || (!lab.batch && selectedConditionId === condition.id) ? 'active' : ''} type="button" aria-pressed={activeCondition?.conditionId === condition.id || (!lab.batch && selectedConditionId === condition.id)} key={condition.id} onClick={() => { setSelectedConditionId(condition.id); setSelectedReplicateId(null); setPlayhead(0); setPlaying(false); }}>
                   <i className={condition.kind} />
                   <span>{condition.label}</span>
                   <small>{lab.batch ? 'complete' : lab.experiment?.approved ? 'approved' : 'draft'}</small>
@@ -3437,7 +3635,7 @@ export default function Home() {
             <section className="results-panel" aria-labelledby="results-title">
               <div className="section-title-row"><div><p className="eyebrow">Behavior analysis</p><h2 id="results-title">{bestResult?.label ?? 'Selected model condition'}</h2></div><div className="badge-pair"><Badge kind="derived" /><Badge kind="simulation_predicted" /></div></div>
               <div className="metric-grid">
-                <article><span>Response initiation</span><strong>{Math.round((bestResult?.responseInitiationProbability ?? 0) * 100)}%</strong><small>{bestResult?.responsiveN ?? 0}/{bestResult?.n ?? 0} seeded runs</small></article>
+                <article><span>Response initiation</span><strong>{Math.round((bestResult?.responseInitiationProbability ?? 0) * 100)}%</strong><small>{bestResult?.responsiveN ?? 0}/{bestResult?.n ?? 0} expressed · {bestResult?.thresholdCrossedN ?? 0}/{bestResult?.n ?? 0} crossed · {bestResult?.censoredN ?? 0} censored</small></article>
                 {analysis.metrics.map((metric) => {
                   const value = bestResult ? conditionMetricValue(bestResult, metric) : null;
                   const meta = METRIC_LABELS[metric];
@@ -3446,7 +3644,7 @@ export default function Home() {
                     <article key={metric}>
                       <span>{meta.label}</span>
                       <strong>{value === null || value === undefined ? 'n/a' : probabilityLike ? `${Math.round(value * 100)}%` : <>{round(value, metric.includes('recruitment') || metric === 'stance_stability' ? 3 : 2)} <i>{meta.unit}</i></>}</strong>
-                      <small>{metric === 'response_latency_ms' ? 'from nominal onset; responsive runs only' : 'uncalibrated simulated condition mean'}</small>
+                      <small>{metric === 'response_latency_ms' ? 'from nominal onset; expressed runs only' : 'trace-derived simulated condition mean'}</small>
                     </article>
                   );
                 })}
@@ -3460,21 +3658,22 @@ export default function Home() {
                     return <div key={metric}><dt><code>{metric}</code></dt><dd>{definition.formula}<br /><small>{definition.unit} · {definition.aggregation} · {definition.nullRule}</small></dd></div>;
                   })}
                   <div><dt><code>{RESPONSE_INITIATION_SUMMARY_DEFINITION.id}</code></dt><dd>{RESPONSE_INITIATION_SUMMARY_DEFINITION.formula}<br /><small>separate declared summary · not an objective metric</small></dd></div>
+                  <div><dt><code>{RESPONSE_OBSERVATION_SUMMARY_DEFINITION.id}</code></dt><dd>{RESPONSE_OBSERVATION_SUMMARY_DEFINITION.fields.thresholdCrossingProbability.formula}; {RESPONSE_OBSERVATION_SUMMARY_DEFINITION.fields.thresholdCrossedN.formula}; {RESPONSE_OBSERVATION_SUMMARY_DEFINITION.fields.censoredN.formula}<br /><small>seeded threshold/censor audit · distinct from per-run generator probability and biological response rates · not an objective metric</small></dd></div>
                 </dl>
               </details>
               <details className="inspector-disclosure">
                 <summary><span>Exact per-run outputs</span><b>{activeCondition?.replicates.length ?? 0} runs · {activeCondition?.label ?? 'select an arm'}</b></summary>
                 <div className="per-run-table-wrap">
                   <table>
-                    <thead><tr><th>Run / seed</th><th>Response</th><th>Speed / distance</th><th>Body output</th><th>Trajectory</th></tr></thead>
+                    <thead><tr><th>Run / seed</th><th>Response + state</th><th>Speed / distance</th><th>Expressed body output</th><th>Seeded replay</th></tr></thead>
                     <tbody>
                       {(activeCondition?.replicates ?? []).map((run) => (
-                        <tr key={run.id}>
-                          <td><code>{run.id}</code><small>seed {run.seed} · drive {round(run.effectiveMotorDrive, 3)}</small></td>
-                          <td>{run.responseInitiated ? 'initiated' : 'not initiated'}<small>{run.responseLatencyMs === null ? 'latency n/a' : `${round(run.responseLatencyMs, 2)} ms from onset`} · p {round(run.responseProbability, 3)}</small></td>
+                        <tr key={run.id} className={activeReplicate?.id === run.id ? 'selected-run' : ''} data-selected-replicate={activeReplicate?.id === run.id ? 'true' : 'false'}>
+                          <td><code>{run.id}</code><small>seed {run.seed} · premotor drive {round(run.premotorDriveIndex, 3)}</small></td>
+                          <td>{run.responseDisposition === 'expressed' ? 'expressed' : run.responseDisposition === 'censored' ? 'threshold crossed · censored' : 'threshold not crossed'}<small>{run.responseLatencyMs === null ? run.responseDisposition === 'censored' ? `candidate latency ${round(run.candidateResponseLatencyMs ?? 0, 3)} ms · body remains stance` : 'remains stance · latency n/a' : `${round(run.responseLatencyMs, 3)} ms from onset · ${run.takeoffSuccess ? 'takeoff completed' : 'body response completed'}`} · threshold p {round(run.responseThresholdProbability, 3)}</small></td>
                           <td>{round(run.signedSpeedMmS, 3)} model mm/s<small>{round(run.backwardDistanceMm, 3)} model mm backward · heading {round(run.headingChangeDeg, 2)}°</small></td>
-                          <td>leg {round(run.legRecruitment, 3)} · wing {round(run.wingRecruitment, 3)}<small>lift {round(run.verticalDisplacementMm, 3)} model mm · stance {round(run.stanceStability, 3)}</small></td>
-                          <td><code>{run.trajectoryId}</code><small>seed {run.trajectorySeed} · {run.trajectory.length} points · {run.trajectoryRole}</small></td>
+                          <td>leg {round(run.legRecruitment, 3)} · wing {round(run.wingRecruitment, 3)}<small>lift {round(run.verticalDisplacementMm, 3)} model mm · stance {round(run.stanceStability, 3)} · {run.eventTimeline.groundReleaseMs === null ? 'ground contact retained' : `ground release ${round(run.eventTimeline.groundReleaseMs, 3)} ms`}</small></td>
+                          <td><button type="button" className="run-replay-action" aria-pressed={activeReplicate?.id === run.id} onClick={() => { setSelectedReplicateId(run.id); setPlayhead(0); setPlaying(false); }}>{activeReplicate?.id === run.id ? 'Selected replay' : 'Replay this run'}</button><code>{run.trajectoryId}</code><small>seed {run.trajectorySeed} · {run.trajectory.length} points · {run.trajectoryRole}</small></td>
                         </tr>
                       ))}
                     </tbody>
@@ -3487,9 +3686,9 @@ export default function Home() {
 
         <aside className={`inspector-panel ${lab.experiment && !lab.batch ? 'protocol-review-active' : ''}`} aria-label="Run details">
           <details className="inspector-disclosure protocol-disclosure" key={`protocol-${lab.experiment?.id ?? 'empty'}`} open={Boolean(lab.experiment)}>
-            <summary><span>Exact protocol</span><b>{!lab.experiment ? 'Not created' : lab.experiment.approved ? 'Approved' : 'Human approval required'}</b></summary>
+            <summary><span>Exact protocol</span><b>{!lab.experiment ? 'Not created' : lab.experiment.approved ? 'Approved' : 'Operator approval required'}</b></summary>
             <section className="protocol-controls" aria-labelledby="protocol-title">
-            <div className="section-title-row"><p className="eyebrow" id="protocol-title">Exact protocol for human review</p><div className="badge-pair">{lab.experiment && <Badge kind={lab.experiment.provenance[0]} />}<span className={`approval-chip ${lab.experiment?.approved ? 'approved' : ''}`}>{!lab.experiment ? 'Not created' : lab.experiment.approved ? 'Approved' : 'Draft'}</span></div></div>
+            <div className="section-title-row"><p className="eyebrow" id="protocol-title">Exact protocol for operator review</p><div className="badge-pair">{lab.experiment && <Badge kind={lab.experiment.provenance[0]} />}<span className={`approval-chip ${lab.experiment?.approved ? 'approved' : ''}`}>{!lab.experiment ? 'Not created' : lab.experiment.approved ? 'Approved' : 'Draft'}</span></div></div>
             {!lab.experiment ? (
               <p className="empty-protocol">No protocol artifact exists. The design tool must create a hypothesis-linked, controlled protocol before approval becomes available.</p>
             ) : (
@@ -3524,6 +3723,22 @@ export default function Home() {
                   <div><dt>Seed</dt><dd>{lab.experiment.seed.toLocaleString()}</dd></div>
                   <div><dt>Controller</dt><dd>{MODEL_MANIFEST.controller}</dd></div>
                 </dl>
+                <div className="calibration-panel">
+                  <strong>Calibration: event order constrained; amplitudes and probabilities unfitted</strong>
+                  <small>{MODEL_MANIFEST.calibrationSummary}</small>
+                </div>
+                <div className="drive-derivation-panel">
+                  <p><strong>Effective drive committed before approval</strong><small><code>nominal × bounded duration gain × laterality gain</code>; suppression arms subtract the bounded result from the declared reference drive.</small></p>
+                  <div className="per-run-table-wrap">
+                    <table>
+                      <thead><tr><th>Arm</th><th>Nominal</th><th>Duration</th><th>Laterality</th><th>Effective</th></tr></thead>
+                      <tbody>{lab.experiment.conditions.map((condition) => {
+                        const derivation = deriveConditionMotorDrive(condition, lab.experiment!);
+                        return <tr key={condition.id}><td><code>{condition.id}</code></td><td>{round(derivation.nominalControlLevel, 4)}</td><td>{round(derivation.boundedDurationGain, 4)}</td><td>{round(derivation.lateralityGain, 4)}</td><td><strong>{round(derivation.effectiveMotorDrive, 4)}</strong><small>{derivation.formula}</small></td></tr>;
+                      })}</tbody>
+                    </table>
+                  </div>
+                </div>
                 {!lab.experiment.approved ? (
                   <button className="protocol-approval-action" type="button" onClick={() => void approveExperiment()} disabled={simulationRunning || approvalPreparing}>
                     <strong>{approvalPreparing ? 'Committing exact protocol…' : 'Approve this exact experiment'}</strong>
@@ -3531,7 +3746,7 @@ export default function Home() {
                   </button>
                 ) : lab.approval ? (
                   <div className="protocol-approved-note">
-                    <p>Human approval applies only to <code>{lab.experiment.id}</code>. Any edit revokes it and clears downstream artifacts.</p>
+                    <p>The visible approval applies only to <code>{lab.experiment.id}</code>. Any edit revokes it and clears downstream artifacts.</p>
                     <dl className="protocol-meta">
                       <div><dt>Protocol hash</dt><dd><code>{lab.approval.protocol_hash}</code></dd></div>
                       <div><dt>Seed manifest hash</dt><dd><code>{lab.approval.seed_manifest_hash}</code></dd></div>

@@ -36,13 +36,13 @@ export default function FlyLabAgentGuide() {
           <li>Open the laboratory in a browser that exposes <code>document.modelContext.registerTool</code>.</li>
           <li>Use the laboratory&apos;s visible <strong>Runtime diagnostic</strong> to distinguish an absent API from a rejected registration.</li>
           <li>When tools are available, call <code>inspect_flylab_state</code> first and after every interruption or visible edit.</li>
-          <li>Human approval remains a visible page action and is intentionally not a Site Tool.</li>
+          <li>Protocol authorization remains a visible operator action and is intentionally not a Site Tool.</li>
         </ol>
         <p>
           The page can detect its own API and registration results, but it cannot detect the selected model, account eligibility, workspace policy, Site Tools setting, or rollout. See the <a href="https://learn.chatgpt.com/docs/webmcp" target="_blank" rel="noreferrer">official Site Tools guidance</a>.
         </p>
         <p>
-          The raw machine endpoints remain <code>/flylab-agent-manifest.json</code> and <code>/flylab-tool-contracts.json</code>. The current page-session state is embedded only on the open laboratory page at <code>#flylab-agent-handoff</code> and is also exposed there in a visible, selectable recovery packet.
+          The raw machine endpoints remain <code>/flylab-agent-manifest.json</code> and <code>/flylab-tool-contracts.json</code>. Portable v3 exports are documented by the <a href="/schemas/flylab-evidence-export-v3.schema.json">deployed evidence-export JSON Schema</a>. The current page-session state is embedded only on the open laboratory page at <code>#flylab-agent-handoff</code> and is also exposed there in a visible, selectable recovery packet.
         </p>
       </section>
 

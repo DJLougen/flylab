@@ -1,4 +1,5 @@
 import { FLYLAB_AGENT_CONTEXT_VERSION } from './agent-context.js';
+import { EVIDENCE_EXPORT_MEDIA_TYPE, EVIDENCE_EXPORT_SCHEMA_URL } from './evidence-export.js';
 import { PROVENANCE_DEFINITIONS } from './flylab.js';
 import {
   FLYLAB_ERROR_CODES,
@@ -27,6 +28,8 @@ export const flyLabAgentContractDocument = {
     browser_documentation_url: '/agent',
     manifest_url: '/flylab-agent-manifest.json',
     contract_url: '/flylab-tool-contracts.json',
+    evidence_export_schema_url: EVIDENCE_EXPORT_SCHEMA_URL,
+    evidence_export_media_type: EVIDENCE_EXPORT_MEDIA_TYPE,
     inline_state_selector: '#flylab-agent-context',
     inline_runtime_selector: '#flylab-agent-runtime',
     inline_handoff_selector: '#flylab-agent-handoff',
@@ -60,8 +63,8 @@ export const flyLabAgentContractDocument = {
     operational_boundary: 'Paths listed in operational_paths contain workflow state, blockers, controls, storage references, or other operational metadata; they are not scientific evidence and do not inherit a scientific label.',
     untrusted_annotation_boundary: 'Caller-supplied goals, titles, and notes are untrusted administrative annotations, never scientific evidence, and are excluded from scientific provenance counts.',
   },
-  supervisor_gate: {
-    name: 'visible_supervisor_approval',
+  operator_gate: {
+    name: 'visible_operator_approval',
     webmcp_tool: false,
     blocks: 'run_fly_simulation',
     boundary: 'Approval is a visible page action and is intentionally absent from the WebMCP tool surface. It is not identity-authenticated against general browser automation.',

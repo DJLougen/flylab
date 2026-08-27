@@ -59,6 +59,39 @@ describe('FlyLab Three.js arena fly', () => {
     assert.match(pageSource, /targetBodyParts=\{lab\.experiment\?\.motorMap\.targetBodyParts\}/);
   });
 
+  test('drives body pose and contact from the exact selected state-trace point', () => {
+    for (const field of [
+      'current.point?.groundContact',
+      'current.point?.legExtension',
+      'current.point?.wingDeployment',
+      'current.point?.bodyPitchDeg',
+      'current.point?.bodyRollDeg',
+    ]) {
+      assert.ok(componentSource.includes(field), `missing state-driven renderer field: ${field}`);
+    }
+    assert.match(componentSource, /appendage pose follows the selected seeded simulation trace/);
+    assert.match(componentSource, /const gait = motorOutputActive \? legExtension : 0/);
+    assert.match(componentSource, /const modeledWingAngle = wingDeployment \* 0\.44/);
+    assert.doesNotMatch(componentSource, /animateGait/);
+    assert.doesNotMatch(componentSource, /Math\.sin\(now/);
+  });
+
+  test('lets the operator select and replay an exact completed run instead of the compatibility illustration', () => {
+    assert.match(pageSource, /selectedReplicateId/);
+    assert.match(pageSource, /activeReplicate\?\.trajectory \?\? activeCondition\?\.trajectory/);
+    assert.match(pageSource, /Replay this run/);
+    assert.match(pageSource, /setSelectedReplicateId\(run\.id\)/);
+    assert.match(pageSource, /run \$\{activeReplicate\.id\}/);
+    assert.match(pageSource, /premotor \{round\(activePoint\.premotorDriveIndex/);
+  });
+
+  test('shows all formal seeded threshold and censoring summaries', () => {
+    assert.match(pageSource, /RESPONSE_OBSERVATION_SUMMARY_DEFINITION\.fields\.thresholdCrossingProbability\.formula/);
+    assert.match(pageSource, /RESPONSE_OBSERVATION_SUMMARY_DEFINITION\.fields\.thresholdCrossedN\.formula/);
+    assert.match(pageSource, /RESPONSE_OBSERVATION_SUMMARY_DEFINITION\.fields\.censoredN\.formula/);
+    assert.match(pageSource, /distinct from per-run generator probability and biological response rates/);
+  });
+
   test('lights and moves only body parts declared by the selected motor map', () => {
     assert.match(componentSource, /new Map<BodyPartId, THREE\.MeshStandardMaterial>/);
     assert.match(componentSource, /targetedBodyParts\.has\(WING_BODY_PARTS\[index\]\)/);

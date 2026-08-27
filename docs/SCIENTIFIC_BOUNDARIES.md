@@ -1,10 +1,10 @@
 # Scientific boundaries
 
-This document defines what the current FlyLab challenge release does, what its outputs mean, and what must not be inferred from them.
+This document defines what the current FlyLab challenge implementation does, what its outputs mean, and what must not be inferred from them.
 
-## Validated product scope
+## Bounded product scope
 
-The challenge release is intentionally bounded:
+The challenge implementation is intentionally bounded:
 
 - organism and stage: adult *Drosophila*
 - neural targets: Moonwalker descending neurons (MDNs) for legged retreat and Giant Fiber/DNp01 for short-mode middle-leg/wing escape output
@@ -21,12 +21,13 @@ The runtime manifest is:
 
 ```text
 model       FlyLab mapped-motor embodiment model
-version     0.2.0
-controller  mapped-circuit-to-body-adapter.v1
-environment open-field-model-scale.v2
+version     0.3.0
+controller  state-coherent-mapped-circuit-adapter.v2
+environment stateful-open-field-model-scale.v3
+metrics     flylab.behavior-metrics.v5
 ```
 
-The model is a deterministic, reduced-order body-controller generator. It converts a bounded circuit-control abstraction into either MDN reverse-walk or GF short-mode escape outputs. Its typed motor maps are provenance records and controller bindings, not executable connectomes.
+The model is a deterministic, reduced-order body-controller generator. It converts a bounded circuit-control abstraction into either an MDN reverse-walk or a GF short-mode escape state trajectory. Its typed motor maps are provenance records and hand-authored controller bindings, not executable connectomes. GF state-transition order and approximate event intervals are constrained by cited adult measurements; amplitudes, threshold probabilities, controller gains, recovery, and MDN dynamics remain unfitted model assumptions.
 
 The current embodiment is **not**:
 
@@ -47,7 +48,7 @@ The mesh is not a scan, specimen reconstruction, segmentation, morphometric data
 
 Both visual citations are exported in the agent-inspectable `VISUAL_REFERENCES` registry under `DATASET_MANIFEST.visualReferences`. They have `relation=visual_reference`, `hypothesisEligible=false`, and explicit interpretation boundaries, so an agent cannot use them as MDN hypothesis support.
 
-Trajectory position, heading, lift, condition, and model-drive timing come from the versioned reduced-order simulation. The motor map selects the schematic appendage cue: six-leg walking for MDN or T2-leg extension plus wing tuck/downstroke for GF. Appendage rendering does not feed back into the simulation. The purple ring indicates selection of the unitless model-drive target window, not neural activity or an optical stimulus. Modeled movement instead follows `motorOutputActive`, so a silencing baseline or sham can replay the hand-authored reference drive without being falsely illuminated as a perturbation target.
+Trajectory position, heading, lift, state, ground contact, appendage deployment, and model-drive timing come from the exact selected seeded per-run trajectory. The arena does not synthesize an independent body response. The motor map selects the schematic appendage representation: six-leg walking for MDN or T2-leg extension plus wing deployment for GF. Rendering does not feed back into the simulation. The purple ring indicates selection of the unitless model-drive target window, not neural activity or an optical stimulus. Modeled movement instead follows the trace's `motorOutputActive` and body state, so a silencing baseline or sham can express the hand-authored reference drive without being falsely illuminated as a perturbation target.
 
 ## 3D circuit-view boundary
 
@@ -61,7 +62,7 @@ During replay, purple illumination means that a neuron or schematic path is the 
 
 Left-only model drive selects the two metadata-left MDNs and highlights their connectome-inferred right LBL40 target (52 + 51 v3-predicted synaptic links). Right-only drive selects the two metadata-right MDNs and highlights their left LBL40 target (26 + 24). These counts come from the v3 future-work product after its postsynapse-size ≥10-voxel filter; the Bates et al. paper analyses use v2 (≥5). This is a visualization of pinned identity and topology, not evidence that link count is functional weight, physiology, activity, or causal efficacy.
 
-FlyGym is a future adapter path: the tool contracts, experiment manifest, seed lineage, and evidence boundaries could wrap a FlyGym-backed worker later. The current manifest pins FlyGym v2.1.0 and commit `ca65a510c2afe6ac61c51df4f274c8d190c2f95f` as a software reference, but the released browser model does not execute it.
+FlyGym is a future adapter path: the tool contracts, experiment manifest, seed lineage, and evidence boundaries could wrap a FlyGym-backed worker later. The current manifest pins FlyGym v2.1.0 and commit `ca65a510c2afe6ac61c51df4f274c8d190c2f95f` as a software reference, but the current browser model does not execute it.
 
 ## Evidence classes
 
@@ -81,9 +82,9 @@ The competition evidence chain is GF-first:
 2. Primary anatomy/electrophysiology and separately labeled FANC structural context describe the middle-leg and wing branches without inventing a GF reconstruction or executable weight.
 3. Discovery persists a derived decision containing every ranked candidate, selected circuit, rejected alternative, exclusion, and reduced-order coverage gap.
 4. The agent drafts an explicitly `agent_hypothesized` claim with a primary outcome, expected direction, mandatory controls, matching perturbation-effect evidence, limitations, and falsification criterion.
-5. A person approves an exact virtual protocol and seed manifest; that authorization remains distinct from scientific evidence.
-6. The FlyLab model produces a simulation-predicted batch with complete per-run trajectories and a separately labeled illustrative condition replay.
-7. `flylab.behavior-metrics.v4` aggregates the simulation-generated per-run records and publishes formal method definitions. Analysis remains derived plus simulation-predicted.
+5. The visible operator approval control accepts an exact virtual protocol and seed manifest; that authorization remains distinct from scientific evidence and does not establish the operator's identity.
+6. The FlyLab model produces a simulation-predicted batch with complete, seeded per-run state trajectories. A legacy condition-level illustrative trace is retained only for compatibility and is excluded from replay, metrics, and scientific interpretation.
+7. `flylab.behavior-metrics.v5` aggregates trace-derived per-run records and publishes formal method definitions. Analysis remains derived plus simulation-predicted.
 8. The comparison remains derived plus simulation-predicted, while its non-authorized follow-up remains agent-hypothesized.
 9. A mission-scope v3 bundle preserves the decision context and the exact selected lineage. Experiment scope preserves only the selected lineage.
 
@@ -114,12 +115,14 @@ For zero-based replicate index `r`, every condition reuses the same latent draw 
 ```text
 replicate_seed = base_seed + r × 37
 per_run_trajectory_seed = replicate_seed + 104729
-illustrative_condition_trajectory_seed = base_seed + 130363
+illustrative_condition_trajectory_seed = base_seed + 130363  (legacy compatibility only)
 ```
 
-This `flylab.seed-policy.v2` common-random-number design pairs replicate index across condition arms. Equivalent effective drives are therefore exactly paired, and differing drives reuse the same latent draws. Each run has its own simulated trajectory; each condition also has a separate illustrative replay seed. The same normalized experiment inputs produce the same experiment ID. Identity covers all design inputs and all three person-editable fields: activation level, duration, and replicate count. UI edits rebuild the full protocol through `designExperiment` instead of patching only the display. The same experiment and seed produce identical run IDs, trajectories, replicate summaries, batch ID, and run hash. Changing the seed changes the generated runs.
+This `flylab.seed-policy.v2` common-random-number design pairs replicate index across condition arms. Equivalent effective drives are therefore exactly paired, and differing drives reuse the same latent draws. Each run has its own authoritative simulated state trajectory. The arena replays an exact selected run and exposes its run ID, trajectory ID, and seed. The condition-level illustrative seed and trace remain serialized for compatibility only; that trace is excluded from analysis and is not an observed or representative run. The same normalized experiment inputs produce the same experiment ID. Identity covers all design inputs and all three person-editable fields: activation level, duration, and replicate count. UI edits rebuild the full protocol through `designExperiment` instead of patching only the display. The same experiment and seed produce identical run IDs, trajectories, trace-derived summaries, batch ID, legacy run hash, and content hash. Changing the seed changes the generated runs.
 
-IDs and run hashes use a stable FNV-1a-derived identifier. Visible approval requires cryptographic SHA-256 support and creates a detached, deeply frozen `flylab.experiment-approval` record. Its `protocol_hash` commits the exact protocol, model, seed policy, and metric method; its `seed_manifest_hash` commits every condition, replicate seed, and trajectory seed. The approval timestamp is outside both hashes. Saving prepares a downloadable `flylab.evidence-export` schema-version-`3` JSON envelope and attempts to store the same envelope in browser local storage on a best-effort basis. Caller-supplied bundle titles and notes are serialized as `untrusted_annotation` administrative metadata, remain outside the five scientific provenance labels, and are excluded from scientific provenance counts.
+Generated hypothesis, experiment, run, trajectory, batch, analysis, comparison, and proposal identities use deterministic SHA-256-derived IDs. The batch retains a legacy FNV-1a `runHash` over only the ordered run-ID and trajectory-ID pairs; it is an identity summary, not a content-integrity digest. The authoritative `runContentHash` is SHA-256 over `JSON.stringify({ protocol, model, conditionRuns })`. Analysis recomputes that content hash, rejects mismatches, records it as `batchRunContentHash`, and binds it into the analysis ID.
+
+Visible approval requires cryptographic SHA-256 support and creates a detached, deeply frozen `flylab.experiment-approval` record. Its `protocol_hash` commits the exact protocol snapshot, model version, seed policy, metric method, and drive derivations; its `seed_manifest_hash` commits every condition, replicate seed, and trajectory seed. The approval timestamp is outside both hashes. Saving prepares a downloadable `flylab.evidence-export` schema-version-`3` JSON envelope and attempts to store the same envelope in browser local storage on a best-effort basis. The advertised portable-export schema is [flylab-evidence-export-v3.schema.json](https://flylab-neuroethology.d-lougen.chatgpt.site/schemas/flylab-evidence-export-v3.schema.json). Caller-supplied bundle titles and notes are serialized as `untrusted_annotation` administrative metadata, remain outside the five scientific provenance labels, and are excluded from scientific provenance counts.
 
 The `flylab.experiment-evidence-bundle.v3` payload includes the exact selected circuit record, the hypothesis's supporting source/evidence closure, hypothesis, experiment, approval, simulation batch, exactly the analyses referenced by the comparison, comparison, dataset/model manifests, seeds, and assumptions. The `flylab.mission-evidence-bundle.v3` format adds the goal, discovery decision, candidates, alternatives, exclusions, and coverage gaps. A timestamp records when the bundle was saved; it is not part of the scientific result. The manifest hash covers `JSON.stringify(payload)` in saved property order. It detects payload changes but is not a digital signature, proof of authorship, or guarantee of immutability. This export checksum must not be confused with the immutable in-memory approval snapshot and its exact authorization commitments.
 
@@ -147,7 +150,15 @@ The MDN behavior analysis exposes:
 
 The GF panel replaces those gait metrics with short-mode escape probability, response latency, vertical displacement, wing recruitment, and leg recruitment. This is not total takeoff probability; the parallel long-mode pathway is not modeled.
 
-The analysis method version is `flylab.behavior-metrics.v4`. Each motor map declares its complete five-metric panel. Every returned metric definition includes its formula, unit, sign convention, aggregation, null rule, full-trial window semantics, method version, provenance, and interpretation boundary; response initiation has a separately declared summary definition. The tool also returns exact per-run inspection rows linked to run and trajectory IDs. Each run has a complete simulation-generated trajectory, while the condition-level Three.js replay is independently generated and labeled `illustrative_condition_replay`; it must never be presented as a raw replicate trace or used to calculate cards. When no seeded run responds, latency is JSON `null`; trial duration is never substituted. Recruitment values are synthetic unitless indices, and vertical displacement is model-scale motion—not muscle force or aerodynamic lift. These estimates are not biological confidence intervals, animal effect sizes, or statistical evidence for a biological hypothesis. FlyLab does not claim a formal preregistration artifact.
+The analysis method version is `flylab.behavior-metrics.v5`. Each motor map declares its complete five-metric panel. Every returned metric definition includes its formula, unit, sign convention, aggregation, null rule, full-trial window semantics, method version, provenance, and interpretation boundary; expressed response initiation has a separately declared summary definition. The tool also returns exact per-run inspection rows linked to run and trajectory IDs.
+
+The tool returns a second formal method block as `response_observation_summary_definition`, whose definition ID is `response_threshold_and_censoring_summary`. Over the full trial, `thresholdCrossingProbability = thresholdCrossedN / n`; `thresholdCrossedN` counts runs with `responseThresholdCrossed=true`; and `censoredN` counts runs with `responseDisposition='censored'`. These three summaries are never null. The fraction is an empirical summary of realized seeded draws, not the per-run hand-authored generator value `responseThresholdProbability`. None of these simulation summaries is a biological response rate or survival-analysis estimate.
+
+Every replicate records the model's threshold probability, whether its seeded draw crossed that threshold, its unclipped candidate latency when crossed, and one disposition: `not_crossed`, `censored`, or `expressed`. A crossed threshold is not automatically a behavior. If the motor map's required expression gate cannot fit before the trial boundary, the run is censored, response latency is JSON `null`, and the state trace remains grounded with no expressed leg, wing, lift, or displacement. Trial duration is never substituted as latency.
+
+The authoritative trace uses the explicit state machine `stance → preparation → reverse_walk → recovery` for MDN or `stance → preparation → jump → wing_deployment → airborne → recovery` for GF. Non-crossed and censored runs remain in `stance`. The trace carries exact event samples and drives position, ground contact, leg and wing deployment, pitch, roll, premotor drive, and stance. Run summaries—including displacement, signed speed, heading, time-weighted stance, recruitment maxima, and takeoff success—are derived from that same trace. GF short-mode escape probability counts a realized airborne state with ground contact absent; it is neither the generator threshold probability nor total takeoff probability.
+
+The Three.js arena displays a selected exact seeded run. The separately serialized `illustrative_condition_replay` is a compatibility-only legacy artifact and must not be presented as a raw replicate trace, used to calculate metrics, or used as scientific evidence. Recruitment values are synthetic unitless indices, and vertical displacement is model-scale motion—not muscle force or aerodynamic lift. These estimates are not biological confidence intervals, animal effect sizes, or statistical evidence for a biological hypothesis. FlyLab does not claim a formal preregistration artifact.
 
 ## Operational shared-state boundary
 
@@ -155,11 +166,11 @@ Every successful tool call returns its `page_session_id`, previous revision, and
 
 Run and save additionally require caller-generated operation IDs. A completed retry with the same page-session/tool/operation ID and identical logical input replays the committed result without another state mutation. The expected revision is excluded from logical operation identity, so the caller supplies the latest inspected revision on retry. Reusing an operation ID for changed logical input returns `INVALID_INPUT` with `operation_id_input_mismatch` and leaves state unchanged.
 
-## Human approval and autoresearch boundary
+## Operator approval and autoresearch boundary
 
-`inspect_flylab_state` is an operational, read-only recovery tool. It reports the current open-page revision, fixed artifact references, person-selected proposal budget, approval status, exactly one valid next action, and provenance for the already-existing lineage it references. Inspection creates no new scientific evidence or provenance, cannot approve a protocol, cannot run an experiment, and must not be interpreted as evidence about a fly.
+`inspect_flylab_state` is an operational, read-only recovery tool. It reports the current open-page revision, fixed artifact references, operator-selected proposal budget, approval status, exactly one valid next action, and provenance for the already-existing lineage it references. Inspection creates no new scientific evidence or provenance, cannot approve a protocol, cannot run an experiment, and must not be interpreted as evidence about a fly.
 
-`design_stimulation_trial` always creates an unapproved experiment. `run_fly_simulation` refuses to run it with `APPROVAL_REQUIRED` until a person clicks the visible approval control. After approval, the caller must echo the exact `approved_protocol_hash`; FlyLab verifies the protocol and seed-manifest commitments against the current experiment before execution.
+`design_stimulation_trial` always creates an unapproved experiment. `run_fly_simulation` refuses to run it with `APPROVAL_REQUIRED` until the visible operator approval control accepts it. The record proves that the visible control was used; it is not identity verification. After approval, the caller must echo the exact `approved_protocol_hash`; FlyLab verifies the protocol and seed-manifest commitments against the current experiment before execution.
 
 Human edits to activation level, duration, or replicate count:
 
@@ -170,7 +181,7 @@ Human edits to activation level, duration, or replicate count:
 
 Changing the next-trial budget also advances the shared revision and clears any comparison, evidence bundle, and export derived from the prior budget.
 
-`compare_fly_trials` may rank saved analyses and generate one bounded activation-level proposal. The UI calls this **propose only**. The proposal does not create an approved protocol and cannot run a new batch. The person controls the next-trial budget and must explicitly direct and approve any subsequent experiment.
+`compare_fly_trials` may rank saved analyses and generate one bounded activation-level proposal. The UI calls this **propose only**. The proposal does not create an approved protocol and cannot run a new batch. The operator controls the next-trial budget and must explicitly direct and approve any subsequent experiment.
 
 This boundary supports assisted research planning, not autonomous biological experimentation.
 
@@ -184,9 +195,9 @@ Each claim remains scoped to the cited assay. Sufficiency under one protocol doe
 
 ### Giant-fiber leg/wing escape evidence
 
-[von Reyn et al., *Nature Neuroscience* (2014)](https://doi.org/10.1038/nn.3741) supports assay-scoped GF activation, silencing, recording, and short-mode escape claims. [King & Wyman, *Journal of Neurocytology* (1980)](https://doi.org/10.1007/BF01205017) supports the primary thoracic anatomy of the TTM jump-leg and PSI/DLM flight-muscle branches. [Allen & Murphey, *European Journal of Neuroscience* (2007)](https://doi.org/10.1111/j.1460-9568.2007.05686.x) supports the electrical and cholinergic chemical components of the mixed GF–TTMn synapse only; FlyLab does not attribute it to the PSI/DLM or neuromuscular branches. [Azevedo et al., *Nature* (2024)](https://doi.org/10.1038/s41586-024-07389-x) supplies adult-female FANC structural context for coordinated leg/wing escape output.
+[von Reyn et al., *Nature Neuroscience* (2014)](https://doi.org/10.1038/nn.3741) supports assay-scoped GF activation, silencing, recording, and short-mode escape claims. [Gaitanidis et al., *PLOS Biology* (2025)](https://doi.org/10.1371/journal.pbio.3003553) supplies the direct-GF and light-off event-order and approximate timing targets used by v0.3.0. [King & Wyman, *Journal of Neurocytology* (1980)](https://doi.org/10.1007/BF01205017) supports the primary thoracic anatomy of the TTM jump-leg and PSI/DLM flight-muscle branches. [Allen & Murphey, *European Journal of Neuroscience* (2007)](https://doi.org/10.1111/j.1460-9568.2007.05686.x) supports the electrical and cholinergic chemical components of the mixed GF–TTMn synapse only; FlyLab does not attribute it to the PSI/DLM or neuromuscular branches. [Azevedo et al., *Nature* (2024)](https://doi.org/10.1038/s41586-024-07389-x) supplies adult-female FANC structural context for coordinated leg/wing escape output.
 
-GF loss does not abolish every escape pathway; the parallel long-mode takeoff pathway is explicitly outside the current model. The cited sub-millisecond physiology does not calibrate FlyLab's hand-authored response-latency model. FANC is a separate specimen and dataset from BANC. FlyLab bundles no GF reconstruction or FANC edge table, and its schematic lines have no dataset IDs.
+GF loss does not abolish every escape pathway; the parallel long-mode takeoff pathway is explicitly outside the current model. Gaitanidis et al.'s direct-GF electrophysiology and light-off behavior are distinct paradigms. FlyLab uses their order and approximate millisecond intervals as calibration targets only; they do not fit the unitless dose law, threshold probability, motion or recruitment amplitudes, controller gains, recovery, or MDN dynamics, and they do not make the reduced-order controller a validated animal model. FANC is a separate specimen and dataset from BANC. FlyLab bundles no GF reconstruction or FANC edge table, and its schematic lines have no dataset IDs.
 
 ### Descending-neuron screen
 
@@ -212,8 +223,8 @@ The manifest also references [FlyEM MANC `manc:v1.2.1`](https://www.janelia.org/
 - Agents can query typed motor paths and explicit body-part coverage before proposing a virtual experiment.
 - The agent can design and analyze controlled, seeded **virtual** experiments.
 - Same-seed simulation is deterministic in the current model.
-- The interface preserves explicit provenance and human approval.
-- The current model predicts a virtual trajectory under its documented assumptions.
+- The interface preserves explicit provenance and a visible operator-authorization record; that record does not establish the operator's human identity.
+- The current model predicts an exact seeded virtual state trajectory under its documented assumptions, and the arena can replay that selected run.
 
 ## Claims the project must not make
 

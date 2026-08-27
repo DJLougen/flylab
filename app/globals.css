@@ -168,6 +168,17 @@ dd {
   text-transform: uppercase;
 }
 
+.calibration-status {
+  margin-left: 9px;
+  padding: 3px 7px;
+  border: 1px solid rgba(255, 201, 120, 0.3);
+  border-radius: 999px;
+  color: #ffd49a;
+  font-size: 0.58rem;
+  letter-spacing: 0.035em;
+  text-transform: none;
+}
+
 .live-dot {
   width: 7px;
   height: 7px;
@@ -1576,6 +1587,18 @@ dd {
 .per-run-table-wrap td small { display: block; max-width: 220px; overflow-wrap: anywhere; }
 .per-run-table-wrap td code { color: var(--agent); }
 .per-run-table-wrap td small { margin-top: 3px; color: var(--muted); line-height: 1.35; }
+.per-run-table-wrap tr.selected-run td { background: rgba(110, 231, 210, 0.055); }
+.run-replay-action {
+  margin-bottom: 6px;
+  padding: 4px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: rgba(110, 231, 210, 0.045);
+  color: var(--agent);
+  font-size: 0.58rem;
+  cursor: pointer;
+}
+.run-replay-action[aria-pressed="true"] { border-color: rgba(110, 231, 210, 0.45); color: var(--ink); }
 
 .hypothesis-card,
 .target-card,
@@ -1743,6 +1766,25 @@ dd {
 .protocol-meta div:last-child { grid-column: 1 / -1; }
 .protocol-meta dt { color: var(--muted); font-size: 0.62rem; text-transform: uppercase; }
 .protocol-meta dd { margin-top: 2px; color: var(--muted-2); font-size: 0.66rem; word-break: break-word; }
+
+.calibration-panel,
+.drive-derivation-panel {
+  margin-top: 12px;
+  padding: 10px;
+  border: 1px solid rgba(255, 201, 120, 0.22);
+  border-radius: 8px;
+  background: rgba(255, 201, 120, 0.035);
+}
+.calibration-panel strong,
+.calibration-panel small,
+.drive-derivation-panel p > strong,
+.drive-derivation-panel p > small { display: block; }
+.calibration-panel strong,
+.drive-derivation-panel p > strong { color: #ffd49a; font-size: 0.64rem; }
+.calibration-panel small,
+.drive-derivation-panel p > small { margin-top: 4px; color: var(--muted); font-size: 0.58rem; line-height: 1.45; }
+.drive-derivation-panel .per-run-table-wrap { margin-top: 8px; }
+.drive-derivation-panel .per-run-table-wrap table { min-width: 620px; }
 
 .protocol-identity { grid-template-columns: 1fr; }
 .protocol-identity div:last-child { grid-column: auto; }

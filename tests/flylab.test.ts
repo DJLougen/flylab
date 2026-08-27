@@ -13,13 +13,18 @@ import {
   METRIC_DEFINITIONS,
   METRIC_LABELS,
   METRIC_METHOD_VERSION,
+  MODEL_MANIFEST,
   MODEL_PARAMETERS,
   RESPONSE_INITIATION_SUMMARY_DEFINITION,
+  RESPONSE_OBSERVATION_SUMMARY_DEFINITION,
   SOURCES,
   analyzeBatch,
   circuitMatchesSearch,
   circuitSupportsBehavior,
   compareAnalyses,
+  computeSimulationRunContentHash,
+  deriveConditionMotorDrive,
+  deterministicSha256Hex,
   designExperiment,
   embodimentCoverageForCircuits,
   evidenceBundleTitle,
@@ -146,10 +151,11 @@ describe('FlyLab reduced-order simulation', () => {
 
     assert.notEqual(second.id, first.id);
     assert.notEqual(second.runHash, first.runHash);
+    assert.notEqual(second.runContentHash, first.runContentHash);
     assert.notDeepEqual(second.conditionRuns, first.conditionRuns);
     assert.notDeepEqual(
-      second.conditionRuns[0]?.trajectory,
-      first.conditionRuns[0]?.trajectory,
+      second.conditionRuns.flatMap((condition) => condition.replicates),
+      first.conditionRuns.flatMap((condition) => condition.replicates),
     );
   });
 
@@ -172,7 +178,19 @@ describe('FlyLab reduced-order simulation', () => {
     assert.ok(byCondition.get('condition_bilateral')?.trajectory.some((point) => point.active));
     assert.ok(byCondition.get('condition_bilateral')?.trajectory
       .filter((point) => point.active)
-      .every((point) => point.t >= experiment.onsetMs && point.t <= experiment.onsetMs + experiment.durationMs));
+      .every((point) => point.t >= experiment.onsetMs && point.t < experiment.onsetMs + experiment.durationMs));
+    for (const condition of batch.conditionRuns) {
+      for (const replicate of condition.replicates) {
+        const onset = replicate.trajectory.find((point) => point.t === experiment.onsetMs);
+        const offset = replicate.trajectory.find((point) => point.t === experiment.onsetMs + experiment.durationMs);
+        assert.ok(onset && offset);
+        assert.equal(onset.active, condition.conditionId.startsWith('condition_')
+          && !['condition_baseline', 'condition_sham'].includes(condition.conditionId));
+        assert.equal(onset.premotorDriveIndex, replicate.effectiveMotorDrive);
+        assert.equal(offset.active, false);
+        assert.equal(offset.premotorDriveIndex, 0);
+      }
+    }
   });
 
   test('derives paired metric and trajectory seeds from the versioned common-random-number policy', () => {
@@ -250,6 +268,12 @@ describe('FlyLab reduced-order simulation', () => {
     assert.equal(RESPONSE_INITIATION_SUMMARY_DEFINITION.id, 'response_initiation_probability');
     assert.equal(RESPONSE_INITIATION_SUMMARY_DEFINITION.methodVersion, METRIC_METHOD_VERSION);
     assert.match(RESPONSE_INITIATION_SUMMARY_DEFINITION.boundary, /not one of the nine stable objective metrics/i);
+    assert.equal(RESPONSE_OBSERVATION_SUMMARY_DEFINITION.methodVersion, METRIC_METHOD_VERSION);
+    assert.match(
+      RESPONSE_OBSERVATION_SUMMARY_DEFINITION.fields.thresholdCrossingProbability.aggregation,
+      /distinct from each run/i,
+    );
+    assert.match(RESPONSE_OBSERVATION_SUMMARY_DEFINITION.boundary, /not biological response rates/i);
 
     const batch = simulateExperiment(makeExperiment());
     const analysis = analyzeBatch(batch, ['response_latency_ms', 'backward_distance_mm']);
@@ -260,6 +284,10 @@ describe('FlyLab reduced-order simulation', () => {
     assert.deepEqual(
       analysis.responseInitiationSummaryDefinition,
       RESPONSE_INITIATION_SUMMARY_DEFINITION,
+    );
+    assert.deepEqual(
+      analysis.responseObservationSummaryDefinition,
+      RESPONSE_OBSERVATION_SUMMARY_DEFINITION,
     );
     assert.throws(
       () => analyzeBatch(batch, ['backward_distance_mm'], 100, batch.protocol.trialDurationMs),
@@ -286,7 +314,16 @@ describe('FlyLab reduced-order simulation', () => {
         assert.equal(replicate.trajectoryRole, 'per_run_simulated_trajectory');
         assert.deepEqual(replicate.provenance, ['simulation_predicted']);
         assert.ok(replicate.trajectoryId.startsWith('trajectory_'));
-        assert.equal(replicate.trajectory.length, MODEL_PARAMETERS.trajectory.steps + 1);
+        assert.ok(replicate.trajectory.length >= MODEL_PARAMETERS.trajectory.steps + 1);
+        for (const eventTime of [
+          replicate.eventTimeline.controllerThresholdMs,
+          replicate.eventTimeline.movementOnsetMs,
+          replicate.eventTimeline.groundReleaseMs,
+          replicate.eventTimeline.wingDeploymentMs,
+          replicate.eventTimeline.recoveryMs,
+        ].filter((value): value is number => value !== null)) {
+          assert.ok(replicate.trajectory.some((point) => point.t === eventTime));
+        }
         assert.equal(trajectoryIds.has(replicate.trajectoryId), false);
         trajectoryIds.add(replicate.trajectoryId);
       }
@@ -307,7 +344,7 @@ describe('FlyLab reduced-order simulation', () => {
         const shamRun = sham.replicates[index]!;
         assert.equal(shamRun.seed, baselineRun.seed);
         assert.equal(shamRun.effectiveMotorDrive, baselineRun.effectiveMotorDrive);
-        assert.equal(shamRun.responseProbability, baselineRun.responseProbability);
+        assert.equal(shamRun.responseThresholdProbability, baselineRun.responseThresholdProbability);
         assert.equal(shamRun.responseInitiated, baselineRun.responseInitiated);
         assert.equal(shamRun.reverseInitiated, baselineRun.reverseInitiated);
         assert.equal(shamRun.shortModeEscapeInitiated, baselineRun.shortModeEscapeInitiated);
@@ -325,7 +362,37 @@ describe('FlyLab reduced-order simulation', () => {
     }
   });
 
-  test('invariant: symmetric left and right inputs differ only by the expected heading sign', () => {
+  test('invariant: a zero-effect unilateral perturbation matches its reference arm outside protocol metadata', () => {
+    const comparableRun = (run: ReturnType<typeof simulateExperiment>['conditionRuns'][number]['replicates'][number]) => {
+      const comparable = structuredClone(run) as unknown as Record<string, unknown>;
+      for (const field of ['id', 'conditionId', 'driveDerivation', 'trajectoryId']) {
+        Reflect.deleteProperty(comparable, field);
+      }
+      comparable.trajectory = (comparable.trajectory as Array<Record<string, unknown>>).map((point) => {
+        const normalizedPoint = { ...point };
+        Reflect.deleteProperty(normalizedPoint, 'active');
+        return normalizedPoint;
+      });
+      return comparable;
+    };
+
+    for (const perturbation of ['activate', 'silence'] as const) {
+      const batch = simulateExperiment(makeExperiment({
+        perturbation,
+        laterality: 'left',
+        activationLevel: 0,
+      }));
+      const reference = batch.conditionRuns.find((condition) => condition.conditionId === 'condition_baseline');
+      const target = batch.conditionRuns.find((condition) => condition.conditionId === 'condition_left');
+      assert.ok(reference && target);
+      assert.equal(target.effectiveMotorDrive, reference.effectiveMotorDrive);
+      target.replicates.forEach((run, index) => {
+        assert.deepEqual(comparableRun(run), comparableRun(reference.replicates[index]!));
+      });
+    }
+  });
+
+  test('invariant: paired left and right inputs express opposite causal roll with shared latent outcomes', () => {
     const batch = simulateExperiment(makeExperiment());
     const left = batch.conditionRuns.find((condition) => condition.conditionId === 'condition_left');
     const right = batch.conditionRuns.find((condition) => condition.conditionId === 'condition_right');
@@ -336,26 +403,24 @@ describe('FlyLab reduced-order simulation', () => {
       const rightRun = right.replicates[index]!;
       assert.equal(leftRun.seed, rightRun.seed);
       assert.equal(leftRun.responseInitiated, rightRun.responseInitiated);
-      assert.equal(leftRun.backwardDistanceMm, rightRun.backwardDistanceMm);
-      assert.equal(leftRun.signedSpeedMmS, rightRun.signedSpeedMmS);
       assert.equal(leftRun.responseLatencyMs, rightRun.responseLatencyMs);
       assert.equal(leftRun.stanceStability, rightRun.stanceStability);
       assert.equal(leftRun.legRecruitment, rightRun.legRecruitment);
-      assert.equal(leftRun.headingChangeDeg, -rightRun.headingChangeDeg);
-      assert.ok(leftRun.headingChangeDeg < 0);
-      assert.ok(rightRun.headingChangeDeg > 0);
+      if (leftRun.responseInitiated) {
+        assert.ok(leftRun.headingChangeDeg < 0);
+        assert.ok(rightRun.headingChangeDeg > 0);
+        assert.ok(Math.abs(leftRun.backwardDistanceMm - rightRun.backwardDistanceMm) < 0.02);
+        assert.ok(Math.abs(leftRun.signedSpeedMmS - rightRun.signedSpeedMmS) < 0.02);
+      } else {
+        assert.equal(leftRun.headingChangeDeg, 0);
+        assert.equal(rightRun.headingChangeDeg, 0);
+      }
       leftRun.trajectory.forEach((leftPoint, pointIndex) => {
         const rightPoint = rightRun.trajectory[pointIndex]!;
-        assert.ok(Math.abs(leftPoint.x + rightPoint.x) < 1e-12);
-        assert.ok(Math.abs(leftPoint.y - rightPoint.y) < 1e-12);
-        assert.ok(Math.abs(leftPoint.heading + rightPoint.heading) < 1e-12);
+        assert.ok(Math.abs(leftPoint.bodyRollDeg + rightPoint.bodyRollDeg) < 1e-12);
         assert.equal(leftPoint.z, rightPoint.z);
       });
     });
-    assert.equal(
-      analyzeBatch(batch, ['heading_change_deg']).conditions.find((condition) => condition.conditionId === 'condition_left')?.headingChangeDeg,
-      analyzeBatch(batch, ['heading_change_deg']).conditions.find((condition) => condition.conditionId === 'condition_right')?.headingChangeDeg,
-    );
   });
 
   test('invariant: greater bilateral drive is monotonic under paired latent draws', () => {
@@ -368,7 +433,7 @@ describe('FlyLab reduced-order simulation', () => {
     bilateral.replicates.forEach((higherDriveRun, index) => {
       const lowerDriveRun = unilateral.replicates[index]!;
       assert.equal(higherDriveRun.seed, lowerDriveRun.seed);
-      assert.ok(higherDriveRun.responseProbability > lowerDriveRun.responseProbability);
+      assert.ok(higherDriveRun.responseThresholdProbability > lowerDriveRun.responseThresholdProbability);
       assert.ok(Number(higherDriveRun.responseInitiated) >= Number(lowerDriveRun.responseInitiated));
       assert.ok(higherDriveRun.backwardDistanceMm >= lowerDriveRun.backwardDistanceMm);
       assert.ok(higherDriveRun.legRecruitment >= lowerDriveRun.legRecruitment);
@@ -419,6 +484,50 @@ describe('FlyLab reduced-order simulation', () => {
     )));
     assert.ok(responsivePairs.every(([earlyRun, lateRun]) => lateRun.backwardDistanceMm <= earlyRun.backwardDistanceMm));
     assert.ok(responsivePairs.some(([earlyRun, lateRun]) => lateRun.backwardDistanceMm < earlyRun.backwardDistanceMm));
+  });
+
+  test('does not label a threshold crossing at the trial boundary as an initiated body response', () => {
+    const batch = simulateExperiment(makeExperiment({
+      onsetMs: 950,
+      durationMs: 50,
+      trialDurationMs: 1000,
+      replicates: 1,
+      seed: 0,
+    }));
+
+    let censoredCount = 0;
+    for (const run of batch.conditionRuns.flatMap((condition) => condition.replicates)) {
+      assert.equal(run.responseInitiated, false);
+      assert.equal(run.reverseInitiated, false);
+      assert.equal(run.responseDisposition, run.responseThresholdCrossed ? 'censored' : 'not_crossed');
+      assert.equal(run.eventTimeline.responseDisposition, run.responseDisposition);
+      assert.equal(run.eventTimeline.thresholdCrossed, run.responseThresholdCrossed);
+      if (run.responseDisposition === 'censored') {
+        censoredCount += 1;
+        assert.match(run.eventTimeline.boundary, /censored/i);
+        assert.ok(run.candidateResponseLatencyMs !== null);
+        assert.equal(
+          run.eventTimeline.candidateMovementOnsetMs,
+          batch.protocol.onsetMs + run.candidateResponseLatencyMs,
+        );
+        assert.ok(run.eventTimeline.candidateMovementOnsetMs > batch.protocol.trialDurationMs);
+      }
+      assert.equal(run.responseLatencyMs, null);
+      assert.equal(run.signedSpeedMmS, 0);
+      assert.equal(run.backwardDistanceMm, 0);
+      assert.ok(run.trajectory.every((point) => point.state === 'stance' && !point.motorOutputActive));
+    }
+    assert.ok(censoredCount > 0);
+    const analysis = analyzeBatch(batch, ['response_latency_ms']);
+    for (const condition of batch.conditionRuns) {
+      const result = analysis.conditions.find((item) => item.conditionId === condition.conditionId);
+      const thresholdCrossedN = condition.replicates.filter((run) => run.responseThresholdCrossed).length;
+      const expectedCensoredN = condition.replicates.filter((run) => run.responseDisposition === 'censored').length;
+      assert.ok(result);
+      assert.equal(result.thresholdCrossedN, thresholdCrossedN);
+      assert.equal(result.censoredN, expectedCensoredN);
+      assert.equal(result.thresholdCrossingProbability, thresholdCrossedN / condition.replicates.length);
+    }
   });
 
   test('bilateral experiment design includes baseline, sham, primary, and unilateral controls', () => {
@@ -621,6 +730,176 @@ describe('FlyLab embodied leg-and-wing motor maps', () => {
     ...overrides,
   });
 
+  test('publishes the exact Run 5 nominal-control to effective-drive derivation before approval', () => {
+    const experiment = gfExperiment({ activationLevel: 0.75, durationMs: 900, replicates: 8, seed: 91827 });
+    const bilateral = experiment.conditions.find((condition) => condition.id === 'condition_bilateral');
+
+    assert.ok(bilateral);
+    const derivation = deriveConditionMotorDrive(bilateral, experiment);
+    assert.equal(derivation.nominalControlLevel, 0.75);
+    assert.equal(derivation.rawDurationGain, 0.5);
+    assert.equal(derivation.boundedDurationGain, 0.5);
+    assert.equal(derivation.lateralityGain, 1);
+    assert.equal(derivation.adapterAmount, 0.375);
+    assert.equal(derivation.effectiveMotorDrive, 0.375);
+    assert.match(derivation.formula, /0\.75 × clamp\(900 \/ 1800/);
+    assert.deepEqual(
+      snapshotExperimentProtocol(experiment).driveDerivations.find((item) => item.conditionId === bilateral.id),
+      derivation,
+    );
+  });
+
+  test('keeps nonresponding GF runs grounded with zero expressed appendage output despite premotor drive', () => {
+    const batch = simulateExperiment(gfExperiment({ activationLevel: 0.75, durationMs: 900, replicates: 8, seed: 91827 }));
+    const bilateral = batch.conditionRuns.find((condition) => condition.conditionId === 'condition_bilateral');
+    const nonresponders = bilateral?.replicates.filter((run) => !run.responseInitiated) ?? [];
+
+    assert.equal(nonresponders.length, 5);
+    for (const run of nonresponders) {
+      assert.equal(run.premotorDriveIndex, 0.375);
+      assert.equal(run.takeoffSuccess, false);
+      assert.equal(run.verticalDisplacementMm, 0);
+      assert.equal(run.legRecruitment, 0);
+      assert.equal(run.wingRecruitment, 0);
+      assert.equal(run.eventTimeline.movementOnsetMs, null);
+      assert.equal(run.stanceStability, run.trajectory[0]?.stanceStability);
+      assert.ok(run.trajectory.every((point) => (
+        point.state === 'stance'
+        && point.groundContact
+        && !point.motorOutputActive
+        && point.legExtension === 0
+        && point.wingDeployment === 0
+        && point.z === 0
+      )));
+    }
+  });
+
+  test('orders every responsive GF body event and derives all expressed outputs from that state trace', () => {
+    const batch = simulateExperiment(gfExperiment({ activationLevel: 0.75, durationMs: 900, replicates: 8, seed: 91827 }));
+    const responses = batch.conditionRuns.flatMap((condition) => condition.replicates).filter((run) => run.shortModeEscapeInitiated);
+
+    assert.ok(responses.length > 0);
+    for (const run of responses) {
+      const timeline = run.eventTimeline;
+      const { controllerThresholdMs, movementOnsetMs, groundReleaseMs, wingDeploymentMs, recoveryMs } = timeline;
+      assert.ok(controllerThresholdMs !== null);
+      assert.ok(movementOnsetMs !== null);
+      assert.ok(groundReleaseMs !== null);
+      assert.ok(wingDeploymentMs !== null);
+      assert.ok(recoveryMs !== null);
+      assert.ok(controllerThresholdMs <= movementOnsetMs);
+      assert.ok(movementOnsetMs < groundReleaseMs);
+      assert.ok(groundReleaseMs < wingDeploymentMs);
+      assert.ok(wingDeploymentMs < recoveryMs);
+      assert.ok(run.trajectory.filter((point) => point.t < movementOnsetMs).every((point) => (
+        point.x === 0 && point.y === 0 && point.z === 0 && !point.motorOutputActive
+      )));
+      assert.ok(run.trajectory.filter((point) => point.t < groundReleaseMs).every((point) => point.groundContact));
+      assert.ok(run.trajectory.filter((point) => point.state === 'airborne').every((point) => !point.groundContact));
+      assert.equal(run.takeoffSuccess, run.trajectory.some((point) => point.state === 'airborne' && !point.groundContact));
+      assert.equal(run.legRecruitment, Math.max(...run.trajectory.map((point) => point.legExtension)));
+      assert.equal(run.wingRecruitment, Math.max(...run.trajectory.map((point) => point.wingDeployment)));
+      assert.equal(run.verticalDisplacementMm, Math.max(...run.trajectory.map((point) => point.z)));
+    }
+  });
+
+  test('recomputes GF aggregates exactly from per-run state-derived summaries', () => {
+    const batch = simulateExperiment(gfExperiment({ activationLevel: 0.75, durationMs: 900, replicates: 8, seed: 91827 }));
+    const analysis = analyzeBatch(batch, [
+      'short_mode_escape_probability',
+      'response_latency_ms',
+      'vertical_displacement_mm',
+      'wing_recruitment',
+      'leg_recruitment',
+    ]);
+    const mean = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
+
+    for (const condition of batch.conditionRuns) {
+      const result = analysis.conditions.find((candidate) => candidate.conditionId === condition.conditionId);
+      const responsive = condition.replicates.filter((run) => run.responseLatencyMs !== null);
+      assert.ok(result);
+      assert.equal(result.shortModeEscapeProbability, mean(condition.replicates.map((run) => Number(run.takeoffSuccess))));
+      assert.equal(result.verticalDisplacementMm, mean(condition.replicates.map((run) => run.verticalDisplacementMm)));
+      assert.equal(result.wingRecruitment, mean(condition.replicates.map((run) => run.wingRecruitment)));
+      assert.equal(result.legRecruitment, mean(condition.replicates.map((run) => run.legRecruitment)));
+      assert.equal(result.responseLatencyMs, responsive.length ? mean(responsive.map((run) => run.responseLatencyMs!)) : null);
+    }
+  });
+
+  test('adds a SHA-256 content digest that changes when any run trajectory content changes', () => {
+    const batch = simulateExperiment(gfExperiment({ replicates: 2 }));
+    assert.match(batch.runHash, /^fnv1a:/);
+    assert.match(batch.runContentHash, /^sha256:[a-f0-9]{64}$/);
+    assert.equal(
+      computeSimulationRunContentHash(batch.protocol, batch.model, batch.conditionRuns),
+      batch.runContentHash,
+    );
+    const conditionRuns = structuredClone(batch.conditionRuns);
+    conditionRuns[0]!.replicates[0]!.trajectory[0]!.x += 0.000001;
+    const changed = `sha256:${deterministicSha256Hex({
+      protocol: batch.protocol,
+      model: MODEL_MANIFEST,
+      conditionRuns,
+    })}`;
+    assert.notEqual(changed, batch.runContentHash);
+  });
+
+  test('rejects a coherently rehashed batch when duplicated summaries contradict the state trace', () => {
+    const batch = simulateExperiment(gfExperiment({ replicates: 2 }));
+    const inconsistent = structuredClone(batch);
+    inconsistent.conditionRuns[0]!.replicates[0]!.verticalDisplacementMm += 0.25;
+    inconsistent.runContentHash = computeSimulationRunContentHash(
+      inconsistent.protocol,
+      inconsistent.model,
+      inconsistent.conditionRuns,
+    );
+
+    assert.throws(
+      () => analyzeBatch(inconsistent, ['vertical_displacement_mm']),
+      /contradicts its authoritative state trajectory/i,
+    );
+
+    const hiddenStateContradiction = structuredClone(batch);
+    const nonresponder = hiddenStateContradiction.conditionRuns
+      .flatMap((condition) => condition.replicates)
+      .find((run) => run.responseDisposition !== 'expressed');
+    assert.ok(nonresponder);
+    nonresponder.trajectory[1]!.bodyPitchDeg = 3;
+    hiddenStateContradiction.runContentHash = computeSimulationRunContentHash(
+      hiddenStateContradiction.protocol,
+      hiddenStateContradiction.model,
+      hiddenStateContradiction.conditionRuns,
+    );
+    assert.throws(
+      () => analyzeBatch(hiddenStateContradiction, ['vertical_displacement_mm']),
+      /expresses body output before movement|without an expressed response/i,
+    );
+
+    const compatibilityReplayContradiction = structuredClone(batch);
+    compatibilityReplayContradiction.conditionRuns[0]!.trajectory[1]!.x += 0.25;
+    compatibilityReplayContradiction.runContentHash = computeSimulationRunContentHash(
+      compatibilityReplayContradiction.protocol,
+      compatibilityReplayContradiction.model,
+      compatibilityReplayContradiction.conditionRuns,
+    );
+    assert.throws(
+      () => analyzeBatch(compatibilityReplayContradiction, ['vertical_displacement_mm']),
+      /does not exactly reproduce from its protocol, seed policy, and versioned generator/i,
+    );
+  });
+
+  test('binds analysis identity to the exact SHA-256 batch content digest', () => {
+    const batch = simulateExperiment(gfExperiment({ replicates: 2 }));
+    const first = analyzeBatch(batch, ['vertical_displacement_mm']);
+    const changed = simulateExperiment(gfExperiment({ replicates: 2, seed: batch.protocol.seed + 1 }));
+    const second = analyzeBatch(changed, ['vertical_displacement_mm']);
+
+    assert.equal(first.batchRunContentHash, batch.runContentHash);
+    assert.equal(second.batchRunContentHash, changed.runContentHash);
+    assert.notEqual(second.batchRunContentHash, first.batchRunContentHash);
+    assert.notEqual(second.id, first.id);
+  });
+
   test('catalogs separate source-backed paths into legs and wings', () => {
     const mdnMap = EMBODIED_MOTOR_MAPS.find((item) => item.circuitId === 'circuit_mdn_adult');
     const gfMap = EMBODIED_MOTOR_MAPS.find((item) => item.circuitId === 'circuit_gf_adult');
@@ -797,7 +1076,8 @@ describe('FlyLab embodied leg-and-wing motor maps', () => {
 
     assert.ok(mdnBaseline?.trajectory.some((point) => point.motorOutputActive && !point.active));
     assert.ok(gfBaseline?.trajectory.some((point) => point.motorOutputActive && !point.active));
-    assert.ok((gfBaseline?.trajectory.at(-1)?.z ?? 0) > 0);
+    assert.ok(gfBaseline?.trajectory.some((point) => point.z > 0));
+    assert.equal(gfBaseline?.trajectory.at(-1)?.z, 0);
     assert.ok(gfPrimary?.trajectory.some((point) => point.active));
     assert.ok((gfPrimary?.replicates.reduce((sum, run) => sum + run.wingRecruitment, 0) ?? 0)
       < (gfBaseline?.replicates.reduce((sum, run) => sum + run.wingRecruitment, 0) ?? 0));

@@ -1,8 +1,8 @@
 # Judge testing instructions
 
-FlyLab exposes exactly eight native WebMCP tools on one shared page. The competition workflow leads with the adult Giant Fiber/DNp01 rapid-escape slice and pauses once for a visible human approval that is intentionally absent from the tool surface.
+FlyLab exposes exactly eight native WebMCP tools on one shared page. The competition workflow leads with the adult Giant Fiber/DNp01 rapid-escape slice and pauses once for visible operator approval that is intentionally absent from the tool surface.
 
-Repository contents and automated tests establish the source contract. The tracked [local Chrome 151 report](release-evidence/chrome-151-v24.json) establishes one complete source-bound native-protocol run and exact capture; the [public Chrome 151 report](release-evidence/public-chrome-151-v24.json) repeats the workflow against the live no-login HTTPS deployment. Neither report claims that a ChatGPT Sol/Terra agent performed the run.
+Repository contents and automated tests establish the source contract. The tracked [local Chrome 151 report](release-evidence/chrome-151-v24.json) and [public Chrome 151 report](release-evidence/public-chrome-151-v24.json) establish the native-protocol workflow for the earlier v24/`0.2.0` release and the revisions named inside those reports. They are historical prior-release evidence: neither verifies the current `0.3.0` candidate, and neither claims that a ChatGPT Sol/Terra agent performed the run. Require fresh source-bound local and public reports before treating the current candidate as verified.
 
 ## Start the release candidate
 
@@ -42,7 +42,7 @@ Confirm these eight names:
 7. `compare_fly_trials`
 8. `save_fly_evidence`
 
-`inspect_flylab_state` is the sole read-only tool. Human approval is not a ninth tool.
+`inspect_flylab_state` is the sole read-only tool. Operator approval is not a ninth tool.
 
 ## Expected v3 contracts
 
@@ -52,8 +52,10 @@ Confirm these eight names:
 - `run_fly_simulation` additionally requires the exact `approved_protocol_hash` and a caller-generated `operation_id`.
 - `save_fly_evidence` requires `scope: experiment | mission` and a caller-generated `operation_id`.
 - Completed run/save retries with the same operation ID and logical input return `idempotent_replay: true`, create no artifacts, and do not advance revision. Conflicting reuse fails with `operation_id_input_mismatch`.
-- `analyze_fly_behavior` uses `flylab.behavior-metrics.v4` and returns formal metric definitions, the response-initiation summary definition, and per-run audit rows.
-- `save_fly_evidence` returns the exact `flylab.evidence-export` schema-version-`3` envelope. Its payload format is `flylab.experiment-evidence-bundle.v3` or `flylab.mission-evidence-bundle.v3` according to scope.
+- `analyze_fly_behavior` uses `flylab.behavior-metrics.v5`, verifies the batch's content hash, derives condition summaries from authoritative per-run state trajectories, and returns formal metric definitions, separate response-initiation and threshold/censoring summary definitions, and per-run audit rows.
+- `save_fly_evidence` returns the exact `flylab.evidence-export` schema-version-`3` envelope. Its payload format is `flylab.experiment-evidence-bundle.v3` or `flylab.mission-evidence-bundle.v3` according to scope, and its response exposes media type `application/vnd.flylab.evidence+json` plus the deployed [v3 export JSON Schema](https://flylab-neuroethology.d-lougen.chatgpt.site/schemas/flylab-evidence-export-v3.schema.json).
+
+The current scientific-model identity is `0.3.0`, `state-coherent-mapped-circuit-adapter.v2`, `stateful-open-field-model-scale.v3`, and `flylab.behavior-metrics.v5`. GF state-transition order and approximate event intervals are literature-constrained. Response probabilities, body amplitudes, controller gains, recovery timing, and all MDN dynamics remain hand-authored and unfitted.
 
 The top-level provenance list is only the union summary. The JSON-Pointer manifest is authoritative for individual scientific fields. Operational paths and caller-authored goals, titles, and notes do not inherit scientific provenance.
 
@@ -114,13 +116,18 @@ inspect_flylab_state
 
 Expected output:
 
-- The simulation response carries the exact approval record, complete protocol snapshot, seed policy, run seeds, per-run trajectory seeds/IDs/full trajectories, and separate illustrative condition replays.
-- Each run and trajectory is complete. The illustrative condition replay is explicitly excluded from analysis.
+- The simulation response carries the exact approval record, complete protocol snapshot, seed policy, per-condition drive derivations, run seeds, per-run trajectory seeds/IDs/full state trajectories, and exact body-event timelines.
+- The Three.js arena renders the exact selected seeded run, including state, ground contact, leg/wing expression, and pose. The legacy condition-level `illustrative_condition_replay` is compatibility-only and is explicitly excluded from analysis and the primary visual audit.
+- Each run distinguishes `responseThresholdCrossed`, `responseDisposition` (`not_crossed`, `censored`, or `expressed`), the optional candidate latency, and expressed latency. A censored or non-crossed run remains grounded with zero body output.
+- Expressed trajectories follow explicit branches—MDN `stance → preparation → reverse_walk → recovery`; GF `stance → preparation → jump → wing_deployment → airborne → recovery`—and include exact protocol/body-event samples.
+- `runHash` is the legacy FNV-1a identity hash over run and trajectory IDs only. `runContentHash` is SHA-256 over the protocol, model manifest, and complete condition runs; analysis returns the same `batchRunContentHash`.
 - The GF analysis contains short-mode escape probability, response latency, vertical displacement, wing recruitment, and leg recruitment.
 - Every metric definition states formula, unit, sign convention, aggregation, null rule, full-trial window semantics, method version, provenance, and interpretation boundary.
+- `response_observation_summary_definition` has ID `response_threshold_and_censoring_summary` and formally declares `thresholdCrossingProbability = thresholdCrossedN / n`, `thresholdCrossedN = count(responseThresholdCrossed=true)`, and `censoredN = count(responseDisposition='censored')`; these full-trial summaries are never null.
+- `thresholdCrossingProbability` is the empirical fraction of realized seeded crossings, not any run's hand-authored generator `responseThresholdProbability`; neither these summaries nor their counts are biological response rates or survival-analysis estimates.
 - `per_run_results` maps each aggregate back to exact runs and trajectory audit fields. No-response latency is JSON `null`, never trial duration.
 - The comparison ranks conditions but returns `execution_authorized: false` for its proposal.
-- A `scope: mission` save returns `flylab.mission-evidence-bundle.v3` with the discovery decision, candidate alternatives, exclusions, coverage gaps, exact selected lineage, approval, formal analysis, and proposal.
+- A `scope: mission` save returns `flylab.mission-evidence-bundle.v3` with the discovery decision, candidate alternatives, exclusions, coverage gaps, exact selected lineage, approval, formal analysis, and proposal. The response links the deployed export schema.
 - The evidence-export hash is described as a payload-change checksum, not a signature or immutability guarantee.
 - A final inspection reports `agent_status: complete`, `state.stage: saved`, `next_tool: null`, and `next_action.kind: complete`.
 

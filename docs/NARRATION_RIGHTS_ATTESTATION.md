@@ -14,7 +14,7 @@ This document is a release gate, not a completed attestation. Do not set `FLYLAB
 
 ## Files covered
 
-This attestation must cover exactly `00.wav` through `14.wav` in `outputs/demo/v24/narration/`. The final build report records the SHA-256 digest of every clip; attach or paste those 15 digests here after the final build:
+This attestation must cover exactly `00.wav` through `14.wav` in `outputs/demo/candidate/narration/`. The final build report records the SHA-256 digest of every clip; attach or paste those 15 digests here after the final build:
 
 **[complete before release]**
 

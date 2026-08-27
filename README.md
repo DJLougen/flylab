@@ -5,9 +5,9 @@
 
 FlyLab is a WebMCP-enabled virtual neuroethology lab for investigating how an adult fruit-fly neural circuit could influence behavior. A person and an agent work in one visible page session while eight native site tools expose the current workflow state, exact next action, approval boundary, formal analysis methods, and evidence lineage.
 
-The competition story leads with the adult Giant Fiber/DNp01 rapid-escape slice: a literature-supported, bilateral short-mode controller with middle-leg jump and wing-depressor output. FlyLab also includes an adult MDN reverse-walking slice. Both use the deterministic **FlyLab mapped-motor model** `0.2.0` and `mapped-circuit-to-body-adapter.v1`; neither executes a connectome, synapses, muscles, aerodynamics, FlyGym, neural dynamics, or a complete fly.
+The competition story leads with the adult Giant Fiber/DNp01 rapid-escape slice: a literature-supported, bilateral short-mode controller with middle-leg jump and wing-depressor output. FlyLab also includes an adult MDN reverse-walking slice. Both use the deterministic **FlyLab mapped-motor model** `0.3.0`, `state-coherent-mapped-circuit-adapter.v2`, and `stateful-open-field-model-scale.v3`; neither executes a connectome, synapses, muscles, aerodynamics, FlyGym, neural dynamics, or a complete fly.
 
-This repository contains the public v24 release and its verification tooling. A [local Chrome 151 report](docs/release-evidence/chrome-151-v24.json) binds the full native-protocol workflow and 15-frame capture to clean source, while a separate [public-deployment report](docs/release-evidence/public-chrome-151-v24.json) repeats the eight-tool workflow against the no-login HTTPS deployment. These are automated WebMCP protocol captures, not ChatGPT agent transcripts; a ChatGPT Sol/Terra run still requires its own retained evidence.
+This repository is preparing the `0.3.0` behavioral-model successor. The retained [local Chrome 151 report](docs/release-evidence/chrome-151-v24.json) and [public-deployment report](docs/release-evidence/public-chrome-151-v24.json) verify the earlier v24/`0.2.0` release only. They are historical automated WebMCP protocol captures, not evidence that the current `0.3.0` source has been deployed or natively invoked and not ChatGPT agent transcripts. The current candidate requires fresh source-bound local and public verification before either claim is made.
 
 ## Competition prompt
 
@@ -22,7 +22,7 @@ inspect_flylab_state
 → find_fly_circuits
 → draft_fly_hypothesis
 → design_stimulation_trial
-→ visible human approval
+→ visible operator approval
 → inspect_flylab_state
 → run_fly_simulation
 → analyze_fly_behavior
@@ -40,9 +40,12 @@ Approval is deliberately absent from the tool inventory. The person reviews and 
 - Same-page mutation guards: every state-changing call must echo the inspected `page_session_id` and `expected_state_revision`.
 - Caller-generated `operation_id` idempotency for simulation and evidence saving. An identical completed retry replays the committed result without another mutation; reusing the ID for different logical input fails closed.
 - A non-tool approval record that binds the experiment to a detached, deeply frozen protocol snapshot and complete seed manifest. The caller must echo its cryptographic `approved_protocol_hash` to run.
-- Common-random-number-paired deterministic trials with recorded policies, run seeds, trajectory seeds, per-run trajectories, separate illustrative condition replays, and stable IDs.
-- `flylab.behavior-metrics.v4` analyses with machine-readable formula, unit, sign, aggregation, null, window, provenance, and boundary fields for every requested metric, plus exact per-run inspection records.
-- Scoped evidence exports: `flylab.experiment-evidence-bundle.v3` for the selected lineage and `flylab.mission-evidence-bundle.v3` for that lineage plus the goal, discovery decision, candidates, exclusions, and coverage gaps. Both travel in a `flylab.evidence-export` schema-version-`3` envelope.
+- Common-random-number-paired deterministic trials with recorded policies, run seeds, trajectory seeds, state-coherent per-run trajectories, exact event timelines, and stable IDs. The Three.js arena replays the selected seeded run; the older `illustrative_condition_replay` is retained only as a compatibility artifact and is excluded from analysis and the primary visual audit.
+- An explicit state model: MDN uses `stance → preparation → reverse_walk → recovery`; GF uses `stance → preparation → jump → wing_deployment → airborne → recovery`. Threshold crossings that cannot express the required body sequence inside the observation window are reported as `censored`, while nonexpressed runs remain grounded with zero body output.
+- `flylab.behavior-metrics.v5` analyses computed from the authoritative per-run state trajectories, with machine-readable formula, unit, sign, aggregation, null, window, provenance, and boundary fields for every requested metric plus exact per-run inspection records.
+- Two declared batch hashes: legacy FNV-1a `runHash` covers run/trajectory identities only; SHA-256 `runContentHash` covers the approved protocol, model manifest, and complete condition-run content used by analysis.
+- Scoped evidence exports: `flylab.experiment-evidence-bundle.v3` for the selected lineage and `flylab.mission-evidence-bundle.v3` for that lineage plus the goal, discovery decision, candidates, exclusions, and coverage gaps. Both travel in a `flylab.evidence-export` schema-version-`3` envelope documented by the deployed [portable export JSON Schema](https://flylab-neuroethology.d-lougen.chatgpt.site/schemas/flylab-evidence-export-v3.schema.json).
+- A declared calibration boundary: GF state-transition order and approximate event intervals are constrained by cited adult escape measurements, but response probabilities, amplitudes, controller gains, recovery timing, and all MDN dynamics remain hand-authored and unfitted.
 - Bounded autoresearch: comparison may propose one follow-up within the visible person-selected budget, but never authorizes or executes it.
 
 ## Quick start
@@ -89,10 +92,10 @@ A wrong session or revision returns non-retryable `STALE_STATE`, publishes no re
 
 ## Immutable approval binding
 
-`design_stimulation_trial` always creates an unapproved protocol. A person reviews the exact visible experiment and clicks the approval control. FlyLab then creates a detached, deeply frozen `flylab.experiment-approval` record containing:
+`design_stimulation_trial` always creates an unapproved protocol. An operator reviews the exact visible experiment and clicks the approval control. FlyLab then creates a detached, deeply frozen `flylab.experiment-approval` record containing:
 
 - the complete protocol snapshot, model version, metric-method version, and seed-policy version;
-- every condition's illustrative trajectory seed;
+- every condition's compatibility-replay seed, retained and committed for deterministic backward compatibility;
 - every replicate's run seed and trajectory seed;
 - SHA-256 commitments at `protocol_hash` and `seed_manifest_hash`.
 
@@ -107,7 +110,7 @@ The approval timestamp is metadata outside the hashes. `run_fly_simulation` requ
 | `draft_fly_hypothesis` | Create a falsifiable, metric-linked claim with compatible causal evidence and limitations. | Remains `agent_hypothesized`. |
 | `design_stimulation_trial` | Create controls, timing, laterality, model settings, seed policy, and conditions. | Writes an unapproved virtual protocol. |
 | `run_fly_simulation` | Execute the current approved protocol and expose exact per-run results and trajectories. | Requires session/revision, approval hash, and operation ID; output is `simulation_predicted`. |
-| `analyze_fly_behavior` | Compute the complete motor-map metric panel and return formal definitions plus per-run audit rows. | Full-trial `flylab.behavior-metrics.v4`; derived from simulation only. |
+| `analyze_fly_behavior` | Compute the complete motor-map metric panel and return formal definitions plus per-run audit rows. | Full-trial `flylab.behavior-metrics.v5`; derived from authoritative state trajectories only. |
 | `compare_fly_trials` | Rank compatible analyses and propose one bounded next experiment. | Proposal is not execution authority. |
 | `save_fly_evidence` | Save an `experiment` or `mission` v3 bundle and return its exact portable envelope. | Requires operation ID; browser-local storage is convenience only. |
 
@@ -127,11 +130,17 @@ When WebMCP is unavailable, `/agent`, `/flylab-agent-manifest.json`, `/flylab-to
 
 ## Metrics, trajectories, and evidence exports
 
-The GF panel is short-mode escape probability, response latency, vertical displacement, wing recruitment, and leg recruitment. The MDN panel is backward distance, signed speed, response latency, heading change, and stance stability. Each analysis returns its complete five-metric panel, formal method definitions, the always-present response-initiation summary definition, and per-run rows linked to run and trajectory IDs.
+The GF panel is short-mode escape probability, response latency, vertical displacement, wing recruitment, and leg recruitment. The MDN panel is backward distance, signed speed, response latency, heading change, and stance stability. Each analysis returns its complete five-metric panel, formal method definitions, separate response-initiation and threshold/censoring summary definitions, and per-run rows linked to run and trajectory IDs.
 
-Every replicate has its own simulation-generated trajectory. The condition-level Three.js replay is a separate `illustrative_condition_replay` and is never used to calculate metric cards. No-response latency is JSON `null`, never trial duration. All distances, speeds, lift, recruitment, and probabilities remain uncalibrated model outputs rather than animal measurements or biological confidence intervals.
+Every replicate has its own simulation-generated state trajectory and exact event timeline. The Three.js arena renders the currently selected run, seed, state, contact state, appendage expression, and pose directly from that trajectory. The legacy condition-level `illustrative_condition_replay` remains in the batch only for compatibility; it is excluded from metric calculation and is not the primary arena replay.
 
-The evidence-export manifest hash detects payload changes; it is not a signature, authorship proof, or immutability guarantee. That checksum is distinct from the immutable in-memory approval snapshot and its protocol/seed-manifest commitments.
+The state vocabulary is `stance`, `preparation`, `reverse_walk`, `jump`, `wing_deployment`, `airborne`, and `recovery`. A stochastic threshold crossing is separate from an expressed response: if the modeled body sequence cannot complete inside the trial window, the run is right-censored and its body remains in stance. No-response and censored latency are JSON `null`, never trial duration. Analysis separately reports threshold crossings, censoring, and expressed initiation.
+
+GF event order and approximate intervals are literature-constrained across distinct direct-GF and light-off paradigms. Response probabilities, body amplitudes, controller gains, recovery timing, and MDN dynamics remain hand-authored and unfitted; model-scale distances and speeds are not animal effect sizes or biological confidence intervals. The legacy FNV-1a `runHash` identifies the run/trajectory ID set only. The SHA-256 `runContentHash` is the content-integrity commitment over the protocol, model manifest, and complete condition runs, and analyses bind that hash.
+
+Portable exports use media type `application/vnd.flylab.evidence+json` and the deployed [v3 evidence-export JSON Schema](https://flylab-neuroethology.d-lougen.chatgpt.site/schemas/flylab-evidence-export-v3.schema.json). The export manifest hash detects payload changes; it is not a signature, authorship proof, or immutability guarantee.
+
+That export checksum is distinct from the immutable in-memory approval snapshot and its protocol/seed-manifest commitments.
 
 ## Scientific provenance
 

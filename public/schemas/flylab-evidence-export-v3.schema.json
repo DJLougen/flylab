@@ -1,0 +1,1132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flylab-neuroethology.d-lougen.chatgpt.site/schemas/flylab-evidence-export-v3.schema.json",
+  "title": "FlyLab deployed evidence export v3",
+  "description": "Schema for portable experiment- and mission-scope evidence exports produced by the deployed FlyLab application. Hash recomputation, lineage closure, pointer resolution, and cross-field equality require semantic verification in addition to this structural schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "schemaVersion", "bundle", "integrity", "payload"],
+  "properties": {
+    "schema": { "const": "flylab.evidence-export" },
+    "schemaVersion": { "const": 3 },
+    "bundle": { "$ref": "#/$defs/bundle" },
+    "integrity": { "$ref": "#/$defs/integrity" },
+    "payload": { "$ref": "#/$defs/payload" }
+  },
+  "oneOf": [
+    {
+      "title": "Experiment-scope export",
+      "properties": {
+        "bundle": { "type": "object", "properties": { "scope": { "const": "experiment" } } },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "format": { "const": "flylab.experiment-evidence-bundle.v3" },
+            "scope": { "const": "experiment" },
+            "mission": { "type": "null" }
+          }
+        }
+      }
+    },
+    {
+      "title": "Mission-scope export",
+      "properties": {
+        "bundle": { "type": "object", "properties": { "scope": { "const": "mission" } } },
+        "payload": {
+          "type": "object",
+          "properties": {
+            "format": { "const": "flylab.mission-evidence-bundle.v3" },
+            "scope": { "const": "mission" },
+            "mission": { "$ref": "#/$defs/mission" }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "nonemptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "idArray": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/nonemptyString" }
+    },
+    "provenanceLabel": {
+      "enum": [
+        "measured",
+        "derived",
+        "connectome_inferred",
+        "simulation_predicted",
+        "agent_hypothesized"
+      ]
+    },
+    "provenanceLabels": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "$ref": "#/$defs/provenanceLabel" }
+    },
+    "annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "note", "author", "trust", "purpose", "boundary"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonemptyString" },
+        "title": { "type": "string" },
+        "note": { "type": "string" },
+        "author": { "const": "caller_input" },
+        "trust": { "const": "untrusted_annotation" },
+        "purpose": { "const": "administrative_annotation_not_evidence" },
+        "boundary": { "$ref": "#/$defs/nonemptyString" }
+      }
+    },
+    "provenanceCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["measured", "derived", "connectome_inferred", "simulation_predicted", "agent_hypothesized"],
+      "properties": {
+        "measured": { "type": "integer", "minimum": 0 },
+        "derived": { "type": "integer", "minimum": 0 },
+        "connectome_inferred": { "type": "integer", "minimum": 0 },
+        "simulation_predicted": { "type": "integer", "minimum": 0 },
+        "agent_hypothesized": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "provenanceIndex": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["measured", "derived", "connectome_inferred", "simulation_predicted", "agent_hypothesized"],
+      "properties": {
+        "measured": { "$ref": "#/$defs/idArray" },
+        "derived": { "$ref": "#/$defs/idArray" },
+        "connectome_inferred": { "$ref": "#/$defs/idArray" },
+        "simulation_predicted": { "$ref": "#/$defs/idArray" },
+        "agent_hypothesized": { "$ref": "#/$defs/idArray" }
+      }
+    },
+    "lineageEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "relation", "to"],
+      "properties": {
+        "from": { "$ref": "#/$defs/nonemptyString" },
+        "relation": { "$ref": "#/$defs/nonemptyString" },
+        "to": { "$ref": "#/$defs/nonemptyString" }
+      }
+    },
+    "bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "scope",
+        "title",
+        "manifestHash",
+        "savedAt",
+        "includedIds",
+        "supportingEvidenceIds",
+        "supportingSourceIds",
+        "contextEvidenceIds",
+        "contextSourceIds",
+        "methodEvidenceIds",
+        "methodSourceIds",
+        "catalogSourceIds",
+        "provenanceCounts",
+        "provenanceIndex",
+        "lineageEdges",
+        "boundary",
+        "provenance",
+        "annotation"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonemptyString" },
+        "scope": { "enum": ["experiment", "mission"] },
+        "title": { "$ref": "#/$defs/nonemptyString" },
+        "manifestHash": { "$ref": "#/$defs/sha256" },
+        "savedAt": { "type": "string", "format": "date-time" },
+        "includedIds": { "$ref": "#/$defs/idArray" },
+        "supportingEvidenceIds": { "$ref": "#/$defs/idArray" },
+        "supportingSourceIds": { "$ref": "#/$defs/idArray" },
+        "contextEvidenceIds": { "$ref": "#/$defs/idArray" },
+        "contextSourceIds": { "$ref": "#/$defs/idArray" },
+        "methodEvidenceIds": { "$ref": "#/$defs/idArray" },
+        "methodSourceIds": { "$ref": "#/$defs/idArray" },
+        "catalogSourceIds": { "$ref": "#/$defs/idArray" },
+        "provenanceCounts": { "$ref": "#/$defs/provenanceCounts" },
+        "provenanceIndex": { "$ref": "#/$defs/provenanceIndex" },
+        "lineageEdges": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/lineageEdge" }
+        },
+        "boundary": { "$ref": "#/$defs/nonemptyString" },
+        "provenance": {
+          "type": "array",
+          "prefixItems": [{ "const": "derived" }],
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "annotation": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/annotation" }
+          ]
+        }
+      }
+    },
+    "integrity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manifestHash", "scope", "serialization", "assurance"],
+      "properties": {
+        "manifestHash": { "$ref": "#/$defs/sha256" },
+        "scope": { "const": "payload" },
+        "serialization": { "const": "JSON.stringify(payload)" },
+        "assurance": { "const": "Checksum for detecting payload changes; not a digital signature or a guarantee of immutability." }
+      }
+    },
+    "provenanceEntry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "artifact_id", "artifact_type", "scope", "labels", "parent_ids", "evidence_ids", "source_ids", "boundary"],
+      "properties": {
+        "path": { "type": "string" },
+        "artifact_id": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/nonemptyString" }
+          ]
+        },
+        "artifact_type": { "$ref": "#/$defs/nonemptyString" },
+        "scope": { "enum": ["artifact", "container", "record"] },
+        "labels": { "$ref": "#/$defs/provenanceLabels" },
+        "parent_ids": { "$ref": "#/$defs/idArray" },
+        "evidence_ids": { "$ref": "#/$defs/idArray" },
+        "source_ids": { "$ref": "#/$defs/idArray" },
+        "boundary": { "$ref": "#/$defs/nonemptyString" }
+      }
+    },
+    "provenanceManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "path_scope", "entries", "operational_paths", "untrusted_annotation_boundary"],
+      "properties": {
+        "schema_version": { "const": "flylab.provenance-manifest.v1" },
+        "path_scope": { "$ref": "#/$defs/nonemptyString" },
+        "entries": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/provenanceEntry" }
+        },
+        "operational_paths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string" }
+        },
+        "untrusted_annotation_boundary": { "$ref": "#/$defs/nonemptyString" }
+      }
+    },
+    "identityRecord": {
+      "type": "object",
+      "required": ["id"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonemptyString" }
+      },
+      "additionalProperties": true
+    },
+    "circuit": {
+      "type": "object",
+      "required": ["id", "evidenceIds", "motorMapId", "provenance"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonemptyString" },
+        "evidenceIds": { "$ref": "#/$defs/idArray" },
+        "motorMapId": { "$ref": "#/$defs/nonemptyString" },
+        "provenance": { "$ref": "#/$defs/provenanceLabels" }
+      },
+      "additionalProperties": true
+    },
+    "hypothesis": {
+      "type": "object",
+      "required": ["id", "circuitId", "evidenceIds", "causalEvidenceIds", "provenance"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonemptyString" },
+        "circuitId": { "$ref": "#/$defs/nonemptyString" },
+        "evidenceIds": { "$ref": "#/$defs/idArray" },
+        "causalEvidenceIds": { "$ref": "#/$defs/idArray" },
+        "provenance": { "$ref": "#/$defs/provenanceLabel" }
+      },
+      "additionalProperties": true
+    },
+    "experiment": {
+      "type": "object",
+      "required": ["id", "hypothesisId", "targetCircuitId", "approved", "conditions", "seed", "seedPolicy", "metricMethodVersion", "model", "motorMap", "provenance"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonemptyString" },
+        "hypothesisId": { "$ref": "#/$defs/nonemptyString" },
+        "targetCircuitId": { "$ref": "#/$defs/nonemptyString" },
+        "approved": { "type": "boolean" },
+        "conditions": { "type": "array", "minItems": 3, "items": { "$ref": "#/$defs/identityRecord" } },
+        "seed": { "type": "integer", "minimum": 0 },
+        "seedPolicy": { "type": "object" },
+        "metricMethodVersion": { "$ref": "#/$defs/nonemptyString" },
+        "model": { "$ref": "#/$defs/model" },
+        "motorMap": { "type": "object" },
+        "provenance": { "$ref": "#/$defs/provenanceLabels" }
+      },
+      "additionalProperties": true
+    },
+    "approval": {
+      "type": "object",
+      "required": ["schema", "schema_version", "experiment_id", "approved_at", "model_version", "metric_method_version", "seed_policy_version", "seed_policy", "protocol", "protocol_hash", "seed_manifest", "seed_manifest_hash"],
+      "properties": {
+        "schema": { "const": "flylab.experiment-approval" },
+        "schema_version": { "const": 1 },
+        "experiment_id": { "$ref": "#/$defs/nonemptyString" },
+        "approved_at": { "type": "string", "format": "date-time" },
+        "model_version": { "$ref": "#/$defs/nonemptyString" },
+        "metric_method_version": { "$ref": "#/$defs/nonemptyString" },
+        "seed_policy_version": { "$ref": "#/$defs/nonemptyString" },
+        "seed_policy": { "type": "object" },
+        "protocol": { "type": "object" },
+        "protocol_hash": { "$ref": "#/$defs/sha256" },
+        "seed_manifest": { "type": "object" },
+        "seed_manifest_hash": { "$ref": "#/$defs/sha256" }
+      },
+      "additionalProperties": true
+    },
+    "motorDriveDerivation": {
+      "type": "object",
+      "required": [
+        "conditionId",
+        "perturbation",
+        "nominalControlLevel",
+        "durationMs",
+        "durationReferenceMs",
+        "rawDurationGain",
+        "boundedDurationGain",
+        "durationGainBounds",
+        "laterality",
+        "lateralityGain",
+        "adapterAmount",
+        "referenceMotorDrive",
+        "suppressionFraction",
+        "effectiveMotorDrive",
+        "formula",
+        "provenance",
+        "boundary"
+      ],
+      "properties": {
+        "conditionId": { "$ref": "#/$defs/nonemptyString" },
+        "perturbation": { "enum": ["activate", "silence"] },
+        "nominalControlLevel": { "type": "number" },
+        "durationMs": { "type": "number", "minimum": 0 },
+        "durationReferenceMs": { "type": "number", "exclusiveMinimum": 0 },
+        "rawDurationGain": { "type": "number", "minimum": 0 },
+        "boundedDurationGain": { "type": "number", "minimum": 0 },
+        "durationGainBounds": {
+          "type": "array",
+          "prefixItems": [{ "type": "number" }, { "type": "number" }],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "laterality": { "enum": ["bilateral", "left", "right", "none"] },
+        "lateralityGain": { "type": "number", "minimum": 0 },
+        "adapterAmount": { "type": "number", "minimum": 0 },
+        "referenceMotorDrive": { "type": "number", "minimum": 0 },
+        "suppressionFraction": { "type": "number", "minimum": 0, "maximum": 1 },
+        "effectiveMotorDrive": { "type": "number", "minimum": 0 },
+        "formula": { "$ref": "#/$defs/nonemptyString" },
+        "provenance": { "const": "agent_hypothesized" },
+        "boundary": { "$ref": "#/$defs/nonemptyString" }
+      },
+      "additionalProperties": true
+    },
+    "nullableEventTime": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "number", "minimum": 0 }
+      ]
+    },
+    "embodiedEventTimeline": {
+      "type": "object",
+      "required": [
+        "responseInitiated",
+        "responseDisposition",
+        "thresholdCrossed",
+        "stimulusOnsetMs",
+        "candidateMovementOnsetMs",
+        "controllerThresholdMs",
+        "movementOnsetMs",
+        "groundReleaseMs",
+        "wingDeploymentMs",
+        "recoveryMs",
+        "sourceConstraint",
+        "provenance",
+        "boundary"
+      ],
+      "properties": {
+        "responseInitiated": { "type": "boolean" },
+        "responseDisposition": { "enum": ["not_crossed", "censored", "expressed"] },
+        "thresholdCrossed": { "type": "boolean" },
+        "stimulusOnsetMs": { "type": "number", "minimum": 0 },
+        "candidateMovementOnsetMs": { "$ref": "#/$defs/nullableEventTime" },
+        "controllerThresholdMs": { "$ref": "#/$defs/nullableEventTime" },
+        "movementOnsetMs": { "$ref": "#/$defs/nullableEventTime" },
+        "groundReleaseMs": { "$ref": "#/$defs/nullableEventTime" },
+        "wingDeploymentMs": { "$ref": "#/$defs/nullableEventTime" },
+        "recoveryMs": { "$ref": "#/$defs/nullableEventTime" },
+        "sourceConstraint": { "$ref": "#/$defs/nonemptyString" },
+        "provenance": {
+          "type": "array",
+          "prefixItems": [{ "const": "simulation_predicted" }],
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "boundary": { "$ref": "#/$defs/nonemptyString" }
+      },
+      "additionalProperties": true
+    },
+    "trajectoryPointV03": {
+      "type": "object",
+      "required": [
+        "t",
+        "x",
+        "y",
+        "z",
+        "heading",
+        "active",
+        "motorOutputActive",
+        "state",
+        "groundContact",
+        "legExtension",
+        "wingDeployment",
+        "bodyPitchDeg",
+        "bodyRollDeg",
+        "premotorDriveIndex",
+        "stanceStability"
+      ],
+      "properties": {
+        "t": { "type": "number", "minimum": 0 },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" },
+        "heading": { "type": "number" },
+        "active": { "type": "boolean" },
+        "motorOutputActive": { "type": "boolean" },
+        "state": { "enum": ["stance", "preparation", "reverse_walk", "jump", "wing_deployment", "airborne", "recovery"] },
+        "groundContact": { "type": "boolean" },
+        "legExtension": { "type": "number", "minimum": 0, "maximum": 1 },
+        "wingDeployment": { "type": "number", "minimum": 0, "maximum": 1 },
+        "bodyPitchDeg": { "type": "number" },
+        "bodyRollDeg": { "type": "number" },
+        "premotorDriveIndex": { "type": "number", "minimum": 0 },
+        "stanceStability": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": true
+    },
+    "replicateResultV03": {
+      "type": "object",
+      "required": [
+        "id",
+        "status",
+        "conditionId",
+        "seed",
+        "effectiveMotorDrive",
+        "driveDerivation",
+        "premotorDriveIndex",
+        "responseThresholdProbability",
+        "responseThresholdCrossed",
+        "responseDisposition",
+        "candidateResponseLatencyMs",
+        "reverseInitiated",
+        "responseInitiated",
+        "shortModeEscapeInitiated",
+        "backwardDistanceMm",
+        "backwardDistanceScale",
+        "signedSpeedMmS",
+        "responseLatencyMs",
+        "headingChangeDeg",
+        "stanceStability",
+        "verticalDisplacementMm",
+        "wingRecruitment",
+        "legRecruitment",
+        "takeoffSuccess",
+        "eventTimeline",
+        "trajectoryId",
+        "trajectorySeed",
+        "trajectoryRole",
+        "trajectory",
+        "provenance"
+      ],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonemptyString" },
+        "status": { "const": "complete" },
+        "conditionId": { "$ref": "#/$defs/nonemptyString" },
+        "seed": { "type": "integer", "minimum": 0 },
+        "effectiveMotorDrive": { "type": "number", "minimum": 0 },
+        "driveDerivation": { "$ref": "#/$defs/motorDriveDerivation" },
+        "premotorDriveIndex": { "type": "number", "minimum": 0 },
+        "responseThresholdProbability": { "type": "number", "minimum": 0, "maximum": 1 },
+        "responseThresholdCrossed": { "type": "boolean" },
+        "responseDisposition": { "enum": ["not_crossed", "censored", "expressed"] },
+        "candidateResponseLatencyMs": { "$ref": "#/$defs/nullableEventTime" },
+        "reverseInitiated": { "type": "boolean" },
+        "responseInitiated": { "type": "boolean" },
+        "shortModeEscapeInitiated": { "type": "boolean" },
+        "backwardDistanceMm": { "type": "number", "minimum": 0 },
+        "backwardDistanceScale": { "type": "number", "minimum": 0 },
+        "signedSpeedMmS": { "type": "number" },
+        "responseLatencyMs": { "$ref": "#/$defs/nullableEventTime" },
+        "headingChangeDeg": { "type": "number" },
+        "stanceStability": { "type": "number", "minimum": 0, "maximum": 1 },
+        "verticalDisplacementMm": { "type": "number", "minimum": 0 },
+        "wingRecruitment": { "type": "number", "minimum": 0, "maximum": 1 },
+        "legRecruitment": { "type": "number", "minimum": 0, "maximum": 1 },
+        "takeoffSuccess": { "type": "boolean" },
+        "eventTimeline": { "$ref": "#/$defs/embodiedEventTimeline" },
+        "trajectoryId": { "$ref": "#/$defs/nonemptyString" },
+        "trajectorySeed": { "type": "integer", "minimum": 0 },
+        "trajectoryRole": { "const": "per_run_simulated_trajectory" },
+        "trajectory": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/trajectoryPointV03" }
+        },
+        "provenance": {
+          "type": "array",
+          "prefixItems": [{ "const": "simulation_predicted" }],
+          "minItems": 1,
+          "maxItems": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "conditionRunV03": {
+      "type": "object",
+      "required": [
+        "conditionId",
+        "label",
+        "laterality",
+        "status",
+        "effectiveMotorDrive",
+        "driveDerivation",
+        "runIds",
+        "replicates",
+        "trajectoryId",
+        "trajectorySeed",
+        "trajectoryStatus",
+        "trajectoryRole",
+        "trajectoryBoundary",
+        "trajectory"
+      ],
+      "properties": {
+        "conditionId": { "$ref": "#/$defs/nonemptyString" },
+        "label": { "$ref": "#/$defs/nonemptyString" },
+        "laterality": { "enum": ["bilateral", "left", "right", "none"] },
+        "status": { "const": "complete" },
+        "effectiveMotorDrive": { "type": "number", "minimum": 0 },
+        "driveDerivation": { "$ref": "#/$defs/motorDriveDerivation" },
+        "runIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/nonemptyString" }
+        },
+        "replicates": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/replicateResultV03" }
+        },
+        "trajectoryId": { "$ref": "#/$defs/nonemptyString" },
+        "trajectorySeed": { "type": "integer", "minimum": 0 },
+        "trajectoryStatus": { "const": "complete" },
+        "trajectoryRole": { "const": "illustrative_condition_replay" },
+        "trajectoryBoundary": { "$ref": "#/$defs/nonemptyString" },
+        "trajectory": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/trajectoryPointV03" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "conditionAnalysisV5": {
+      "type": "object",
+      "required": [
+        "conditionId",
+        "label",
+        "n",
+        "reverseInitiationProbability",
+        "thresholdCrossingProbability",
+        "thresholdCrossedN",
+        "censoredN",
+        "responseInitiationProbability",
+        "shortModeEscapeProbability",
+        "backwardDistanceMm",
+        "signedSpeedMmS",
+        "responseLatencyMs",
+        "responsiveN",
+        "headingChangeDeg",
+        "stanceStability",
+        "verticalDisplacementMm",
+        "wingRecruitment",
+        "legRecruitment"
+      ],
+      "properties": {
+        "conditionId": { "$ref": "#/$defs/nonemptyString" },
+        "label": { "$ref": "#/$defs/nonemptyString" },
+        "n": { "type": "integer", "minimum": 1 },
+        "reverseInitiationProbability": { "type": "number", "minimum": 0, "maximum": 1 },
+        "thresholdCrossingProbability": { "type": "number", "minimum": 0, "maximum": 1 },
+        "thresholdCrossedN": { "type": "integer", "minimum": 0 },
+        "censoredN": { "type": "integer", "minimum": 0 },
+        "responseInitiationProbability": { "type": "number", "minimum": 0, "maximum": 1 },
+        "shortModeEscapeProbability": { "type": "number", "minimum": 0, "maximum": 1 },
+        "backwardDistanceMm": { "type": "number", "minimum": 0 },
+        "signedSpeedMmS": { "type": "number" },
+        "responseLatencyMs": { "$ref": "#/$defs/nullableEventTime" },
+        "responsiveN": { "type": "integer", "minimum": 0 },
+        "headingChangeDeg": { "type": "number", "minimum": 0 },
+        "stanceStability": { "type": "number", "minimum": 0, "maximum": 1 },
+        "verticalDisplacementMm": { "type": "number", "minimum": 0 },
+        "wingRecruitment": { "type": "number", "minimum": 0, "maximum": 1 },
+        "legRecruitment": { "type": "number", "minimum": 0, "maximum": 1 }
+      },
+      "additionalProperties": true
+    },
+    "trialConditionV03": {
+      "type": "object",
+      "required": ["id", "label", "kind", "laterality", "nominalControlLevel", "expectedModelEffect"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonemptyString" },
+        "label": { "$ref": "#/$defs/nonemptyString" },
+        "kind": { "enum": ["baseline", "sham", "perturbation"] },
+        "laterality": { "enum": ["bilateral", "left", "right", "none"] },
+        "nominalControlLevel": { "type": "number" },
+        "expectedModelEffect": {
+          "enum": [
+            "no_retreat_drive",
+            "zero_effect_sham",
+            "reference_retreat_drive",
+            "reference_drive_sham",
+            "activation_increases_retreat_drive",
+            "suppression_reduces_reference_drive",
+            "no_motor_drive",
+            "reference_motor_drive",
+            "activation_increases_motor_drive",
+            "suppression_reduces_reference_motor_drive"
+          ]
+        }
+      },
+      "additionalProperties": true
+    },
+    "seedPolicyV03": {
+      "type": "object",
+      "required": [
+        "version",
+        "generator",
+        "design",
+        "pairingRule",
+        "replicateFormula",
+        "trajectoryFormula",
+        "illustrativeTrajectoryFormula",
+        "replicateStride",
+        "trajectoryOffset",
+        "illustrativeTrajectoryOffset"
+      ],
+      "properties": {
+        "version": { "const": "flylab.seed-policy.v2" },
+        "generator": { "const": "mulberry32" },
+        "design": { "const": "common_random_numbers_by_replicate" },
+        "pairingRule": { "$ref": "#/$defs/nonemptyString" },
+        "replicateFormula": { "$ref": "#/$defs/nonemptyString" },
+        "trajectoryFormula": { "$ref": "#/$defs/nonemptyString" },
+        "illustrativeTrajectoryFormula": { "$ref": "#/$defs/nonemptyString" },
+        "replicateStride": { "type": "integer", "minimum": 1 },
+        "trajectoryOffset": { "type": "integer", "minimum": 1 },
+        "illustrativeTrajectoryOffset": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": true
+    },
+    "protocolV03": {
+      "type": "object",
+      "required": [
+        "experimentId",
+        "hypothesisId",
+        "targetCircuitId",
+        "behavior",
+        "motorMapId",
+        "perturbation",
+        "activationLevel",
+        "primaryLaterality",
+        "onsetMs",
+        "durationMs",
+        "trialDurationMs",
+        "replicates",
+        "seed",
+        "seedPolicy",
+        "metricMethodVersion",
+        "conditions",
+        "driveDerivations",
+        "assumptions"
+      ],
+      "properties": {
+        "experimentId": { "$ref": "#/$defs/nonemptyString" },
+        "hypothesisId": { "$ref": "#/$defs/nonemptyString" },
+        "targetCircuitId": { "$ref": "#/$defs/nonemptyString" },
+        "behavior": { "$ref": "#/$defs/nonemptyString" },
+        "motorMapId": { "$ref": "#/$defs/nonemptyString" },
+        "perturbation": { "enum": ["activate", "silence"] },
+        "activationLevel": { "type": "number" },
+        "primaryLaterality": { "enum": ["bilateral", "left", "right"] },
+        "onsetMs": { "type": "number", "minimum": 0 },
+        "durationMs": { "type": "number", "exclusiveMinimum": 0 },
+        "trialDurationMs": { "type": "number", "exclusiveMinimum": 0 },
+        "replicates": { "type": "integer", "minimum": 1 },
+        "seed": { "type": "integer", "minimum": 0 },
+        "seedPolicy": { "$ref": "#/$defs/seedPolicyV03" },
+        "metricMethodVersion": { "const": "flylab.behavior-metrics.v5" },
+        "conditions": {
+          "type": "array",
+          "minItems": 3,
+          "items": { "$ref": "#/$defs/trialConditionV03" }
+        },
+        "driveDerivations": {
+          "type": "array",
+          "minItems": 3,
+          "items": { "$ref": "#/$defs/motorDriveDerivation" }
+        },
+        "assumptions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/nonemptyString" }
+        }
+      },
+      "additionalProperties": true
+    },
+    "derivedSimulationProvenance": {
+      "type": "array",
+      "prefixItems": [{ "const": "derived" }, { "const": "simulation_predicted" }],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "metricDefinitionV5": {
+      "type": "object",
+      "required": [
+        "id",
+        "label",
+        "formula",
+        "unit",
+        "signConvention",
+        "aggregation",
+        "nullRule",
+        "windowSemantics",
+        "methodVersion",
+        "provenance",
+        "boundary"
+      ],
+      "properties": {
+        "id": {
+          "enum": [
+            "backward_distance_mm",
+            "signed_speed_mm_s",
+            "response_latency_ms",
+            "heading_change_deg",
+            "stance_stability",
+            "short_mode_escape_probability",
+            "vertical_displacement_mm",
+            "wing_recruitment",
+            "leg_recruitment"
+          ]
+        },
+        "label": { "$ref": "#/$defs/nonemptyString" },
+        "formula": { "$ref": "#/$defs/nonemptyString" },
+        "unit": { "$ref": "#/$defs/nonemptyString" },
+        "signConvention": { "$ref": "#/$defs/nonemptyString" },
+        "aggregation": { "$ref": "#/$defs/nonemptyString" },
+        "nullRule": { "$ref": "#/$defs/nonemptyString" },
+        "windowSemantics": { "$ref": "#/$defs/nonemptyString" },
+        "methodVersion": { "const": "flylab.behavior-metrics.v5" },
+        "provenance": { "$ref": "#/$defs/derivedSimulationProvenance" },
+        "boundary": { "$ref": "#/$defs/nonemptyString" }
+      },
+      "additionalProperties": true
+    },
+    "metricDefinitionsV5": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": {
+        "enum": [
+          "backward_distance_mm",
+          "signed_speed_mm_s",
+          "response_latency_ms",
+          "heading_change_deg",
+          "stance_stability",
+          "short_mode_escape_probability",
+          "vertical_displacement_mm",
+          "wing_recruitment",
+          "leg_recruitment"
+        ]
+      },
+      "additionalProperties": { "$ref": "#/$defs/metricDefinitionV5" }
+    },
+    "responseInitiationSummaryDefinitionV5": {
+      "type": "object",
+      "required": [
+        "id",
+        "label",
+        "formula",
+        "unit",
+        "signConvention",
+        "aggregation",
+        "nullRule",
+        "windowSemantics",
+        "methodVersion",
+        "provenance",
+        "boundary"
+      ],
+      "properties": {
+        "id": { "const": "response_initiation_probability" },
+        "label": { "$ref": "#/$defs/nonemptyString" },
+        "formula": { "$ref": "#/$defs/nonemptyString" },
+        "unit": { "$ref": "#/$defs/nonemptyString" },
+        "signConvention": { "$ref": "#/$defs/nonemptyString" },
+        "aggregation": { "$ref": "#/$defs/nonemptyString" },
+        "nullRule": { "$ref": "#/$defs/nonemptyString" },
+        "windowSemantics": { "$ref": "#/$defs/nonemptyString" },
+        "methodVersion": { "const": "flylab.behavior-metrics.v5" },
+        "provenance": { "$ref": "#/$defs/derivedSimulationProvenance" },
+        "boundary": { "$ref": "#/$defs/nonemptyString" }
+      },
+      "additionalProperties": true
+    },
+    "responseObservationFieldDefinitionV5": {
+      "type": "object",
+      "required": ["formula", "unit", "aggregation", "nullRule"],
+      "properties": {
+        "formula": { "$ref": "#/$defs/nonemptyString" },
+        "unit": { "$ref": "#/$defs/nonemptyString" },
+        "aggregation": { "$ref": "#/$defs/nonemptyString" },
+        "nullRule": { "$ref": "#/$defs/nonemptyString" }
+      },
+      "additionalProperties": false
+    },
+    "responseObservationSummaryDefinitionV5": {
+      "type": "object",
+      "required": ["id", "label", "fields", "windowSemantics", "methodVersion", "provenance", "boundary"],
+      "properties": {
+        "id": { "const": "response_threshold_and_censoring_summary" },
+        "label": { "$ref": "#/$defs/nonemptyString" },
+        "fields": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["thresholdCrossingProbability", "thresholdCrossedN", "censoredN"],
+          "properties": {
+            "thresholdCrossingProbability": { "$ref": "#/$defs/responseObservationFieldDefinitionV5" },
+            "thresholdCrossedN": { "$ref": "#/$defs/responseObservationFieldDefinitionV5" },
+            "censoredN": { "$ref": "#/$defs/responseObservationFieldDefinitionV5" }
+          }
+        },
+        "windowSemantics": { "$ref": "#/$defs/nonemptyString" },
+        "methodVersion": { "const": "flylab.behavior-metrics.v5" },
+        "provenance": { "$ref": "#/$defs/derivedSimulationProvenance" },
+        "boundary": { "$ref": "#/$defs/nonemptyString" }
+      },
+      "additionalProperties": true
+    },
+    "batch": {
+      "type": "object",
+      "required": ["id", "experimentId", "status", "conditionRuns", "runHash", "protocol", "model", "provenance"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonemptyString" },
+        "experimentId": { "$ref": "#/$defs/nonemptyString" },
+        "targetCircuitId": { "$ref": "#/$defs/nonemptyString" },
+        "behavior": { "$ref": "#/$defs/nonemptyString" },
+        "motorMap": { "type": "object", "minProperties": 1 },
+        "status": { "const": "complete" },
+        "conditionRuns": { "type": "array", "minItems": 3, "items": { "type": "object" } },
+        "runHash": { "type": "string", "pattern": "^fnv1a:[a-f0-9]+$" },
+        "runHashScope": { "const": "run_and_trajectory_ids_only" },
+        "runHashSerialization": { "const": "FNV-1a(JSON.stringify([{ runId, trajectoryId }]))" },
+        "runContentHash": { "$ref": "#/$defs/sha256" },
+        "runContentHashScope": { "const": "protocol_model_and_complete_condition_runs" },
+        "runContentHashSerialization": { "const": "SHA-256(JSON.stringify({ protocol, model, conditionRuns }))" },
+        "protocol": { "type": "object" },
+        "approval": { "$ref": "#/$defs/approval" },
+        "model": { "$ref": "#/$defs/model" },
+        "provenance": { "$ref": "#/$defs/provenanceLabels" },
+        "boundary": { "$ref": "#/$defs/nonemptyString" }
+      },
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "model": {
+                "type": "object",
+                "properties": { "version": { "const": "0.3.0" } },
+                "required": ["version"]
+              }
+            },
+            "required": ["model"]
+          },
+          "then": {
+            "properties": {
+              "conditionRuns": {
+                "type": "array",
+                "minItems": 3,
+                "items": { "$ref": "#/$defs/conditionRunV03" }
+              },
+              "targetCircuitId": { "$ref": "#/$defs/nonemptyString" },
+              "behavior": { "$ref": "#/$defs/nonemptyString" },
+              "motorMap": { "type": "object", "minProperties": 1 },
+              "protocol": { "$ref": "#/$defs/protocolV03" },
+              "approval": { "$ref": "#/$defs/approval" },
+              "boundary": { "$ref": "#/$defs/nonemptyString" },
+              "runHashScope": { "const": "run_and_trajectory_ids_only" },
+              "runHashSerialization": { "const": "FNV-1a(JSON.stringify([{ runId, trajectoryId }]))" },
+              "runContentHash": { "$ref": "#/$defs/sha256" },
+              "runContentHashScope": { "const": "protocol_model_and_complete_condition_runs" },
+              "runContentHashSerialization": { "const": "SHA-256(JSON.stringify({ protocol, model, conditionRuns }))" }
+            },
+            "required": [
+              "targetCircuitId",
+              "behavior",
+              "motorMap",
+              "protocol",
+              "approval",
+              "boundary",
+              "runHashScope",
+              "runHashSerialization",
+              "runContentHash",
+              "runContentHashScope",
+              "runContentHashSerialization"
+            ]
+          }
+        }
+      ]
+    },
+    "analysis": {
+      "type": "object",
+      "required": ["id", "batchId", "metrics", "metricDefinitions", "responseInitiationSummaryDefinition", "conditions", "windowMs", "methodVersion", "provenance", "warning"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonemptyString" },
+        "batchId": { "$ref": "#/$defs/nonemptyString" },
+        "batchRunContentHash": { "$ref": "#/$defs/sha256" },
+        "metrics": { "$ref": "#/$defs/idArray" },
+        "metricDefinitions": { "type": "object" },
+        "responseInitiationSummaryDefinition": { "type": "object" },
+        "responseObservationSummaryDefinition": { "type": "object" },
+        "conditions": { "type": "array", "minItems": 1, "items": { "type": "object" } },
+        "windowMs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["start", "end"],
+          "properties": {
+            "start": { "type": "number" },
+            "end": { "type": "number" }
+          }
+        },
+        "methodVersion": { "$ref": "#/$defs/nonemptyString" },
+        "provenance": { "$ref": "#/$defs/provenanceLabels" },
+        "warning": { "$ref": "#/$defs/nonemptyString" }
+      },
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "methodVersion": { "const": "flylab.behavior-metrics.v5" } },
+            "required": ["methodVersion"]
+          },
+          "then": {
+            "properties": {
+              "batchRunContentHash": { "$ref": "#/$defs/sha256" },
+              "metrics": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": {
+                  "enum": [
+                    "backward_distance_mm",
+                    "signed_speed_mm_s",
+                    "response_latency_ms",
+                    "heading_change_deg",
+                    "stance_stability",
+                    "short_mode_escape_probability",
+                    "vertical_displacement_mm",
+                    "wing_recruitment",
+                    "leg_recruitment"
+                  ]
+                }
+              },
+              "metricDefinitions": { "$ref": "#/$defs/metricDefinitionsV5" },
+              "responseInitiationSummaryDefinition": { "$ref": "#/$defs/responseInitiationSummaryDefinitionV5" },
+              "responseObservationSummaryDefinition": { "$ref": "#/$defs/responseObservationSummaryDefinitionV5" },
+              "conditions": {
+                "type": "array",
+                "minItems": 1,
+                "items": { "$ref": "#/$defs/conditionAnalysisV5" }
+              }
+            },
+            "required": [
+              "batchRunContentHash",
+              "metricDefinitions",
+              "responseInitiationSummaryDefinition",
+              "responseObservationSummaryDefinition"
+            ]
+          }
+        }
+      ]
+    },
+    "comparison": {
+      "type": "object",
+      "required": ["id", "analysisIds", "objectiveMetric", "objective", "rankedConditions", "proposal", "limitations", "provenance"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonemptyString" },
+        "analysisIds": { "$ref": "#/$defs/idArray" },
+        "objectiveMetric": { "$ref": "#/$defs/nonemptyString" },
+        "objective": { "enum": ["maximize", "minimize"] },
+        "rankedConditions": { "type": "array", "items": { "type": "object" } },
+        "proposal": { "$ref": "#/$defs/identityRecord" },
+        "limitations": { "type": "array", "items": { "type": "string" } },
+        "provenance": { "$ref": "#/$defs/provenanceLabels" }
+      },
+      "additionalProperties": true
+    },
+    "model": {
+      "type": "object",
+      "required": ["name", "version", "controller", "environment", "controllerMapping", "embodimentReference", "parameterization", "boundary"],
+      "properties": {
+        "name": { "$ref": "#/$defs/nonemptyString" },
+        "version": { "$ref": "#/$defs/nonemptyString" },
+        "controller": { "$ref": "#/$defs/nonemptyString" },
+        "environment": { "$ref": "#/$defs/nonemptyString" },
+        "calibrationStatus": { "$ref": "#/$defs/nonemptyString" },
+        "calibrationSummary": { "$ref": "#/$defs/nonemptyString" },
+        "controllerMapping": { "type": "object" },
+        "embodimentReference": { "type": "object" },
+        "parameterization": { "type": "object" },
+        "boundary": { "$ref": "#/$defs/nonemptyString" }
+      },
+      "additionalProperties": true,
+      "allOf": [
+        {
+          "if": {
+            "properties": { "version": { "const": "0.3.0" } },
+            "required": ["version"]
+          },
+          "then": {
+            "properties": {
+              "version": { "const": "0.3.0" },
+              "controller": { "const": "state-coherent-mapped-circuit-adapter.v2" },
+              "environment": { "const": "stateful-open-field-model-scale.v3" },
+              "calibrationStatus": { "const": "literature_constrained_event_order_unfitted_amplitudes" },
+              "calibrationSummary": { "$ref": "#/$defs/nonemptyString" },
+              "parameterization": { "type": "object", "minProperties": 1 },
+              "boundary": { "$ref": "#/$defs/nonemptyString" }
+            },
+            "required": [
+              "version",
+              "controller",
+              "environment",
+              "calibrationStatus",
+              "calibrationSummary",
+              "parameterization",
+              "boundary"
+            ]
+          }
+        }
+      ]
+    },
+    "systemMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "generated_by", "purpose", "boundary"],
+      "properties": {
+        "title": { "$ref": "#/$defs/nonemptyString" },
+        "generated_by": { "const": "flylab" },
+        "purpose": { "const": "display_and_filename_metadata" },
+        "boundary": { "$ref": "#/$defs/nonemptyString" }
+      }
+    },
+    "mission": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["goal", "discoveryDecision", "candidateCircuits", "evidence", "sources", "boundary"],
+      "properties": {
+        "goal": { "type": "string" },
+        "discoveryDecision": { "$ref": "#/$defs/identityRecord" },
+        "candidateCircuits": { "type": "array", "items": { "$ref": "#/$defs/identityRecord" } },
+        "evidence": { "type": "array", "items": { "$ref": "#/$defs/identityRecord" } },
+        "sources": { "type": "array", "items": { "$ref": "#/$defs/identityRecord" } },
+        "boundary": { "$ref": "#/$defs/nonemptyString" }
+      }
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "format",
+        "scope",
+        "mission",
+        "systemMetadata",
+        "annotation",
+        "supportingSources",
+        "supportingEvidence",
+        "contextSources",
+        "contextEvidence",
+        "methodSources",
+        "methodEvidence",
+        "catalogSources",
+        "circuit",
+        "hypothesis",
+        "experiment",
+        "approval",
+        "batch",
+        "analyses",
+        "comparison",
+        "datasets",
+        "model",
+        "provenanceManifest"
+      ],
+      "properties": {
+        "format": { "enum": ["flylab.experiment-evidence-bundle.v3", "flylab.mission-evidence-bundle.v3"] },
+        "scope": { "enum": ["experiment", "mission"] },
+        "mission": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/mission" }
+          ]
+        },
+        "systemMetadata": { "$ref": "#/$defs/systemMetadata" },
+        "annotation": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/annotation" }
+          ]
+        },
+        "supportingSources": { "type": "array", "items": { "$ref": "#/$defs/identityRecord" } },
+        "supportingEvidence": { "type": "array", "items": { "$ref": "#/$defs/identityRecord" } },
+        "contextSources": { "type": "array", "items": { "$ref": "#/$defs/identityRecord" } },
+        "contextEvidence": { "type": "array", "items": { "$ref": "#/$defs/identityRecord" } },
+        "methodSources": { "type": "array", "items": { "$ref": "#/$defs/identityRecord" } },
+        "methodEvidence": { "type": "array", "items": { "$ref": "#/$defs/identityRecord" } },
+        "catalogSources": { "type": "array", "items": { "$ref": "#/$defs/identityRecord" } },
+        "circuit": { "$ref": "#/$defs/circuit" },
+        "hypothesis": { "$ref": "#/$defs/hypothesis" },
+        "experiment": { "$ref": "#/$defs/experiment" },
+        "approval": { "$ref": "#/$defs/approval" },
+        "batch": { "$ref": "#/$defs/batch" },
+        "analyses": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/analysis" } },
+        "comparison": { "$ref": "#/$defs/comparison" },
+        "datasets": { "type": "object" },
+        "model": { "$ref": "#/$defs/model" },
+        "provenanceManifest": { "$ref": "#/$defs/provenanceManifest" }
+      }
+    }
+  }
+}

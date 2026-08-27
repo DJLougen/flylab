@@ -51,7 +51,7 @@ export function generateMetadata(): Metadata {
       default: 'FlyLab — Virtual Neuroethology',
       template: '%s · FlyLab',
     },
-    description: 'An agent-first WebMCP virtual Drosophila lab with typed site tools, reproducible experiments, source-backed circuits, and a visible supervisor audit surface.',
+    description: 'An agent-first WebMCP virtual Drosophila lab with typed site tools, reproducible experiments, source-backed circuits, and a visible operator audit surface.',
     openGraph: {
       type: 'website',
       title: 'FlyLab',

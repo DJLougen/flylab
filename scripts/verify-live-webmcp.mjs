@@ -4,6 +4,8 @@ import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
+import Ajv2020 from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
 
 const defaultUrl = 'https://flylab-neuroethology.d-lougen.chatgpt.site/';
 const competitionHeroPrompt = 'Investigate how the adult fruit-fly brain coordinates leg and wing output during rapid escape. Separate measured findings from connectome inference and simulation assumptions, draft a falsifiable hypothesis, and design a controlled experiment. Stop for my approval, then continue, analyze every metric, compare conditions, and save the complete evidence bundle.';
@@ -33,7 +35,7 @@ const expectedDemoFrameNames = [
   '01-circuit-found.png',
   '02-hypothesis-drafted.png',
   '03-protocol-locked.png',
-  '04-human-approved.png',
+  '04-operator-approved.png',
   'proof-approval-hash-guard.png',
   '05-simulation-replay.png',
   '06-circuit-bilateral-active.png',
@@ -73,6 +75,7 @@ const reportFile = process.env.FLYLAB_REPORT_FILE
   ? resolve(process.env.FLYLAB_REPORT_FILE)
   : null;
 const cleanDemoCapture = process.env.FLYLAB_DEMO_CAPTURE === '1';
+let validateEvidenceExportSchema = null;
 
 function gitOutput(args) {
   const result = spawnSync('git', args, {
@@ -107,7 +110,11 @@ async function captureFileEvidence(filepath) {
 }
 
 async function fetchServedArtifactEvidence(pageUrl) {
-  return Promise.all(['/flylab-agent-manifest.json', '/flylab-tool-contracts.json'].map(async (pathname) => {
+  return Promise.all([
+    '/flylab-agent-manifest.json',
+    '/flylab-tool-contracts.json',
+    '/schemas/flylab-evidence-export-v3.schema.json',
+  ].map(async (pathname) => {
     const url = new URL(pathname, pageUrl).href;
     const response = await fetch(url, { cache: 'no-store' });
     const body = await response.text();
@@ -120,13 +127,19 @@ async function fetchServedArtifactEvidence(pageUrl) {
     if (!response.ok || !parsed) {
       throw new Error(`Served release artifact was unavailable or invalid JSON: ${JSON.stringify({ url, status: response.status })}`);
     }
+    if (pathname === '/schemas/flylab-evidence-export-v3.schema.json') {
+      const ajv = new Ajv2020({ allErrors: true, strict: true });
+      addFormats(ajv);
+      validateEvidenceExportSchema = ajv.compile(parsed);
+    }
     return {
       pathname,
       url,
       status: response.status,
       content_type: response.headers.get('content-type'),
       cache_control: response.headers.get('cache-control'),
-      schema_version: parsed.schema_version ?? null,
+      schema_version: parsed.schema_version ?? parsed.schemaVersion ?? null,
+      schema_id: parsed.$id ?? null,
       bytes: Buffer.byteLength(body),
       sha256: `sha256:${createHash('sha256').update(body).digest('hex')}`,
     };
@@ -897,11 +910,61 @@ async function verifyVisibleAnalysis(analysis, primaryConditionId) {
     || !expectedLabels.every((label) => visible.cards.some((card) => card.label === label))
     || initiationCard?.value !== `${Math.round(primary.responseInitiationProbability * 100)}%`
     || !initiationCard?.detail?.includes(`${primary.responsiveN}/${primary.n}`)
+    || !initiationCard?.detail?.includes(`${primary.thresholdCrossedN}/${primary.n} crossed`)
+    || !initiationCard?.detail?.includes(`${primary.censoredN} censored`)
     || (headingCard && headingCard.value !== `${roundedHeading} °`)
     || (primary.responseLatencyMs === null && responseCard?.value !== 'n/a')) {
     throw new Error(`Visible analysis did not match the returned primary condition: ${JSON.stringify({ visible, primary })}`);
   }
   return visible;
+}
+
+async function verifyVisibleSelectedRunReplay(batch, conditionId) {
+  const condition = batch.conditionRuns.find((item) => item.conditionId === conditionId);
+  const run = condition?.replicates.find((item) => item.responseInitiated)
+    ?? condition?.replicates[0];
+  if (!condition || !run) throw new Error(`No seeded run was available for ${conditionId}.`);
+  await selectCondition(conditionId);
+  const clicked = await sendCommand('Runtime.evaluate', {
+    expression: `(() => {
+      const runId = ${JSON.stringify(run.id)};
+      const row = [...document.querySelectorAll('.per-run-table-wrap tbody tr')]
+        .find((candidate) => candidate.querySelector('code')?.textContent?.trim() === runId);
+      const button = row?.querySelector('.run-replay-action');
+      button?.click();
+      return Boolean(button);
+    })()`,
+    returnByValue: true,
+  });
+  if (clicked?.result?.value !== true) throw new Error(`Could not select exact seeded run ${run.id}.`);
+  await new Promise((resolve) => setTimeout(resolve, 80));
+  const response = await sendCommand('Runtime.evaluate', {
+    expression: `(() => {
+      const selected = document.querySelector('.per-run-table-wrap tbody tr[data-selected-replicate="true"]');
+      return {
+        selected_codes: [...selected?.querySelectorAll('code') ?? []].map((node) => node.textContent?.trim() ?? ''),
+        selected_text: selected?.textContent?.replace(/\\s+/g, ' ').trim() ?? null,
+        arena: document.querySelector('.arena-data')?.textContent?.replace(/\\s+/g, ' ').trim() ?? null,
+        fly_aria: document.querySelector('.fly-3d-agent')?.getAttribute('aria-label') ?? null,
+      };
+    })()`,
+    returnByValue: true,
+  });
+  const visible = response?.result?.value;
+  if (!visible?.selected_codes?.includes(run.id)
+    || !visible.selected_codes.includes(run.trajectoryId)
+    || !visible.selected_text?.includes(`seed ${run.trajectorySeed}`)
+    || !visible.arena?.includes(`seed ${run.seed}`)
+    || !visible.fly_aria?.includes(`run ${run.id}`)
+    || !visible.fly_aria?.includes('selected seeded simulation trace')) {
+    throw new Error(`Visible Three.js replay did not bind to exact run ${run.id}: ${JSON.stringify(visible)}`);
+  }
+  return {
+    run_id: run.id,
+    seed: run.seed,
+    trajectory_id: run.trajectoryId,
+    trajectory_seed: run.trajectorySeed,
+  };
 }
 
 async function verifyConditionTabAnalysisParity(analysis, primaryConditionId) {
@@ -945,7 +1008,7 @@ async function setHumanProposalBudget(tools, budget) {
     })()`,
     returnByValue: true,
   });
-  if (response?.result?.value !== true) throw new Error('The visible human proposal-budget control was unavailable.');
+  if (response?.result?.value !== true) throw new Error('The visible operator proposal-budget control was unavailable.');
   await new Promise((resolve) => setTimeout(resolve, 100));
   const context = await inspectAgentContext(tools);
   if (context.human_controls?.next_trial_budget !== budget) {
@@ -1470,6 +1533,40 @@ function meanNumbers(values) {
   return values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
 }
 
+function summarizeAuthoritativeTrajectory(replicate, takeoffMode) {
+  const trajectory = replicate.trajectory;
+  const first = trajectory[0];
+  const last = trajectory.at(-1);
+  const timeline = replicate.eventTimeline;
+  const movementDurationSeconds = timeline.movementOnsetMs === null || timeline.recoveryMs === null
+    ? 0
+    : Math.max(0, timeline.recoveryMs - timeline.movementOnsetMs) / 1000;
+  const backwardDistanceMm = Math.max(0, ...trajectory.map((point) => -point.y));
+  const planarDistanceMm = first && last ? Math.hypot(last.x - first.x, last.y - first.y) : 0;
+  const signedSpeedMmS = movementDurationSeconds > 0
+    ? takeoffMode
+      ? planarDistanceMm / movementDurationSeconds
+      : backwardDistanceMm > 0 ? -(backwardDistanceMm / movementDurationSeconds) : 0
+    : 0;
+  let stanceArea = 0;
+  for (let index = 1; index < trajectory.length; index += 1) {
+    const previous = trajectory[index - 1];
+    const current = trajectory[index];
+    stanceArea += previous.stanceStability * Math.max(0, current.t - previous.t);
+  }
+  const traceDurationMs = first && last ? Math.max(0, last.t - first.t) : 0;
+  return {
+    backwardDistanceMm,
+    signedSpeedMmS,
+    headingChangeDeg: first && last ? last.heading - first.heading : 0,
+    stanceStability: traceDurationMs > 0 ? stanceArea / traceDurationMs : first?.stanceStability ?? 0,
+    verticalDisplacementMm: Math.max(0, ...trajectory.map((point) => point.z)),
+    wingRecruitment: Math.max(0, ...trajectory.map((point) => point.wingDeployment)),
+    legRecruitment: Math.max(0, ...trajectory.map((point) => point.legExtension)),
+    takeoffSuccess: trajectory.some((point) => point.state === 'airborne' && !point.groundContact),
+  };
+}
+
 function assertApproximatelyEqual(actual, expected, label, tolerance = 1e-9) {
   if (actual === null || expected === null) {
     if (actual !== expected) throw new Error(`${label} null rule diverged: ${JSON.stringify({ actual, expected })}`);
@@ -1485,6 +1582,8 @@ function assertFormalMetricDefinitions(analysisEnvelope) {
   const definitions = analysisEnvelope.data?.metric_definitions;
   const summaryDefinition = analysis?.responseInitiationSummaryDefinition;
   const exportedSummaryDefinition = analysisEnvelope.data?.response_initiation_summary_definition;
+  const observationDefinition = analysis?.responseObservationSummaryDefinition;
+  const exportedObservationDefinition = analysisEnvelope.data?.response_observation_summary_definition;
   const requiredTextFields = [
     'label',
     'formula',
@@ -1501,6 +1600,7 @@ function assertFormalMetricDefinitions(analysisEnvelope) {
     || Array.isArray(definitions)
     || JSON.stringify(definitions) !== JSON.stringify(analysis.metricDefinitions)
     || JSON.stringify(exportedSummaryDefinition) !== JSON.stringify(summaryDefinition)
+    || JSON.stringify(exportedObservationDefinition) !== JSON.stringify(observationDefinition)
     || typeof analysis.methodVersion !== 'string'
     || !analysis.methodVersion.startsWith('flylab.behavior-metrics.v')) {
     throw new Error(`Analysis did not expose one canonical formal metric-definition map: ${JSON.stringify(analysisEnvelope.data)}`);
@@ -1522,6 +1622,27 @@ function assertFormalMetricDefinitions(analysisEnvelope) {
     || analysis.metrics.includes(summaryDefinition.id)) {
     throw new Error(`Response initiation was not a separately declared result summary: ${JSON.stringify(summaryDefinition)}`);
   }
+  if (observationDefinition?.id !== 'response_threshold_and_censoring_summary'
+    || typeof observationDefinition.label !== 'string'
+    || !observationDefinition.label
+    || observationDefinition.methodVersion !== analysis.methodVersion
+    || observationDefinition.provenance?.join(',') !== 'derived,simulation_predicted'
+    || typeof observationDefinition.windowSemantics !== 'string'
+    || !observationDefinition.windowSemantics
+    || typeof observationDefinition.boundary !== 'string'
+    || !/not biological response rates/i.test(observationDefinition.boundary)
+    || !['thresholdCrossingProbability', 'thresholdCrossedN', 'censoredN'].every((field) => (
+      typeof observationDefinition.fields?.[field]?.formula === 'string'
+      && typeof observationDefinition.fields?.[field]?.aggregation === 'string'
+      && typeof observationDefinition.fields?.[field]?.unit === 'string'
+      && typeof observationDefinition.fields?.[field]?.nullRule === 'string'
+      && observationDefinition.fields[field].formula.length > 0
+      && observationDefinition.fields[field].aggregation.length > 0
+      && observationDefinition.fields[field].unit.length > 0
+      && observationDefinition.fields[field].nullRule.length > 0
+    ))) {
+    throw new Error(`Threshold and censoring summaries lacked a formal definition: ${JSON.stringify(observationDefinition)}`);
+  }
   if (typeof analysisEnvelope.data?.unit_boundary !== 'string'
     || !analysisEnvelope.data.unit_boundary
     || !/simulat/i.test(String(analysis.warning))) {
@@ -1531,6 +1652,7 @@ function assertFormalMetricDefinitions(analysisEnvelope) {
     method_version: analysis.methodVersion,
     objective_metric_definitions: analysis.metrics.length,
     response_initiation_summary_separate: true,
+    response_observation_summary_separate: true,
   };
 }
 
@@ -1542,7 +1664,26 @@ function assertPerRunSimulationAndAnalysis(batch, analysis, exportedPerRunResult
     || !batch.conditionRuns.length
     || !Array.isArray(exportedPerRunResults)
     || exportedPerRunResults.length !== batch.conditionRuns.length
-    || protocol?.metricMethodVersion !== analysis.methodVersion
+    || protocol?.metricMethodVersion !== 'flylab.behavior-metrics.v5'
+    || protocol.metricMethodVersion !== analysis.methodVersion
+    || batch.model?.version !== '0.3.0'
+    || batch.model?.controller !== 'state-coherent-mapped-circuit-adapter.v2'
+    || batch.model?.environment !== 'stateful-open-field-model-scale.v3'
+    || batch.model?.calibrationStatus !== 'literature_constrained_event_order_unfitted_amplitudes'
+    || analysis.batchRunContentHash !== batch.runContentHash
+    || batch.runHashScope !== 'run_and_trajectory_ids_only'
+    || !/^fnv1a:[a-f0-9]+$/.test(batch.runHash ?? '')
+    || fnv1aJson(batch.conditionRuns.flatMap((condition) => condition.replicates.map((replicate) => ({
+      runId: replicate.id,
+      trajectoryId: replicate.trajectoryId,
+    })))) !== batch.runHash
+    || batch.runHashSerialization !== 'FNV-1a(JSON.stringify([{ runId, trajectoryId }]))'
+    || batch.runContentHashScope !== 'protocol_model_and_complete_condition_runs'
+    || !/^sha256:[a-f0-9]{64}$/.test(batch.runContentHash ?? '')
+    || batch.runContentHashSerialization !== 'SHA-256(JSON.stringify({ protocol, model, conditionRuns }))'
+    || sha256Json({ protocol, model: batch.model, conditionRuns: batch.conditionRuns }) !== batch.runContentHash
+    || !Array.isArray(protocol?.driveDerivations)
+    || protocol.driveDerivations.length !== protocol.conditions?.length
     || protocol?.seedPolicy?.version !== 'flylab.seed-policy.v2'
     || protocol.seedPolicy.design !== 'common_random_numbers_by_replicate'
     || !Number.isInteger(protocol.replicates)
@@ -1555,8 +1696,10 @@ function assertPerRunSimulationAndAnalysis(batch, analysis, exportedPerRunResult
   const allRunTrajectoryIds = [];
   let totalRuns = 0;
   for (const conditionRun of batch.conditionRuns) {
+    const protocolCondition = protocol.conditions.find((condition) => condition.id === conditionRun.conditionId);
     const exportedCondition = exportedPerRunResults.find((candidate) => candidate.condition_id === conditionRun.conditionId);
-    if (conditionRun.status !== 'complete'
+    if (!protocolCondition
+      || conditionRun.status !== 'complete'
       || conditionRun.trajectoryStatus !== 'complete'
       || conditionRun.trajectoryRole !== 'illustrative_condition_replay'
       || !String(conditionRun.trajectoryBoundary).includes('must not be used')
@@ -1588,7 +1731,8 @@ function assertPerRunSimulationAndAnalysis(batch, analysis, exportedPerRunResult
       trajectorySeedRows[replicateIndex].push(replicate.trajectorySeed);
       const numericFields = [
         'effectiveMotorDrive',
-        'responseProbability',
+        'premotorDriveIndex',
+        'responseThresholdProbability',
         'backwardDistanceMm',
         'backwardDistanceScale',
         'signedSpeedMmS',
@@ -1598,6 +1742,108 @@ function assertPerRunSimulationAndAnalysis(batch, analysis, exportedPerRunResult
         'wingRecruitment',
         'legRecruitment',
       ];
+      const eventTimeline = replicate.eventTimeline;
+      const allowedStates = new Set(['stance', 'preparation', 'reverse_walk', 'jump', 'wing_deployment', 'airborne', 'recovery']);
+      const eventTimes = [
+        protocol.onsetMs,
+        Math.min(protocol.trialDurationMs, protocol.onsetMs + protocol.durationMs),
+        eventTimeline?.controllerThresholdMs,
+        eventTimeline?.movementOnsetMs,
+        eventTimeline?.groundReleaseMs,
+        eventTimeline?.wingDeploymentMs,
+        eventTimeline?.recoveryMs,
+      ].filter((value) => value !== null && value !== undefined);
+      let previousTime = -Infinity;
+      const protocolOffsetMs = Math.min(protocol.trialDurationMs, protocol.onsetMs + protocol.durationMs);
+      const trajectoryFieldsValid = replicate.trajectory.every((point) => {
+        const inProtocolWindow = point.t >= protocol.onsetMs && point.t < protocolOffsetMs;
+        const expectedActive = protocolCondition.kind === 'perturbation' && inProtocolWindow;
+        const valid = (
+        Number.isFinite(point.t)
+        && Number.isFinite(point.x)
+        && Number.isFinite(point.y)
+        && Number.isFinite(point.z)
+        && Number.isFinite(point.heading)
+        && Number.isFinite(point.legExtension)
+        && Number.isFinite(point.wingDeployment)
+        && Number.isFinite(point.bodyPitchDeg)
+        && Number.isFinite(point.bodyRollDeg)
+        && Number.isFinite(point.premotorDriveIndex)
+        && Number.isFinite(point.stanceStability)
+        && typeof point.groundContact === 'boolean'
+        && typeof point.motorOutputActive === 'boolean'
+        && allowedStates.has(point.state)
+        && point.t > previousTime
+        && point.t >= 0
+        && point.t <= protocol.trialDurationMs
+        && point.active === expectedActive
+        && point.premotorDriveIndex === (inProtocolWindow ? replicate.effectiveMotorDrive : 0)
+        );
+        previousTime = point.t;
+        return valid;
+      });
+      const eventPointsPresent = eventTimes.every((eventTime) => replicate.trajectory.some((point) => point.t === eventTime));
+      const nonresponseCoherent = replicate.responseDisposition === 'expressed' || replicate.trajectory.every((point) => (
+        point.state === 'stance'
+        && point.groundContact
+        && !point.motorOutputActive
+        && point.x === 0
+        && point.y === 0
+        && point.z === 0
+        && point.heading === 0
+        && point.legExtension === 0
+        && point.wingDeployment === 0
+        && point.bodyPitchDeg === 0
+        && point.bodyRollDeg === 0
+      ));
+      const takeoffTimelineOrdered = batch.motorMap.responseMode !== 'takeoff' || replicate.responseDisposition !== 'expressed' || (
+        eventTimeline.controllerThresholdMs <= eventTimeline.movementOnsetMs
+        && eventTimeline.movementOnsetMs < eventTimeline.groundReleaseMs
+        && eventTimeline.groundReleaseMs < eventTimeline.wingDeploymentMs
+        && eventTimeline.wingDeploymentMs < eventTimeline.recoveryMs
+        && replicate.trajectory.filter((point) => point.t < eventTimeline.groundReleaseMs).every((point) => point.groundContact)
+        && replicate.trajectory.filter((point) => point.state === 'airborne').every((point) => !point.groundContact)
+      );
+      const reverseTimelineOrdered = batch.motorMap.responseMode !== 'reverse' || replicate.responseDisposition !== 'expressed' || (
+        eventTimeline.controllerThresholdMs <= eventTimeline.movementOnsetMs
+        && eventTimeline.movementOnsetMs < eventTimeline.recoveryMs
+        && eventTimeline.groundReleaseMs === null
+        && eventTimeline.wingDeploymentMs === null
+      );
+      const absentTimelineCoherent = replicate.responseDisposition === 'expressed' || [
+        eventTimeline.controllerThresholdMs,
+        eventTimeline.movementOnsetMs,
+        eventTimeline.groundReleaseMs,
+        eventTimeline.wingDeploymentMs,
+        eventTimeline.recoveryMs,
+      ].every((value) => value === null);
+      const preMovementCoherent = replicate.responseDisposition !== 'expressed' || replicate.trajectory
+        .filter((point) => point.t < eventTimeline.movementOnsetMs)
+        .every((point) => (
+          point.x === 0
+          && point.y === 0
+          && point.z === 0
+          && point.heading === 0
+          && point.legExtension === 0
+          && point.wingDeployment === 0
+          && point.bodyPitchDeg === 0
+          && point.bodyRollDeg === 0
+          && !point.motorOutputActive
+        ));
+      const requiredPostMovementMs = batch.motorMap.responseMode === 'takeoff'
+        ? batch.model.parameterization.escapeTakeoff.eventTiming.groundReleaseDelayMs
+          + batch.model.parameterization.escapeTakeoff.eventTiming.wingDelayAfterGroundReleaseMs
+        : 0;
+      const candidateFitsTrial = replicate.candidateResponseLatencyMs !== null
+        && replicate.candidateResponseLatencyMs + requiredPostMovementMs
+          < protocol.trialDurationMs - protocol.onsetMs;
+      const expressedLeg = Math.max(...replicate.trajectory.map((point) => point.legExtension));
+      const expressedWing = Math.max(...replicate.trajectory.map((point) => point.wingDeployment));
+      const expressedLift = Math.max(...replicate.trajectory.map((point) => point.z));
+      const traceSummary = summarizeAuthoritativeTrajectory(replicate, batch.motorMap.responseMode === 'takeoff');
+      const candidateMovementOnset = replicate.candidateResponseLatencyMs === null
+        ? null
+        : protocol.onsetMs + replicate.candidateResponseLatencyMs;
       if (!replicate.id
         || replicate.status !== 'complete'
         || replicate.conditionId !== conditionRun.conditionId
@@ -1611,6 +1857,33 @@ function assertPerRunSimulationAndAnalysis(batch, analysis, exportedPerRunResult
         || typeof replicate.responseInitiated !== 'boolean'
         || typeof replicate.reverseInitiated !== 'boolean'
         || typeof replicate.shortModeEscapeInitiated !== 'boolean'
+        || typeof replicate.responseThresholdCrossed !== 'boolean'
+        || !['not_crossed', 'censored', 'expressed'].includes(replicate.responseDisposition)
+        || replicate.responseDisposition !== (replicate.responseThresholdCrossed ? replicate.responseInitiated ? 'expressed' : 'censored' : 'not_crossed')
+        || replicate.eventTimeline?.responseDisposition !== replicate.responseDisposition
+        || replicate.eventTimeline?.thresholdCrossed !== replicate.responseThresholdCrossed
+        || replicate.eventTimeline?.stimulusOnsetMs !== protocol.onsetMs
+        || replicate.eventTimeline?.candidateMovementOnsetMs !== candidateMovementOnset
+        || !replicate.driveDerivation
+        || replicate.driveDerivation.effectiveMotorDrive !== replicate.effectiveMotorDrive
+        || replicate.premotorDriveIndex !== replicate.effectiveMotorDrive
+        || !trajectoryFieldsValid
+        || !eventPointsPresent
+        || !nonresponseCoherent
+        || !takeoffTimelineOrdered
+        || !reverseTimelineOrdered
+        || !absentTimelineCoherent
+        || !preMovementCoherent
+        || replicate.legRecruitment !== expressedLeg
+        || replicate.wingRecruitment !== expressedWing
+        || replicate.verticalDisplacementMm !== expressedLift
+        || Math.abs(replicate.backwardDistanceMm - traceSummary.backwardDistanceMm) > 1e-9
+        || Math.abs(replicate.signedSpeedMmS - traceSummary.signedSpeedMmS) > 1e-9
+        || Math.abs(replicate.headingChangeDeg - traceSummary.headingChangeDeg) > 1e-9
+        || Math.abs(replicate.stanceStability - traceSummary.stanceStability) > 1e-9
+        || replicate.takeoffSuccess !== replicate.trajectory.some((point) => point.state === 'airborne' && !point.groundContact)
+        || replicate.trajectory[0]?.t !== 0
+        || replicate.trajectory.at(-1)?.t !== protocol.trialDurationMs
         || !exportedRun
         || exportedRun.conditionId !== replicate.conditionId
         || exportedRun.seed !== replicate.seed
@@ -1620,9 +1893,14 @@ function assertPerRunSimulationAndAnalysis(batch, analysis, exportedPerRunResult
         || JSON.stringify(exportedRun) !== JSON.stringify(expectedExportedRun)
         || (replicate.responseInitiated !== (replicate.reverseInitiated || replicate.shortModeEscapeInitiated))
         || (replicate.responseInitiated !== (replicate.responseLatencyMs !== null))
+        || replicate.responseInitiated !== candidateFitsTrial
+        || (replicate.responseThresholdCrossed !== (replicate.candidateResponseLatencyMs !== null))
         || (replicate.backwardDistanceMm > 0 && (!replicate.reverseInitiated || replicate.signedSpeedMmS >= 0))
         || (replicate.verticalDisplacementMm > 0 && !replicate.shortModeEscapeInitiated)
         || (replicate.responseLatencyMs !== null && !Number.isFinite(replicate.responseLatencyMs))
+        || (replicate.candidateResponseLatencyMs !== null && !Number.isFinite(replicate.candidateResponseLatencyMs))
+        || replicate.responseThresholdProbability < 0
+        || replicate.responseThresholdProbability > 1
         || numericFields.some((field) => !Number.isFinite(replicate[field]))) {
         throw new Error(`Per-run record ${replicate?.id} was incomplete: ${JSON.stringify(replicate)}`);
       }
@@ -1648,23 +1926,32 @@ function assertPerRunSimulationAndAnalysis(batch, analysis, exportedPerRunResult
       throw new Error(`Analysis condition ${condition.conditionId} did not close over its per-run records.`);
     }
     const responsive = run.replicates.filter((replicate) => replicate.responseInitiated && replicate.responseLatencyMs !== null);
+    const traceDerived = run.replicates.map((replicate) => ({
+      replicate,
+      summary: summarizeAuthoritativeTrajectory(replicate, batch.motorMap.responseMode === 'takeoff'),
+    }));
     const speedContributors = batch.motorMap.responseMode === 'takeoff'
-      ? run.replicates
-      : run.replicates.filter((replicate) => replicate.backwardDistanceMm > 0);
+      ? traceDerived
+      : traceDerived.filter((item) => item.summary.backwardDistanceMm > 0);
+    const thresholdCrossedN = run.replicates.filter((replicate) => replicate.responseThresholdCrossed).length;
+    const censoredN = run.replicates.filter((replicate) => replicate.responseDisposition === 'censored').length;
     const expectedValues = {
       reverseInitiationProbability: meanNumbers(run.replicates.map((replicate) => replicate.reverseInitiated ? 1 : 0)),
+      thresholdCrossingProbability: meanNumbers(run.replicates.map((replicate) => replicate.responseThresholdCrossed ? 1 : 0)),
       responseInitiationProbability: meanNumbers(run.replicates.map((replicate) => replicate.responseInitiated ? 1 : 0)),
-      shortModeEscapeProbability: meanNumbers(run.replicates.map((replicate) => replicate.shortModeEscapeInitiated ? 1 : 0)),
-      backwardDistanceMm: meanNumbers(run.replicates.map((replicate) => replicate.backwardDistanceMm)),
-      signedSpeedMmS: speedContributors.length ? meanNumbers(speedContributors.map((replicate) => replicate.signedSpeedMmS)) : 0,
+      shortModeEscapeProbability: meanNumbers(traceDerived.map((item) => item.summary.takeoffSuccess ? 1 : 0)),
+      backwardDistanceMm: meanNumbers(traceDerived.map((item) => item.summary.backwardDistanceMm)),
+      signedSpeedMmS: speedContributors.length ? meanNumbers(speedContributors.map((item) => item.summary.signedSpeedMmS)) : 0,
       responseLatencyMs: responsive.length ? meanNumbers(responsive.map((replicate) => replicate.responseLatencyMs)) : null,
-      headingChangeDeg: Math.abs(meanNumbers(run.replicates.map((replicate) => replicate.headingChangeDeg))),
-      stanceStability: meanNumbers(run.replicates.map((replicate) => replicate.stanceStability)),
-      verticalDisplacementMm: meanNumbers(run.replicates.map((replicate) => replicate.verticalDisplacementMm)),
-      wingRecruitment: meanNumbers(run.replicates.map((replicate) => replicate.wingRecruitment)),
-      legRecruitment: meanNumbers(run.replicates.map((replicate) => replicate.legRecruitment)),
+      headingChangeDeg: Math.abs(meanNumbers(traceDerived.map((item) => item.summary.headingChangeDeg))),
+      stanceStability: meanNumbers(traceDerived.map((item) => item.summary.stanceStability)),
+      verticalDisplacementMm: meanNumbers(traceDerived.map((item) => item.summary.verticalDisplacementMm)),
+      wingRecruitment: meanNumbers(traceDerived.map((item) => item.summary.wingRecruitment)),
+      legRecruitment: meanNumbers(traceDerived.map((item) => item.summary.legRecruitment)),
     };
-    if (condition.responsiveN !== responsive.length) {
+    if (condition.responsiveN !== responsive.length
+      || condition.thresholdCrossedN !== thresholdCrossedN
+      || condition.censoredN !== censoredN) {
       throw new Error(`Analysis responsive_n diverged for ${condition.conditionId}.`);
     }
     for (const [field, expectedValue] of Object.entries(expectedValues)) {
@@ -1675,12 +1962,24 @@ function assertPerRunSimulationAndAnalysis(batch, analysis, exportedPerRunResult
     condition_count: batch.conditionRuns.length,
     per_run_records: totalRuns,
     common_random_number_pairing: true,
+    state_coherent_per_run_traces: true,
+    sha256_content_hash_verified: true,
     illustrative_replay_excluded_from_metrics: true,
   };
 }
 
 function sha256Json(value) {
   return `sha256:${createHash('sha256').update(JSON.stringify(value)).digest('hex')}`;
+}
+
+function fnv1aJson(value) {
+  const text = JSON.stringify(value);
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `fnv1a:${(hash >>> 0).toString(16).padStart(8, '0')}`;
 }
 
 function resolveJsonPointer(root, pointer) {
@@ -1855,6 +2154,7 @@ async function inspectAgentContext(tools) {
   const context = envelope.data?.agent_context;
   const artifactManifest = context?.artifact_manifest;
   const requiredArtifactFields = [
+    'model',
     'discovery_decision',
     'selected_circuit',
     'discovered_evidence',
@@ -1873,6 +2173,11 @@ async function inspectAgentContext(tools) {
     || requiredArtifactFields.some((field) => !(field in artifactManifest))
     || !Array.isArray(artifactManifest.discovered_evidence)
     || !Array.isArray(artifactManifest.analyses)
+    || artifactManifest.model?.version !== '0.3.0'
+    || artifactManifest.model?.controller !== 'state-coherent-mapped-circuit-adapter.v2'
+    || artifactManifest.model?.environment !== 'stateful-open-field-model-scale.v3'
+    || artifactManifest.model?.calibration_status !== 'literature_constrained_event_order_unfitted_amplitudes'
+    || !artifactManifest.model?.parameterization
     || !context.provenance_policy?.definitions
     || provenanceLabels.some((label) => typeof context.provenance_policy.definitions[label] !== 'string')
     || !String(context.provenance_policy?.inheritance ?? '').includes('more specific nested record')
@@ -1882,6 +2187,25 @@ async function inspectAgentContext(tools) {
   }
   if (envelope.provenance_manifest.entries.some((entry) => !entry.path.startsWith('/agent_context/artifact_manifest'))) {
     throw new Error(`Inspector provenance entries escaped artifact_manifest: ${JSON.stringify(envelope.provenance_manifest.entries)}`);
+  }
+  const inspectorEntries = envelope.provenance_manifest.entries;
+  const requiredModelPaths = [
+    '/agent_context/artifact_manifest/model',
+    '/agent_context/artifact_manifest/model/controller_mapping_provenance',
+    '/agent_context/artifact_manifest/model/parameterization',
+    '/agent_context/artifact_manifest/model/parameterization/escapeTakeoff/eventTiming',
+    '/agent_context/artifact_manifest/model/parameterization/escapeTakeoff/eventTiming/recoveryBaseMs',
+    '/agent_context/artifact_manifest/model/parameterization/escapeTakeoff/responseLatency',
+    '/agent_context/artifact_manifest/model/parameterization/escapeTakeoff/responseLatency/inverseDriveGainMs',
+  ];
+  if (requiredModelPaths.some((path) => !inspectorEntries.some((entry) => entry.path === path))) {
+    throw new Error(`Inspector omitted field-addressed provenance for its always-visible model manifest: ${JSON.stringify(inspectorEntries)}`);
+  }
+  const eventTimingEntry = inspectorEntries.find((entry) => entry.path.endsWith('/model/parameterization/escapeTakeoff/eventTiming'));
+  const recoveryEntry = inspectorEntries.find((entry) => entry.path.endsWith('/model/parameterization/escapeTakeoff/eventTiming/recoveryBaseMs'));
+  if (eventTimingEntry?.labels?.join(',') !== 'derived,agent_hypothesized'
+    || recoveryEntry?.labels?.join(',') !== 'agent_hypothesized') {
+    throw new Error(`Inspector promoted derived calibration targets or unfitted recovery constants to measurements: ${JSON.stringify({ eventTimingEntry, recoveryEntry })}`);
   }
   return context;
 }
@@ -1895,7 +2219,19 @@ function assertApprovedProtocolContext(context, experiment) {
     || approval.protocol?.experimentId !== experiment.id
     || approval.protocol?.modelVersion !== approval.model_version
     || approval.protocol?.metricMethodVersion !== approval.metric_method_version
+    || approval.model_version !== '0.3.0'
+    || approval.metric_method_version !== 'flylab.behavior-metrics.v5'
     || approval.protocol?.seedPolicy?.version !== approval.seed_policy_version
+    || !Array.isArray(approval.protocol?.driveDerivations)
+    || approval.protocol.driveDerivations.length !== experiment.conditions.length
+    || new Set(approval.protocol.driveDerivations.map((derivation) => derivation.conditionId)).size !== experiment.conditions.length
+    || approval.protocol.driveDerivations.some((derivation) => (
+      !experiment.conditions.some((condition) => condition.id === derivation.conditionId)
+      || derivation.provenance !== 'agent_hypothesized'
+      || !Number.isFinite(derivation.effectiveMotorDrive)
+      || typeof derivation.formula !== 'string'
+      || !derivation.formula
+    ))
     || JSON.stringify(approval.seed_policy) !== JSON.stringify(experiment.seedPolicy)
     || typeof approval.approved_at !== 'string'
     || Number.isNaN(Date.parse(approval.approved_at))
@@ -1959,7 +2295,7 @@ async function waitForApprovedProtocolContext(tools, experiment) {
     }
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
-  throw new Error(`Inspector did not publish the immutable approval after the visible human action: ${JSON.stringify(context)}`);
+  throw new Error(`Inspector did not publish the immutable approval after the visible operator action: ${JSON.stringify(context)}`);
 }
 
 async function verifyApprovedProtocolHashGuard(tools, experiment, approval) {
@@ -2121,6 +2457,8 @@ function verifySavedEvidenceExport(saved, expected) {
   const evidenceExport = saved.data?.evidence_export;
   const payload = evidenceExport?.payload;
   if (!bundle
+    || saved.data?.export_media_type !== 'application/vnd.flylab.evidence+json'
+    || saved.data?.export_schema_url !== 'https://flylab-neuroethology.d-lougen.chatgpt.site/schemas/flylab-evidence-export-v3.schema.json'
     || evidenceExport?.schema !== 'flylab.evidence-export'
     || evidenceExport?.schemaVersion !== 3
     || evidenceExport?.integrity?.scope !== 'payload'
@@ -2128,6 +2466,13 @@ function verifySavedEvidenceExport(saved, expected) {
     || !payload
     || JSON.stringify(evidenceExport.bundle) !== JSON.stringify(bundle)) {
     throw new Error(`save_fly_evidence did not expose the exact v3 evidence export: ${JSON.stringify(saved.data)}`);
+  }
+  if (typeof validateEvidenceExportSchema !== 'function') {
+    throw new Error('The served evidence-export JSON Schema was not loaded before validating a saved bundle.');
+  }
+  const schemaValid = validateEvidenceExportSchema(evidenceExport);
+  if (!schemaValid) {
+    throw new Error(`Saved evidence did not validate against the served export schema: ${JSON.stringify(validateEvidenceExportSchema.errors)}`);
   }
   if (!['experiment', 'mission'].includes(bundle.scope)
     || payload.scope !== bundle.scope
@@ -2245,6 +2590,24 @@ function verifySavedEvidenceExport(saved, expected) {
       || payload.approval?.seed_manifest_hash !== expected.approval.seed_manifest_hash
       || payload.approval?.experiment_id !== expected.experiment.id)) {
     throw new Error(`Evidence export did not preserve the exact immutable approval: ${JSON.stringify({ approval: payload.approval, expected: expected.approval })}`);
+  }
+  if (JSON.stringify(payload.batch?.approval) !== JSON.stringify(payload.approval)
+    || JSON.stringify(payload.batch?.approval) !== JSON.stringify(expected.approval)) {
+    throw new Error(`Evidence export batch approval is not exactly bound to the saved and executed approval: ${JSON.stringify({
+      batchApproval: payload.batch?.approval,
+      payloadApproval: payload.approval,
+      expectedApproval: expected.approval,
+    })}`);
+  }
+  if (payload.batch?.boundary !== payload.batch?.model?.boundary
+    || payload.batch?.boundary !== payload.model?.boundary
+    || payload.batch?.boundary !== expected.batch?.model?.boundary) {
+    throw new Error(`Evidence export batch boundary is not exactly bound to the saved model boundary: ${JSON.stringify({
+      batchBoundary: payload.batch?.boundary,
+      batchModelBoundary: payload.batch?.model?.boundary,
+      payloadModelBoundary: payload.model?.boundary,
+      expectedModelBoundary: expected.batch?.model?.boundary,
+    })}`);
   }
 
   let missionAudit = null;
@@ -2486,7 +2849,7 @@ function verifySavedEvidenceExport(saved, expected) {
   if (expected.approval
     && (!hasEdge(expected.approval.protocol_hash, 'authorizes_exact_experiment', payload.experiment.id)
       || !hasEdge(expected.approval.protocol_hash, 'commits_seed_manifest', expected.approval.seed_manifest_hash))) {
-    throw new Error('Lineage graph omitted the exact human approval and seed-manifest commitments.');
+    throw new Error('Lineage graph omitted the exact operator-authorization and seed-manifest commitments.');
   }
   if (bundle.scope === 'mission') {
     const decision = payload.mission.discoveryDecision;
@@ -2509,6 +2872,9 @@ function verifySavedEvidenceExport(saved, expected) {
   return {
     schema: evidenceExport.schema,
     schema_version: evidenceExport.schemaVersion,
+    schema_url: saved.data.export_schema_url,
+    media_type: saved.data.export_media_type,
+    served_schema_valid: true,
     manifest_hash: computedManifestHash,
     evidence_records: groups.reduce((count, group) => count + group.evidence.length, 0),
     source_records: uniqueSortedStrings([
@@ -2550,7 +2916,7 @@ async function verifyCompletedLineageIdempotency(tools, inputs, savedBundle) {
       throw new Error(`${toolName} regressed a completed lineage: ${JSON.stringify(envelope.data?.next_action)}`);
     }
     if (toolName === 'design_stimulation_trial' && envelope.data.experiment?.approved !== true) {
-      throw new Error(`Idempotent design lost human approval: ${JSON.stringify(envelope.data.experiment)}`);
+      throw new Error(`Idempotent design lost operator approval: ${JSON.stringify(envelope.data.experiment)}`);
     }
     if ((toolName === 'run_fly_simulation' || toolName === 'save_fly_evidence')
       && (envelope.idempotent_replay !== true
@@ -2750,7 +3116,7 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
   const approvedContext = approved.context;
   const approvalRecord = approved.approval;
   const approvalHashGuard = await verifyApprovedProtocolHashGuard(tools, designed.data.experiment, approvalRecord);
-  await captureStage('human-approved', { selector: '.protocol-controls', block: 'start' });
+  await captureStage('operator-approved', { selector: '.protocol-controls', block: 'start' });
 
   const webmcpCancellation = cleanCapture
     ? { skipped_for_clean_demo_capture: true }
@@ -2886,7 +3252,7 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
       'find_fly_circuits',
       'draft_fly_hypothesis',
       'design_stimulation_trial',
-      'human_approval_dom_click',
+      'visible_operator_approval_control_dom_click',
       'run_fly_simulation',
       'analyze_fly_behavior',
       'compare_fly_trials',
@@ -2927,7 +3293,7 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
       abort_sources: [
         'execute callback AbortSignal',
         'Chrome 151 toolcancel compatibility event',
-        'visible human cancel control',
+        'visible operator cancel control',
       ],
       human_control: humanCancellation,
       webmcp_protocol: webmcpCancellation,
@@ -3118,7 +3484,7 @@ async function verifyGfShortModeWorkflow(tools, options = {}) {
   }
   const approved = await waitForApprovedProtocolContext(tools, experiment);
   if (cleanCapture) {
-    await captureStage('human-approved', { selector: '.protocol-controls', block: 'start' });
+    await captureStage('operator-approved', { selector: '.protocol-controls', block: 'start' });
   }
   const approvalHashGuard = await verifyApprovedProtocolHashGuard(tools, experiment, approved.approval);
   if (cleanCapture) {
@@ -3174,10 +3540,25 @@ async function verifyGfShortModeWorkflow(tools, options = {}) {
   const baseline = run.data.conditionRuns.find((condition) => condition.conditionId === 'condition_baseline');
   const sham = run.data.conditionRuns.find((condition) => condition.conditionId === 'condition_sham');
   const primary = run.data.conditionRuns.find((condition) => condition.conditionId === 'condition_bilateral');
+  const baselineResponder = baseline?.replicates.find((replicate) => replicate.responseDisposition === 'expressed');
+  const shamResponder = sham?.replicates.find((replicate) => replicate.responseDisposition === 'expressed');
   if (!baseline?.trajectory.some((point) => point.motorOutputActive && !point.active)
     || !sham?.trajectory.some((point) => point.motorOutputActive && !point.active)
     || !primary?.trajectory.some((point) => point.active)
-    || baseline.trajectory.at(-1)?.z <= 0
+    || !baseline.trajectory.some((point) => point.z > 0)
+    || baseline.trajectory.at(-1)?.z !== 0
+    || !baselineResponder?.trajectory.some((point) => (
+      point.state === 'airborne'
+      && !point.groundContact
+      && point.z > 0
+      && point.wingDeployment > 0
+    ))
+    || !shamResponder?.trajectory.some((point) => (
+      point.state === 'airborne'
+      && !point.groundContact
+      && point.z > 0
+      && point.wingDeployment > 0
+    ))
     || primary.replicates.reduce((sum, replicate) => sum + replicate.wingRecruitment, 0)
       >= baseline.replicates.reduce((sum, replicate) => sum + replicate.wingRecruitment, 0)) {
     throw new Error(`GF silencing replay confused reference motion with perturbation targeting: ${JSON.stringify({ baseline, sham, primary })}`);
@@ -3207,6 +3588,7 @@ async function verifyGfShortModeWorkflow(tools, options = {}) {
   const visibleAnalysis = cleanCapture
     ? await verifyVisibleAnalysis(analysis.data.analysis, 'condition_bilateral')
     : null;
+  const selectedRunReplay = await verifyVisibleSelectedRunReplay(run.data, 'condition_bilateral');
   const conditionTabParity = cleanCapture
     ? await verifyConditionTabAnalysisParity(analysis.data.analysis, 'condition_bilateral')
     : null;
@@ -3332,7 +3714,7 @@ async function verifyGfShortModeWorkflow(tools, options = {}) {
       'draft_silencing_hypothesis',
       'reject_unilateral_design',
       'design_bilateral_protocol',
-      'human_approval_dom_click',
+      'visible_operator_approval_control_dom_click',
       'run_exact_protocol',
       'analyze_short_mode_escape',
       'compare',
@@ -3343,6 +3725,7 @@ async function verifyGfShortModeWorkflow(tools, options = {}) {
     rejected_alternative_circuit_id: 'circuit_mdn_adult',
     visible_protocol_verified: Boolean(visibleProtocol),
     visible_analysis_verified: Boolean(visibleAnalysis),
+    selected_run_replay: selectedRunReplay,
     condition_tab_analysis_parity: conditionTabParity,
     visible_comparison_verified: Boolean(visibleComparison),
     visible_bundle_verified: Boolean(visibleBundle),
@@ -3459,6 +3842,10 @@ try {
     };
   }
   const actualToolNames = registeredTools.tools.map((tool) => tool.name).sort();
+  const servedArtifacts = await fetchServedArtifactEvidence(status.location);
+  if (typeof validateEvidenceExportSchema !== 'function') {
+    throw new Error('Served release artifacts did not provide a compilable evidence-export JSON Schema.');
+  }
   const initialContext = await inspectAgentContext(registeredTools.tools);
   if (initialContext.next_tool !== 'find_fly_circuits'
     || initialContext.agent_status !== 'ready') {
@@ -3579,7 +3966,6 @@ try {
     toolName,
     protocolInvocationLog.filter((entry) => entry.tool_name === toolName && entry.status === 'Completed').length,
   ]));
-  const servedArtifacts = await fetchServedArtifactEvidence(status.location);
   const captureArtifacts = await Promise.all(capturedFrames.map(captureFileEvidence));
 
   const report = {

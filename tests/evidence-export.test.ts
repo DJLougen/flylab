@@ -1,15 +1,54 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, test } from 'node:test';
+import Ajv2020 from 'ajv/dist/2020.js';
+import addFormats from 'ajv-formats';
+import ts from 'typescript';
 
 import {
   EVIDENCE_EXPORT_SCHEMA,
+  EVIDENCE_EXPORT_SCHEMA_URL,
   EVIDENCE_EXPORT_SCHEMA_VERSION,
   createEvidenceExportEnvelope,
   evidenceExportFilename,
   serializeEvidenceExport,
   type EvidenceBundleMetadata,
 } from '../lib/evidence-export.js';
-import { sha256 } from '../lib/flylab.js';
+import { createExperimentApproval } from '../lib/experiment-approval.js';
+import {
+  ANALYSIS_METRICS,
+  analyzeBatch,
+  designExperiment,
+  sha256,
+  simulateExperiment,
+} from '../lib/flylab.js';
+
+function duplicateJsonObjectKeys(sourceText: string): string[] {
+  const source = ts.parseJsonText('flylab-evidence-export-v3.schema.json', sourceText);
+  const duplicates: string[] = [];
+
+  function visit(node: ts.Node, path: string) {
+    if (ts.isObjectLiteralExpression(node)) {
+      const seen = new Set<string>();
+      for (const property of node.properties) {
+        if (!ts.isPropertyAssignment(property)) continue;
+        const key = property.name.getText(source);
+        if (seen.has(key)) duplicates.push(`${path}.${key}`);
+        seen.add(key);
+        visit(property.initializer, `${path}.${key}`);
+      }
+      return;
+    }
+    if (ts.isArrayLiteralExpression(node)) {
+      node.elements.forEach((element, index) => visit(element, `${path}[${index}]`));
+    }
+  }
+
+  const root = source.statements[0];
+  if (root && ts.isExpressionStatement(root)) visit(root.expression, '$');
+  return duplicates;
+}
 
 const provenanceCounts = {
   measured: 2,
@@ -149,5 +188,124 @@ describe('FlyLab portable evidence export', () => {
       'evidence-123-mdn-trial.flylab-evidence.json',
     );
     assert.equal(evidenceExportFilename('***'), 'flylab-evidence.flylab-evidence.json');
+  });
+
+  test('publishes a strict deployed v3 schema that validates the retained Run 5 bundle', async () => {
+    const schemaPath = join(process.cwd(), 'public/schemas/flylab-evidence-export-v3.schema.json');
+    const retainedBundlePath = join(
+      process.cwd(),
+      'docs/release-evidence/evidence_06b9daf2e1c7d6a6404e4f81841549882f41b884018b04d731be0a27c52c5660.flylab-evidence.json',
+    );
+    const schemaText = readFileSync(schemaPath, 'utf8');
+    const schema = JSON.parse(schemaText);
+    const retainedBundle = JSON.parse(readFileSync(retainedBundlePath, 'utf8'));
+    const ajv = new Ajv2020({ allErrors: true, strict: true });
+    addFormats(ajv);
+    const validate = ajv.compile(schema);
+
+    assert.equal(schema.$schema, 'https://json-schema.org/draft/2020-12/schema');
+    assert.equal(schema.$id, EVIDENCE_EXPORT_SCHEMA_URL);
+    assert.deepEqual(duplicateJsonObjectKeys(schemaText), []);
+    assert.equal(validate(retainedBundle), true, JSON.stringify(validate.errors));
+    assert.equal(validate({ ...retainedBundle, schemaVersion: 2 }), false);
+    const missingIntegrity = { ...retainedBundle };
+    delete missingIntegrity.integrity;
+    assert.equal(validate(missingIntegrity), false);
+
+    const experiment = designExperiment({
+      hypothesisId: 'hyp_gf_short_mode_escape',
+      targetCircuitId: 'circuit_gf_adult',
+      behavior: 'short_mode_escape',
+      perturbation: 'activate',
+      laterality: 'bilateral',
+      activationLevel: 0.75,
+      onsetMs: 500,
+      durationMs: 900,
+      trialDurationMs: 3000,
+      replicates: 2,
+      includeBaseline: true,
+      includeShamControl: true,
+      seed: 91827,
+    });
+    const batch = simulateExperiment(experiment);
+    const analysis = analyzeBatch(batch, [...ANALYSIS_METRICS]);
+    const approval = await createExperimentApproval(experiment, '2026-08-27T12:00:00.000Z');
+    const v03WithContentDigest = structuredClone(retainedBundle);
+    v03WithContentDigest.payload.approval = approval;
+    v03WithContentDigest.payload.batch = {
+      ...batch,
+      approval,
+      boundary: batch.model.boundary,
+    };
+    v03WithContentDigest.payload.analyses = [analysis];
+    v03WithContentDigest.payload.model = batch.model;
+    v03WithContentDigest.payload.experiment.model = batch.model;
+    assert.equal(validate(v03WithContentDigest), true, JSON.stringify(validate.errors));
+
+    const v03WithoutContentDigest = structuredClone(v03WithContentDigest);
+    delete v03WithoutContentDigest.payload.batch.runHashScope;
+    delete v03WithoutContentDigest.payload.batch.runHashSerialization;
+    delete v03WithoutContentDigest.payload.batch.runContentHash;
+    delete v03WithoutContentDigest.payload.batch.runContentHashScope;
+    delete v03WithoutContentDigest.payload.batch.runContentHashSerialization;
+    assert.equal(validate(v03WithoutContentDigest), false);
+
+    const v03WithEmptyConditionRuns = structuredClone(v03WithContentDigest);
+    v03WithEmptyConditionRuns.payload.batch.conditionRuns = [{}, {}, {}];
+    assert.equal(validate(v03WithEmptyConditionRuns), false);
+
+    const v03WithoutCompatibilityTrajectory = structuredClone(v03WithContentDigest);
+    delete v03WithoutCompatibilityTrajectory.payload.batch.conditionRuns[0].trajectory;
+    assert.equal(validate(v03WithoutCompatibilityTrajectory), false);
+
+    const v03WithEmptyProtocol = structuredClone(v03WithContentDigest);
+    v03WithEmptyProtocol.payload.batch.protocol = {};
+    assert.equal(validate(v03WithEmptyProtocol), false);
+
+    for (const field of ['targetCircuitId', 'behavior', 'motorMap', 'approval', 'boundary']) {
+      const withoutRequiredBatchField = structuredClone(v03WithContentDigest);
+      delete withoutRequiredBatchField.payload.batch[field];
+      assert.equal(validate(withoutRequiredBatchField), false, `v0.3 batch accepted without ${field}`);
+    }
+
+    for (const field of ['calibrationStatus', 'calibrationSummary']) {
+      const withoutCalibrationField = structuredClone(v03WithContentDigest);
+      delete withoutCalibrationField.payload.model[field];
+      assert.equal(validate(withoutCalibrationField), false, `v0.3 payload model accepted without ${field}`);
+    }
+
+    const v03WithWrongController = structuredClone(v03WithContentDigest);
+    v03WithWrongController.payload.model.controller = 'legacy-controller';
+    assert.equal(validate(v03WithWrongController), false);
+
+    const v03WithWrongEnvironment = structuredClone(v03WithContentDigest);
+    v03WithWrongEnvironment.payload.model.environment = 'legacy-environment';
+    assert.equal(validate(v03WithWrongEnvironment), false);
+
+    const v5WithoutAnalysisDigest = structuredClone(v03WithContentDigest);
+    for (const analysis of v5WithoutAnalysisDigest.payload.analyses) {
+      delete analysis.batchRunContentHash;
+    }
+    assert.equal(validate(v5WithoutAnalysisDigest), false);
+    for (const analysis of v5WithoutAnalysisDigest.payload.analyses) {
+      analysis.batchRunContentHash = v5WithoutAnalysisDigest.payload.batch.runContentHash;
+    }
+    assert.equal(validate(v5WithoutAnalysisDigest), true, JSON.stringify(validate.errors));
+
+    const v5WithEmptyConditions = structuredClone(v03WithContentDigest);
+    v5WithEmptyConditions.payload.analyses[0].conditions = [{}];
+    assert.equal(validate(v5WithEmptyConditions), false);
+
+    const v5WithEmptyMetricDefinitions = structuredClone(v03WithContentDigest);
+    v5WithEmptyMetricDefinitions.payload.analyses[0].metricDefinitions = {};
+    assert.equal(validate(v5WithEmptyMetricDefinitions), false);
+
+    const v5WithEmptyInitiationDefinition = structuredClone(v03WithContentDigest);
+    v5WithEmptyInitiationDefinition.payload.analyses[0].responseInitiationSummaryDefinition = {};
+    assert.equal(validate(v5WithEmptyInitiationDefinition), false);
+
+    const v5WithEmptyObservationDefinition = structuredClone(v03WithContentDigest);
+    v5WithEmptyObservationDefinition.payload.analyses[0].responseObservationSummaryDefinition = {};
+    assert.equal(validate(v5WithEmptyObservationDefinition), false);
   });
 });

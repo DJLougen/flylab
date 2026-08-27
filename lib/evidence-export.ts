@@ -3,6 +3,7 @@ import type { ProvenanceLabel } from './flylab.js';
 export const EVIDENCE_EXPORT_SCHEMA = 'flylab.evidence-export';
 export const EVIDENCE_EXPORT_SCHEMA_VERSION = 3 as const;
 export const EVIDENCE_EXPORT_MEDIA_TYPE = 'application/vnd.flylab.evidence+json';
+export const EVIDENCE_EXPORT_SCHEMA_URL = 'https://flylab-neuroethology.d-lougen.chatgpt.site/schemas/flylab-evidence-export-v3.schema.json';
 
 export type EvidenceBundleScope = 'experiment' | 'mission';
 

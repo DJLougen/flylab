@@ -1,7 +1,7 @@
 {
   "schema_version": "flylab.agent-manifest.v3",
   "name": "FlyLab",
-  "description": "Agent-first WebMCP virtual Drosophila neuroethology lab with a visible supervisor audit surface.",
+  "description": "Agent-first WebMCP virtual Drosophila neuroethology lab with a visible operator audit surface.",
   "site": "https://flylab-neuroethology.d-lougen.chatgpt.site/",
   "source": "https://github.com/DJLougen/flylab",
   "transport": {
@@ -20,6 +20,8 @@
     "browser_documentation_url": "/agent",
     "manifest_url": "/flylab-agent-manifest.json",
     "contract_url": "/flylab-tool-contracts.json",
+    "evidence_export_schema_url": "/schemas/flylab-evidence-export-v3.schema.json",
+    "evidence_export_media_type": "application/vnd.flylab.evidence+json",
     "inline_state_selector": "#flylab-agent-context",
     "inline_runtime_selector": "#flylab-agent-runtime",
     "inline_handoff_selector": "#flylab-agent-handoff",
@@ -32,7 +34,7 @@
     "find_fly_circuits",
     "draft_fly_hypothesis",
     "design_stimulation_trial",
-    "visible_supervisor_approval",
+    "visible_operator_approval",
     "run_fly_simulation",
     "analyze_fly_behavior",
     "compare_fly_trials",
@@ -43,8 +45,8 @@
     { "name": "find_fly_circuits", "effect": "writes_shared_selection", "purpose": "Search source-backed adult circuits by neuron, behavior, or body part and return their typed motor maps." },
     { "name": "draft_fly_hypothesis", "effect": "writes_hypothesis", "purpose": "Create a falsifiable agent_hypothesized claim from eligible evidence." },
     { "name": "design_stimulation_trial", "effect": "writes_protocol", "purpose": "Create controlled conditions, timing, seeds, and model assumptions." },
-    { "name": "run_fly_simulation", "effect": "writes_simulation_batch", "purpose": "Run only the exact protocol hash and seed manifest committed by visible human approval." },
-    { "name": "analyze_fly_behavior", "effect": "writes_analysis", "purpose": "Compute the selected motor map's complete five-metric panel with formal definitions and per-run traceability." },
+    { "name": "run_fly_simulation", "effect": "writes_simulation_batch", "purpose": "Run only the exact protocol hash and seed manifest committed by visible operator approval; return state-coherent seeded traces and content integrity." },
+    { "name": "analyze_fly_behavior", "effect": "writes_analysis", "purpose": "Compute the selected motor map's complete five-metric panel from authoritative per-run state trajectories." },
     { "name": "compare_fly_trials", "effect": "writes_comparison_and_proposal", "purpose": "Rank conditions and propose, but never execute, one bounded follow-up." },
     { "name": "save_fly_evidence", "effect": "writes_evidence_bundle", "purpose": "Commit the exact source-to-result lineage and portable JSON envelope." }
   ],
@@ -74,15 +76,15 @@
       "operational_paths": ["/experiment/approved", "/approval_required", "/agent_status", "/blocked_by", "/agent_actionable", "/human_gate", "/next_action"]
     },
     "run_fly_simulation": {
-      "required_data_fields": ["id", "experimentId", "targetCircuitId", "behavior", "motorMap", "status", "conditionRuns", "runHash", "protocol", "approval", "model", "provenance", "boundary", "next_action"],
+      "required_data_fields": ["id", "experimentId", "targetCircuitId", "behavior", "motorMap", "status", "conditionRuns", "runHash", "runHashScope", "runHashSerialization", "runContentHash", "runContentHashScope", "runContentHashSerialization", "protocol", "approval", "model", "provenance", "boundary", "next_action"],
       "produced_artifacts": ["simulation_batch", "simulation_run", "per_run_trajectory", "illustrative_trajectory", "experiment_approval", "embodied_motor_map"],
       "scientific_paths": ["", "/motorMap", "/conditionRuns", "/protocol", "/approval/protocol", "/approval/seed_manifest", "/model", "/model/controllerMapping", "/boundary"],
       "operational_paths": ["/status", "/approval/approved_at", "/approval/protocol_hash", "/approval/seed_manifest_hash", "/next_action"]
     },
     "analyze_fly_behavior": {
-      "required_data_fields": ["analysis", "metric_definitions", "response_initiation_summary_definition", "per_run_results", "unit_boundary", "next_action"],
+      "required_data_fields": ["analysis", "metric_definitions", "response_initiation_summary_definition", "response_observation_summary_definition", "per_run_results", "unit_boundary", "next_action"],
       "produced_artifacts": ["behavior_analysis", "simulation_run_summary"],
-      "scientific_paths": ["/analysis", "/metric_definitions", "/response_initiation_summary_definition", "/per_run_results", "/unit_boundary"],
+      "scientific_paths": ["/analysis", "/metric_definitions", "/response_initiation_summary_definition", "/response_observation_summary_definition", "/per_run_results", "/unit_boundary"],
       "operational_paths": ["/next_action"]
     },
     "compare_fly_trials": {
@@ -92,14 +94,14 @@
       "operational_paths": ["/execution_authorized", "/next_action"]
     },
     "save_fly_evidence": {
-      "required_data_fields": ["bundle", "evidence_export", "export_media_type", "export_filename", "local_reference", "storage_scope", "next_action"],
+      "required_data_fields": ["bundle", "evidence_export", "export_media_type", "export_schema_url", "export_filename", "local_reference", "storage_scope", "next_action"],
       "produced_artifacts": ["evidence_bundle", "portable_evidence_export"],
       "scientific_paths": ["/bundle", "/evidence_export"],
-      "operational_paths": ["/export_media_type", "/export_filename", "/local_reference", "/storage_scope", "/next_action"]
+      "operational_paths": ["/export_media_type", "/export_schema_url", "/export_filename", "/local_reference", "/storage_scope", "/next_action"]
     }
   },
-  "supervisor_gate": {
-    "name": "visible_supervisor_approval",
+  "operator_gate": {
+    "name": "visible_operator_approval",
     "webmcp_tool": false,
     "blocks": "run_fly_simulation",
     "scope": "webmcp_site_tools",
@@ -142,9 +144,12 @@
   ],
   "scientific_scope": {
     "release_slice": "adult MDN leg-retreat and adult giant-fiber bilateral short-mode escape motor maps",
-    "model_version": "0.2.0",
-    "controller": "mapped-circuit-to-body-adapter.v1",
-    "boundary": "Hand-authored, uncalibrated reduced-order body-controller simulation; not neural dynamics, synapse execution, muscle mechanics, aerodynamics, FlyGym execution, a wet-lab experiment, or biological validation."
+    "model_version": "0.3.0",
+    "controller": "state-coherent-mapped-circuit-adapter.v2",
+    "environment": "stateful-open-field-model-scale.v3",
+    "metric_method": "flylab.behavior-metrics.v5",
+    "calibration_status": "literature_constrained_event_order_unfitted_amplitudes",
+    "boundary": "GF event order and approximate intervals are literature-constrained; probabilities, amplitudes, controller gains, recovery, and MDN dynamics remain hand-authored and unfitted. The model does not execute connectome neurons, neural dynamics, synapses, muscles, aerodynamics, FlyGym, or wet-lab experiments and is not biological validation."
   },
   "license": "Apache-2.0"
 }

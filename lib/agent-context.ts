@@ -114,7 +114,7 @@ export function buildFlyLabAgentContext(snapshot: FlyLabAgentSnapshot) {
     },
     {
       name: 'human_approval',
-      title: 'Supervisor reviews exact protocol',
+      title: 'Operator reviews exact protocol',
       kind: 'human_gate',
       status: hasApproval ? 'complete' : hasExperiment ? 'human_required' : 'blocked',
       boundary: 'Intentionally not a WebMCP tool. Any protocol edit revokes approval and clears downstream work.',
@@ -131,7 +131,7 @@ export function buildFlyLabAgentContext(snapshot: FlyLabAgentSnapshot) {
       title: 'Quantify simulated behavior',
       kind: 'tool',
       status: hasAnalysis ? 'complete' : hasBatch ? 'recommended' : 'blocked',
-      boundary: 'Metrics aggregate simulation-generated per-run summaries; the displayed condition replay is illustrative and separate.',
+      boundary: 'Metrics aggregate summaries derived from complete seeded state trajectories. The arena replays the exact selected run; the separately serialized condition illustration is compatibility-only and excluded from analysis.',
     },
     {
       name: 'compare_fly_trials',
@@ -155,7 +155,7 @@ export function buildFlyLabAgentContext(snapshot: FlyLabAgentSnapshot) {
         name: null,
         callable: false,
         blocked_by: 'run_fly_simulation is still running',
-        reason: 'Wait for completion or use the visible human cancel control.',
+        reason: 'Wait for completion or use the visible operator cancel control.',
         input_refs: {},
       }
     : snapshot.evidenceSaveRunning
@@ -174,7 +174,7 @@ export function buildFlyLabAgentContext(snapshot: FlyLabAgentSnapshot) {
         : !hasExperiment
           ? { kind: 'tool' as const, name: 'design_stimulation_trial', callable: true, blocked_by: null, reason: 'Create visible controls and a reproducible seed manifest.', input_refs: { hypothesis_id: snapshot.hypothesisId, target_circuit_id: snapshot.selectedCircuitId, perturbation: snapshot.hypothesisPerturbation } }
           : !hasApproval
-            ? { kind: 'human_gate' as const, name: null, callable: false, blocked_by: 'human_approval', reason: 'A supervisor must review and approve the exact visible protocol.', input_refs: { experiment_id: snapshot.experimentId } }
+            ? { kind: 'human_gate' as const, name: null, callable: false, blocked_by: 'human_approval', reason: 'The operator must review and authorize the exact visible protocol.', input_refs: { experiment_id: snapshot.experimentId } }
             : !hasBatch
               ? { kind: 'tool' as const, name: 'run_fly_simulation', callable: true, blocked_by: null, reason: 'The exact current experiment is approved for virtual execution.', input_refs: { experiment_id: snapshot.experimentId, approved_protocol_hash: snapshot.approvedProtocolHash } }
               : !hasAnalysis

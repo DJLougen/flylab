@@ -290,39 +290,47 @@ export function FlyArena3D({ point, conditionLabel, timeMs, playing = false, tra
 
       const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
       let reportedReady = false;
-      const animate = (now: number) => {
+      const animate = () => {
         if (disposed) return;
         const current = stateRef.current;
         const active = Boolean(current.point?.active);
         const motorOutputActive = Boolean(current.point?.motorOutputActive);
+        const groundContact = current.point?.groundContact ?? true;
+        const legExtension = THREE.MathUtils.clamp(current.point?.legExtension ?? 0, 0, 1);
+        const wingDeployment = THREE.MathUtils.clamp(current.point?.wingDeployment ?? 0, 0, 1);
         const targetedBodyParts = new Set(current.targetBodyParts);
-        const phase = current.timeMs * 0.009;
-        const animateGait = current.playing && !reducedMotion;
+        const selectionPhase = current.timeMs * 0.009;
+        const selectionPulse = current.playing && !reducedMotion ? Math.sin(selectionPhase) : 0;
         const takeoff = current.motorProgram === 'short_mode_escape';
-        const gait = animateGait ? Math.sin(phase) : 0;
-        const oppositeGait = animateGait ? Math.sin(phase + Math.PI) : 0;
+        const gait = motorOutputActive ? legExtension : 0;
+        const oppositeGait = -gait;
         fly.rotation.y = THREE.MathUtils.degToRad(-(current.point?.heading ?? 4));
-        fly.position.y = 0.02 + Math.min(1.9, (current.point?.z ?? 0) * 0.55) + (animateGait && !takeoff ? Math.sin(now * 0.0045) * 0.024 : 0);
+        fly.rotation.x = THREE.MathUtils.degToRad(current.point?.bodyPitchDeg ?? 0) - 0.07;
+        fly.rotation.z = THREE.MathUtils.degToRad(current.point?.bodyRollDeg ?? 0);
+        fly.position.y = 0.02 + Math.min(1.9, (current.point?.z ?? 0) * 0.55);
         wings.children.forEach((wing, index) => {
           const targeted = targetedBodyParts.has(WING_BODY_PARTS[index]);
-          wing.rotation.z = takeoff && motorOutputActive && targeted && animateGait ? (index === 0 ? -1 : 1) * (0.22 + Math.sin(phase * 2.6) * 0.32) : 0;
+          const modeledWingAngle = wingDeployment * 0.44;
+          wing.rotation.z = takeoff && targeted ? (index === 0 ? -1 : 1) * modeledWingAngle : 0;
         });
         bodyPartMaterials.forEach((material, bodyPart) => {
           const targeted = active && targetedBodyParts.has(bodyPart);
           material.emissive.set(targeted ? bodyPart.includes('wing') ? 0x4f9f91 : 0x4a1e63 : 0x000000);
           material.emissiveIntensity = targeted ? bodyPart.includes('wing') ? 0.8 : 0.45 : 0;
         });
-        antennae.rotation.y = animateGait ? Math.sin(now * 0.0035) * 0.025 : 0;
+        antennae.rotation.y = 0;
         legRoots.forEach((leg, index) => {
           const targeted = targetedBodyParts.has(LEG_BODY_PARTS[index]);
           const tripodA = index === 0 || index === 4 || index === 2;
           const midleg = index === 1 || index === 4;
           leg.rotation.z = takeoff
-            ? motorOutputActive && targeted && midleg ? (index < 3 ? -1 : 1) * 0.34 : 0
+            ? targeted && midleg ? (index < 3 ? -1 : 1) * legExtension * 0.34 : 0
             : motorOutputActive && targeted ? (tripodA ? gait : oppositeGait) * 0.11 : 0;
         });
-        haloMaterial.opacity = active ? 0.72 + Math.sin(now * 0.008) * 0.18 : 0;
-        halo.scale.setScalar(active ? 1 + Math.sin(now * 0.006) * 0.08 : 1);
+        shadowMaterial.opacity = groundContact ? 0.3 : THREE.MathUtils.clamp(0.2 - (current.point?.z ?? 0) * 0.08, 0.04, 0.2);
+        contactShadow.scale.setScalar(groundContact ? 1 : 0.82 + Math.min(0.3, (current.point?.z ?? 0) * 0.08));
+        haloMaterial.opacity = active ? 0.72 + selectionPulse * 0.18 : 0;
+        halo.scale.setScalar(active ? 1 + selectionPulse * 0.08 : 1);
         renderer.render(scene, camera);
         if (!reportedReady) {
           reportedReady = true;
@@ -365,7 +373,7 @@ export function FlyArena3D({ point, conditionLabel, timeMs, playing = false, tra
         top: `calc(50% - ${(point?.y ?? 0) * 95}px)`,
       }}
       role="img"
-      aria-label={`${conditionLabel} Three.js 3D adult fruit-fly model at ${timeMs} milliseconds${active ? `; ${motorProgram.replaceAll('_', ' ')} model target selected for ${targetBodyParts.map((part) => part.replaceAll('_', ' ')).join(', ')}` : ''}. External morphology is schematic; appendage motion is also schematic.`}
+      aria-label={`${conditionLabel} Three.js 3D adult fruit-fly model at ${timeMs} milliseconds; modeled state ${(point?.state ?? 'stance').replaceAll('_', ' ')}; ${point?.groundContact === false ? 'airborne' : 'grounded'}; leg expression ${point?.legExtension ?? 0}; wing expression ${point?.wingDeployment ?? 0}${active ? `; ${motorProgram.replaceAll('_', ' ')} model target selected for ${targetBodyParts.map((part) => part.replaceAll('_', ' ')).join(', ')}` : ''}. External morphology is schematic; appendage pose follows the selected seeded simulation trace.`}
     >
       <div className="fly-3d-canvas" ref={mountRef} aria-hidden="true" />
       {renderState === 'loading' && <span className="fly-3d-load">Loading 3D fly…</span>}

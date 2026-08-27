@@ -137,9 +137,9 @@ export const EMBODIED_MOTOR_MAPS: EmbodiedMotorMap[] = [
       { id: 'edge_dlm_left_wing', from: 'dlm', to: 'left_wing', relation: 'model_adapter', provenance: 'agent_hypothesized', evidenceIds: ['E-FLYLAB-MODEL-004'], boundary: 'FlyLab maps bilateral muscle recruitment to schematic wing motion; no aerodynamics are executed.' },
       { id: 'edge_dlm_right_wing', from: 'dlm', to: 'right_wing', relation: 'model_adapter', provenance: 'agent_hypothesized', evidenceIds: ['E-FLYLAB-MODEL-004'], boundary: 'FlyLab maps bilateral muscle recruitment to schematic wing motion; no aerodynamics are executed.' },
     ],
-    summary: 'Adult giant fibers route a short-mode escape command through TTMn/TTM jump-leg and PSI/DLMn/DLM wing branches, then into a reduced-order takeoff animation.',
+    summary: 'Adult giant fibers route a short-mode escape command through TTMn/TTM jump-leg and PSI/DLMn/DLM wing branches, then into a reduced-order, state-coherent body replay.',
     evidenceBoundary: 'The functional and pathway literature is source-backed, but FlyLab bundles no GF reconstruction or BANC node IDs. The rendered GF path is an explicitly schematic bilateral literature map; it does not encode the reported ipsilateral jump-muscle versus contralateral DLM laterality.',
-    simulationBoundary: 'Recruitment, timing, and lift are seeded hand-authored model outputs; the simulator does not execute electrical synapses, motor neurons, muscles, aerodynamics, or a connectome.',
+    simulationBoundary: 'In model 0.3, GF body-event order and approximate millisecond intervals are literature-constrained calibration targets; response probability, body amplitudes, adapter gains, lift, and recovery remain seeded, hand-authored, and unfitted. The simulator does not execute electrical synapses, motor neurons, muscles, aerodynamics, or a connectome.',
   },
 ];
 
