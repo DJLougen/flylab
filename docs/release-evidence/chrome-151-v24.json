@@ -1,7 +1,37 @@
 {
   "ok": true,
-  "verified_at": "2026-08-27T01:23:40.033Z",
+  "verified_at": "2026-08-27T03:17:31.847Z",
   "url": "http://localhost:3001/",
+  "source_revision": {
+    "schema_version": "flylab.source-revision.v1",
+    "git_available": true,
+    "git_commit": "5f589a4361ba3ff1209e7fd64dc88bd6afe58839",
+    "git_tree": "abc24ce2749035762ae953f502709878effdeaa6",
+    "worktree_clean": true,
+    "worktree_change_count": 0
+  },
+  "served_artifacts": [
+    {
+      "pathname": "/flylab-agent-manifest.json",
+      "url": "http://localhost:3001/flylab-agent-manifest.json",
+      "status": 200,
+      "content_type": "application/json",
+      "cache_control": "no-cache",
+      "schema_version": "flylab.agent-manifest.v3",
+      "bytes": 10820,
+      "sha256": "sha256:20521cc6ace3b4455dec7d519923fd56afa83134584de658f5103a12b14d047c"
+    },
+    {
+      "pathname": "/flylab-tool-contracts.json",
+      "url": "http://localhost:3001/flylab-tool-contracts.json",
+      "status": 200,
+      "content_type": "application/json",
+      "cache_control": "no-cache",
+      "schema_version": "flylab.webmcp-contracts.v3",
+      "bytes": 21515,
+      "sha256": "sha256:d84a1f102f4aa8cfcb6eb6cf5791c4531cb9aa501f6ee4a0ae236375affc0b7f"
+    }
+  ],
   "browser_api": "document.modelContext.registerTool",
   "browser_client": {
     "chrome_full_version": "151.0.7922.175",
@@ -33,10 +63,34 @@
     "run_fly_simulation",
     "save_fly_evidence"
   ],
+  "invocation_evidence": {
+    "source": "observed WebMCP.toolResponded protocol events",
+    "completed_event_count": 65,
+    "completed_counts_by_tool": {
+      "analyze_fly_behavior": 2,
+      "compare_fly_trials": 2,
+      "design_stimulation_trial": 3,
+      "draft_fly_hypothesis": 2,
+      "find_fly_circuits": 4,
+      "inspect_flylab_state": 42,
+      "run_fly_simulation": 6,
+      "save_fly_evidence": 4
+    }
+  },
   "invocation_status": "Completed",
+  "reload_before_experiment_audit": {
+    "performed": true,
+    "before_page_session_id": "session_4e7a7cd37d78428b",
+    "before_state_revision": 1,
+    "after_page_session_id": "session_ff157569ce474b28",
+    "after_state_revision": 1,
+    "after_stage": "discover",
+    "registered_tools_after_reload": 8,
+    "fresh_session_created": true
+  },
   "agent_transport": {
     "status": "active",
-    "page_session_id": "session_3d1f9d4090e54175",
+    "page_session_id": "session_ff157569ce474b28",
     "registered_tool_count": 8,
     "workflow_next_tool": "find_fly_circuits",
     "invocable_next_tool_before_first_call": null,
@@ -65,7 +119,7 @@
   "origin_agent_cluster": true,
   "browser_user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
   "mutation_context_guards": {
-    "page_session_id": "session_3d1f9d4090e54175",
+    "page_session_id": "session_ff157569ce474b28",
     "preserved_state_revision": 1,
     "wrong_session_error": "STALE_STATE",
     "stale_revision_error": "STALE_STATE",
@@ -131,7 +185,7 @@
     "experiment_id": "exp_0698ed95f27700bf2537ecf43a4b48e09687b4612170323d7ac8e2ff9fa0d4f5",
     "batch_id": "batch_75335b76179170db9d472106ec9a6e35b3bc0092587b19378e5486320c6e7275",
     "analysis_id": "analysis_f6903c9fc0a5df89d8ac9ea865e3291f7f067015eb2324f9177359dbb84974c6",
-    "evidence_bundle_id": "evidence_85e7f362b2c698d9e5987e81470f3b3679223f79b895b2431263a46316f6bc7d",
+    "evidence_bundle_id": "evidence_0c237c93584695967664bd9ff603092cfd899bc1e2ac65fc1b8d046499c1f5ab",
     "filter_to_inspector_parity": true,
     "motor_map_source_closure": true,
     "hero_candidate_count": 2,
@@ -151,7 +205,7 @@
     "evidence_export_audit": {
       "schema": "flylab.evidence-export",
       "schema_version": 3,
-      "manifest_hash": "sha256:4d3bd3d73efe474684a4d50858cc6d0b643ecef80972d7ce136b7fc4341760b7",
+      "manifest_hash": "sha256:84db50e252b3e0c12d01cecaaa543b343df327511c1085b7843b004ce536c3d1",
       "evidence_records": 4,
       "source_records": 13,
       "manifest_source_records": 17,
@@ -184,6 +238,15 @@
       },
       "untrusted_annotation_excluded": true
     },
+    "browser_export_audit": {
+      "browser_observable_download": true,
+      "filename": "evidence_0c237c93584695967664bd9ff603092cfd899bc1e2ac65fc1b8d046499c1f5ab.flylab-evidence.json",
+      "bytes": 1434076,
+      "sha256": "sha256:c44b70b1c3180a3df86488de3a5ce1cf5e77bf6b7a59f0abfaac8ce26ed772aa",
+      "downloaded_envelope_exact": true,
+      "clipboard_matches_manual_fallback": true,
+      "manual_fallback_sha256": "sha256:c44b70b1c3180a3df86488de3a5ce1cf5e77bf6b7a59f0abfaac8ce26ed772aa"
+    },
     "approval_hash_guard": {
       "error": "EVIDENCE_MISMATCH",
       "expected_protocol_hash": "sha256:5918a36c826a9cd8c2a3c2bc84a15ec0277d3307b532885f09bd2084fb3cb581",
@@ -205,9 +268,9 @@
         "save_fly_evidence"
       ],
       "final_stage": "saved",
-      "stable_bundle_id": "evidence_85e7f362b2c698d9e5987e81470f3b3679223f79b895b2431263a46316f6bc7d",
-      "stable_manifest_hash": "sha256:4d3bd3d73efe474684a4d50858cc6d0b643ecef80972d7ce136b7fc4341760b7",
-      "stable_saved_at": "2026-08-27T01:23:38.096Z",
+      "stable_bundle_id": "evidence_0c237c93584695967664bd9ff603092cfd899bc1e2ac65fc1b8d046499c1f5ab",
+      "stable_manifest_hash": "sha256:84db50e252b3e0c12d01cecaaa543b343df327511c1085b7843b004ce536c3d1",
+      "stable_saved_at": "2026-08-27T03:17:29.546Z",
       "replay_created_artifacts": 0,
       "operation_replays": {
         "run_fly_simulation": {
@@ -251,6 +314,83 @@
     "outputs/demo/v24/frames/proof-idempotent-retry.png",
     "outputs/demo/v24/frames/10-protocol-edit-invalidates-results.png",
     "outputs/demo/v24/frames/proof-webmcp-invocations.png"
+  ],
+  "capture_artifacts": [
+    {
+      "path": "outputs/demo/v24/frames/proof-webmcp-tools.png",
+      "bytes": 175306,
+      "sha256": "sha256:950747be8dfbcaa5e84abeec34f762c2bce5342017bd838684ac1b467d5ddc5a"
+    },
+    {
+      "path": "outputs/demo/v24/frames/00-eight-tools-live.png",
+      "bytes": 155349,
+      "sha256": "sha256:6e2aa894906ce0589beab937a5246dd80eb8aab359c20f99db6fe10de45b77c8"
+    },
+    {
+      "path": "outputs/demo/v24/frames/01-circuit-found.png",
+      "bytes": 207579,
+      "sha256": "sha256:498ebcfadc2038d7b38589415b0ee1cd080859d3c9b4720fa45748e4f0422487"
+    },
+    {
+      "path": "outputs/demo/v24/frames/02-hypothesis-drafted.png",
+      "bytes": 159892,
+      "sha256": "sha256:5a335eb2ec4fc230fc3c812329f64e84c0d300c402ef69e528fe8febedfc7f41"
+    },
+    {
+      "path": "outputs/demo/v24/frames/03-protocol-locked.png",
+      "bytes": 180116,
+      "sha256": "sha256:198b5843725f4c32000d498be17e6bbe53fd3f4eacd8aaaa6449ed348e3ff594"
+    },
+    {
+      "path": "outputs/demo/v24/frames/04-human-approved.png",
+      "bytes": 114022,
+      "sha256": "sha256:a8655e0f6ce23833fbd98a88540a2e9506a4fd6d2ee7aefca202ed7ca927dc73"
+    },
+    {
+      "path": "outputs/demo/v24/frames/proof-approval-hash-guard.png",
+      "bytes": 137745,
+      "sha256": "sha256:6e380cc9b3ddcc5c69d2a0f99fd43ecd4fe147d32d8af8b83969bc6a1e02308c"
+    },
+    {
+      "path": "outputs/demo/v24/frames/05-simulation-replay.png",
+      "bytes": 162206,
+      "sha256": "sha256:f80ee1c1f1f8235c39ef10a8e5b59acbcda6cc6e92ccbd48e73c71c4a8d0d1ca"
+    },
+    {
+      "path": "outputs/demo/v24/frames/06-circuit-bilateral-active.png",
+      "bytes": 364739,
+      "sha256": "sha256:5a2759853959a96ee339197571aebd69a41c76498f0fe9306b0905ffeaab2608"
+    },
+    {
+      "path": "outputs/demo/v24/frames/07-behavior-analysis.png",
+      "bytes": 147698,
+      "sha256": "sha256:e10a2147bae06542cc125a551af715f71ca755d75177e109b1be2607890981d8"
+    },
+    {
+      "path": "outputs/demo/v24/frames/08-bounded-follow-up.png",
+      "bytes": 120016,
+      "sha256": "sha256:107bf68fb4cf0031ca1a444315972ac8e20f53308ab5f6f960639d4d5bc0732a"
+    },
+    {
+      "path": "outputs/demo/v24/frames/09-evidence-saved.png",
+      "bytes": 173066,
+      "sha256": "sha256:3bab7d081c777318d5f399144ce8aa886d90118d0d5738fb897db5251ccfc93b"
+    },
+    {
+      "path": "outputs/demo/v24/frames/proof-idempotent-retry.png",
+      "bytes": 148343,
+      "sha256": "sha256:9297bde4cfffa5cd885e02d2ead6f818bf470e0999ffd937717c4ab259ce06bf"
+    },
+    {
+      "path": "outputs/demo/v24/frames/10-protocol-edit-invalidates-results.png",
+      "bytes": 179354,
+      "sha256": "sha256:82eabf421a1a663e2a63dd73868d7577358d198dac7763d2731db239d12f97bb"
+    },
+    {
+      "path": "outputs/demo/v24/frames/proof-webmcp-invocations.png",
+      "bytes": 193155,
+      "sha256": "sha256:6d550124b8a79cc9aa40699312ef908623175507e1b9f1bb441fc6a3b009b892"
+    }
   ],
   "capture_contract": {
     "mode": "gf_competition_hero",
