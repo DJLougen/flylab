@@ -23,7 +23,7 @@ const annotation = {
   id: 'annotation_123',
   title: 'MDN-inspired trial',
   note: 'Model evidence only.',
-  author: 'webmcp_agent' as const,
+  author: 'caller_input' as const,
   trust: 'untrusted_annotation' as const,
   purpose: 'administrative_annotation_not_evidence' as const,
   boundary: 'Administrative annotation; not scientific evidence.',

@@ -6,7 +6,7 @@ export function GET() {
   return Response.json(flyLabAgentContractDocument, {
     headers: {
       'Access-Control-Allow-Origin': '*',
-      'Cache-Control': 'public, max-age=300',
+      'Cache-Control': 'no-cache',
     },
   });
 }

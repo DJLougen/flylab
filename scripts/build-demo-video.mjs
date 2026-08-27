@@ -63,63 +63,63 @@ const demoMetadata = {
 const segments = [
   {
     frame: 'proof-webmcp-tools.png',
-    narration: 'In the flag-enabled automated Chrome protocol capture, the runtime diagnostic confirms eight native FlyLab WebMCP tools: one read-only inspector and seven page-registered scientific actions.',
+    narration: 'This flag-enabled automated Chrome protocol capture confirms eight native FlyLab WebMCP tools: one read-only inspector and seven page-registered scientific actions.',
   },
   {
     frame: '00-eight-tools-live.png',
-    narration: 'The automated WebMCP client reads the rapid-escape goal, page session, shared revision, artifact IDs, blocker, and one valid next action. The visible page exposes the same state.',
+    narration: 'The WebMCP client reads the rapid-escape goal, page session, revision, artifact IDs, blocker, and one valid next action, matching the visible page.',
   },
   {
     frame: '01-circuit-found.png',
-    narration: 'Goal-aware discovery selects the adult giant-fiber pathway for coordinated leg-and-wing escape, preserves MDN as a rejected alternative, and records the reason and coverage gaps.',
+    narration: 'Goal-aware discovery selects the adult giant-fiber pathway for leg-and-wing escape, preserves MDN as a rejected alternative, and records reasons and gaps.',
   },
   {
     frame: '02-hypothesis-drafted.png',
-    narration: 'The client drafts a falsifiable giant-fiber hypothesis with a primary outcome, expected direction, baseline and sham controls, evidence limitations, and an explicit failure criterion.',
+    narration: 'It drafts a falsifiable giant-fiber hypothesis with primary outcome, expected direction, controls, evidence limits, and explicit failure criterion.',
   },
   {
     frame: '03-protocol-locked.png',
-    narration: 'It designs exactly three arms: baseline, model sham, and bilateral giant-fiber perturbation. Twelve replicates per arm produce a complete thirty-six-run seed manifest.',
+    narration: 'It designs exactly three arms—baseline, model sham, and bilateral perturbation—and twelve replicates each, yielding thirty-six deterministic virtual trials in a complete seed manifest.',
   },
   {
     frame: '04-human-approved.png',
-    narration: 'Approval is absent from the WebMCP tool surface. For this automated capture, the harness activates the visible control, committing the exact protocol hash and seed-manifest hash; in a judged run, the person reviews and clicks it.',
+    narration: 'Approval is not a WebMCP tool. The capture activates the visible control, committing the protocol hash and seed-manifest hash; a judged run requires the person’s review and click.',
   },
   {
     frame: 'proof-approval-hash-guard.png',
-    narration: 'A deliberately wrong protocol hash returns EVIDENCE MISMATCH. The revision does not move and no batch appears, proving the simulation remains bound to the exact visible commitment.',
+    narration: 'A deliberately wrong protocol hash returns EVIDENCE MISMATCH. Revision and batch remain unchanged, proving exact approval binding.',
   },
   {
     frame: '05-simulation-replay.png',
-    narration: 'The client echoes the approved protocol hash and runs thirty-six deterministic virtual trials. Every run has its own seed and trajectory ID in the reduced-order model.',
+    narration: 'The client echoes the approved hash and runs all thirty-six trials. Every run has a deterministic seed and trajectory ID in the reduced-order model.',
   },
   {
     frame: '06-circuit-bilateral-active.png',
-    narration: 'The 3D literature-schematic view traces giant-fiber descent into established jump-leg and wing branches. It invents no connectome neuron IDs and imports no specimen reconstruction.',
+    narration: 'The 3D literature schematic traces giant-fiber descent into established jump-leg and wing branches. It invents no connectome neuron IDs or specimen reconstruction.',
   },
   {
     frame: '07-behavior-analysis.png',
-    narration: 'FlyLab returns formal versioned metric definitions and the exact per-run records behind every aggregate. Highlighting is model selection, and all values are simulation predictions rather than biological measurements.',
+    narration: 'FlyLab returns formal versioned metric definitions and exact per-run records behind each aggregate. Highlighting is model selection; values are simulation predictions, not measurements.',
   },
   {
     frame: '08-bounded-follow-up.png',
-    narration: 'The client compares all conditions and proposes one bounded follow-up, but receives no authority to execute it. Another experiment requires another exact visible approval.',
+    narration: 'The client compares every condition and proposes one bounded follow-up without authority to execute it. A new experiment needs new visible approval.',
   },
   {
     frame: '09-evidence-saved.png',
-    narration: 'The save tool creates a source-closed mission version-three bundle containing the discovery decision, rejected alternative, dataset catalog, approval commitments, thirty-six runs, analysis, comparison, and manifest hash.',
+    narration: 'The save tool creates a source-closed mission version-three bundle with discovery decision, rejected alternative, source catalog, approval commitments, thirty-six runs, analysis, comparison, and manifest hash.',
   },
   {
     frame: 'proof-idempotent-retry.png',
-    narration: 'Repeating run and save with their original operation IDs returns idempotent replay, creates zero artifacts, and keeps each revision unchanged. Conflicting operation reuse fails closed.',
+    narration: 'Repeating run and save with original operation IDs returns idempotent replay, creates zero artifacts, and preserves revision. Conflicting reuse fails closed.',
   },
   {
     frame: '10-protocol-edit-invalidates-results.png',
-    narration: 'Editing the protocol advances the revision, revokes both approval hashes, clears downstream artifacts, and returns the client to a fail-closed review gate. Old operation IDs cannot revive the cleared lineage.',
+    narration: 'Editing the protocol advances revision, revokes both approval hashes, clears downstream artifacts, and restores fail-closed review. Old operation IDs cannot revive cleared lineage.',
   },
   {
     frame: 'proof-webmcp-invocations.png',
-    narration: 'Finally, the flag-enabled automated Chrome protocol capture confirms native WebMCP invocation and structured results. It is runtime evidence, not a DevTools screenshot; ordinary Chrome without that test capability remains unsupported.',
+    narration: 'Finally, the flag-enabled automated Chrome protocol capture confirms native invocation and structured results. It is runtime evidence, not a DevTools screenshot; ordinary Chrome without test capability remains unsupported.',
   },
 ];
 

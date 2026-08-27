@@ -2,7 +2,7 @@
 
 FlyLab exposes exactly eight native WebMCP tools on one shared page. The competition workflow leads with the adult Giant Fiber/DNp01 rapid-escape slice and pauses once for a visible human approval that is intentionally absent from the tool surface.
 
-Repository contents and automated tests establish the source contract. They do not establish that the candidate deployment is currently public/reachable or that a supported ChatGPT or Chrome runtime has completed this build. Verify the chosen URL and retain the current run report before making either claim.
+Repository contents and automated tests establish the source contract. The tracked [Chrome 151 release report](release-evidence/chrome-151-v24.json) additionally establishes one complete local automated native-protocol run for the source revision named inside it. It does not establish that the candidate deployment serves that revision or that a ChatGPT Sol/Terra agent completed it. Verify the chosen public URL and retain environment-specific evidence before making either claim.
 
 ## Start the release candidate
 

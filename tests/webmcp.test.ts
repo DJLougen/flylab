@@ -146,6 +146,9 @@ describe('FlyLab WebMCP contracts', () => {
     const runContract = flyLabToolContracts.find((item) => item.name === 'run_fly_simulation');
     assert.ok(runContract?.inputSchema.required.includes('approved_protocol_hash'));
     assert.ok(runContract && 'approved_protocol_hash' in runContract.inputSchema.properties);
+    const saveContract = flyLabToolContracts.find((item) => item.name === 'save_fly_evidence');
+    assert.equal(saveContract?.inputSchema.required.includes('title'), false);
+    assert.ok(saveContract && 'title' in saveContract.inputSchema.properties);
     assert.throws(
       () => validateToolInput('find_fly_circuits', { query: 'MDN' }),
       (error: unknown) => (error as { code?: string }).code === 'INVALID_INPUT',
@@ -160,6 +163,16 @@ describe('FlyLab WebMCP contracts', () => {
       () => validateToolInput('run_fly_simulation', { ...mutationContext, experiment_id: 'exp_1' }),
       (error: unknown) => (error as { code?: string }).code === 'INVALID_INPUT',
     );
+    assert.doesNotThrow(() => validateToolInput('save_fly_evidence', {
+      ...mutationContext,
+      scope: 'mission',
+      hypothesis_id: 'hyp_1',
+      experiment_id: 'exp_1',
+      batch_ids: ['batch_1'],
+      analysis_ids: ['analysis_1'],
+      comparison_id: 'comparison_1',
+      operation_id: 'save_once_1',
+    }));
   });
 
   test('compares operation inputs by exact canonical JSON rather than key order or a short hash', () => {

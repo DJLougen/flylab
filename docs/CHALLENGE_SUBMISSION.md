@@ -1,6 +1,6 @@
 # WebMCP Challenge submission
 
-FlyLab is a release candidate for the WebMCP Challenge. The source implements the v3 agent contract described below. Public deployment reachability, a completed supported-runtime run, the final video, and Devpost publication must be verified separately; they are not claimed complete here.
+FlyLab is a release candidate for the WebMCP Challenge. The source implements the v3 agent contract described below. A tracked local Chrome 151 report records a complete automated native-protocol run for the source revision named inside it. Public deployment of that revision, a ChatGPT Sol/Terra agent run, the final video, and Devpost publication must still be verified separately; they are not claimed complete here.
 
 Submission deadline: **September 3, 2026 at 1:00 p.m. PDT**, as recorded in the challenge materials. Confirm the binding rules again before submission.
 
@@ -100,6 +100,8 @@ After the person approves the exact visible protocol, use:
 
 Neither product label proves the current task passed. Confirm the exact eight-tool inventory, retain the runtime diagnostic, and record a successful native workflow. Static manifests, DOM packets, and guided examples are read-only/helpful UI surfaces, not substitute transports.
 
+Current local protocol evidence: [`docs/release-evidence/chrome-151-v24.json`](release-evidence/chrome-151-v24.json). It records Chrome 151, eight registered and invoked tools, the complete GF workflow, approval-hash rejection, operation replay/conflict behavior, edit invalidation, and global source closure. It is an automated WebMCP client capture, not a ChatGPT agent transcript or public-deployment proof.
+
 ## Scientific scope
 
 **Implemented**
@@ -121,17 +123,17 @@ Neither product label proves the current task passed. Confirm the exact eight-to
 - Actual FlyGym/NeuroMechFly execution
 - Muscle mechanics, aerodynamics, or calibrated biological effect sizes
 - New wet-lab evidence or autonomous biological experimentation
-- A verified public deployment or supported-runtime pass without a retained current report
+- A ChatGPT Sol/Terra agent run, identified-human approval record, or public deployment of the current source revision
 
 ## Submission status
 
 | Item | Honest current status |
 |---|---|
-| Source contract | Implemented in the repository; run local tests against the final commit. |
-| Candidate app URL | Configured; reachability, headers, deployed revision, and no-login access require fresh verification. |
-| Candidate source URL | Configured; public visibility and final revision require fresh verification. |
+| Source contract | Implemented; local tests/build/security gates must remain green on the final commit. |
+| Candidate app URL | Public older deployment is reachable; deploying and verifying the current v24 revision is pending. |
+| Candidate source URL | Repository is public with Apache-2.0 metadata; pushing and verifying the current v24 revision is pending. |
 | ChatGPT Sol/Terra run | Supported path; no success claim without retained current-session evidence. |
-| Chrome 149+ run | Supported path; no success claim without a successful retained verifier report. |
+| Chrome 149+ run | Local Chrome 151 native-protocol workflow passed; tracked report is linked above. Public-URL rerun remains pending. |
 | Demo video | Pending final capture, rights-cleared narration, build, upload, and signed-out playback verification. |
 | Devpost entry | Pending authenticated publication and link verification. |
 

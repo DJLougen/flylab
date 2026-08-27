@@ -1,7 +1,7 @@
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 
@@ -73,6 +73,65 @@ const reportFile = process.env.FLYLAB_REPORT_FILE
   ? resolve(process.env.FLYLAB_REPORT_FILE)
   : null;
 const cleanDemoCapture = process.env.FLYLAB_DEMO_CAPTURE === '1';
+
+function gitOutput(args) {
+  const result = spawnSync('git', args, {
+    cwd: process.cwd(),
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  });
+  return result.status === 0 ? result.stdout.trim() : null;
+}
+
+function captureSourceRevision() {
+  const gitCommit = gitOutput(['rev-parse', 'HEAD']);
+  const gitTree = gitOutput(['rev-parse', 'HEAD^{tree}']);
+  const porcelain = gitOutput(['status', '--porcelain=v1', '--untracked-files=all']);
+  return {
+    schema_version: 'flylab.source-revision.v1',
+    git_available: Boolean(gitCommit && gitTree && porcelain !== null),
+    git_commit: gitCommit,
+    git_tree: gitTree,
+    worktree_clean: porcelain === '',
+    worktree_change_count: porcelain === null || porcelain === '' ? 0 : porcelain.split(/\r?\n/).length,
+  };
+}
+
+async function captureFileEvidence(filepath) {
+  const bytes = await readFile(filepath);
+  return {
+    path: relative(process.cwd(), filepath),
+    bytes: bytes.byteLength,
+    sha256: `sha256:${createHash('sha256').update(bytes).digest('hex')}`,
+  };
+}
+
+async function fetchServedArtifactEvidence(pageUrl) {
+  return Promise.all(['/flylab-agent-manifest.json', '/flylab-tool-contracts.json'].map(async (pathname) => {
+    const url = new URL(pathname, pageUrl).href;
+    const response = await fetch(url, { cache: 'no-store' });
+    const body = await response.text();
+    let parsed = null;
+    try {
+      parsed = JSON.parse(body);
+    } catch {
+      // The status and content hash below retain enough evidence for a useful failure.
+    }
+    if (!response.ok || !parsed) {
+      throw new Error(`Served release artifact was unavailable or invalid JSON: ${JSON.stringify({ url, status: response.status })}`);
+    }
+    return {
+      pathname,
+      url,
+      status: response.status,
+      content_type: response.headers.get('content-type'),
+      cache_control: response.headers.get('cache-control'),
+      schema_version: parsed.schema_version ?? null,
+      bytes: Buffer.byteLength(body),
+      sha256: `sha256:${createHash('sha256').update(body).digest('hex')}`,
+    };
+  }));
+}
 
 function withTimeout(promise, milliseconds, label) {
   let timer;
@@ -155,6 +214,28 @@ function waitForEvent(method, predicate = () => true) {
     };
     socket.addEventListener('message', onMessage);
   }), 5_000, method);
+}
+
+function waitForRegisteredToolInventory(expectedCount = expectedToolNames.length) {
+  return withTimeout(new Promise((resolve) => {
+    const toolsByName = new Map();
+    let frameId = null;
+    const onMessage = (event) => {
+      const message = JSON.parse(String(event.data));
+      if (message.method !== 'WebMCP.toolsAdded') return;
+      frameId = message.params?.frameId ?? frameId;
+      for (const tool of message.params?.tools ?? []) {
+        toolsByName.set(tool.name, {
+          ...tool,
+          frameId: tool.frameId ?? message.params?.frameId ?? null,
+        });
+      }
+      if (toolsByName.size < expectedCount) return;
+      socket.removeEventListener('message', onMessage);
+      resolve({ frameId, tools: [...toolsByName.values()] });
+    };
+    socket.addEventListener('message', onMessage);
+  }), 5_000, `WebMCP inventory of ${expectedCount} tools`);
 }
 
 async function readRuntimeStatus() {
@@ -1024,12 +1105,32 @@ async function verifyProtocolEditInvalidation(tools, previousExperimentId, expec
 
 async function beginRegisteredToolInvocationRaw(tools, toolName, input) {
   const tool = tools.find((candidate) => candidate.name === toolName);
-  if (!tool?.frameId) throw new Error(`Chrome did not return a frame for ${toolName}.`);
+  if (!tool?.frameId) {
+    throw new Error(`Chrome did not return a frame for ${toolName}: ${JSON.stringify({
+      available_tools: tools.map((candidate) => ({ name: candidate.name, frameId: candidate.frameId ?? null })),
+    })}`);
+  }
   return sendCommand('WebMCP.invokeTool', {
     frameId: tool.frameId,
     toolName,
     input,
   });
+}
+
+async function normalizeRegisteredTools(toolsAdded) {
+  const frameTree = await sendCommand('Page.getFrameTree');
+  const topFrameId = frameTree?.frameTree?.frame?.id ?? null;
+  const eventFrameId = toolsAdded?.frameId ?? null;
+  const tools = Array.isArray(toolsAdded?.tools)
+    ? toolsAdded.tools.map((tool) => ({
+        ...tool,
+        frameId: tool.frameId ?? eventFrameId ?? topFrameId,
+      }))
+    : [];
+  if (!topFrameId || tools.length === 0 || tools.some((tool) => !tool.frameId)) {
+    throw new Error(`Chrome did not publish an invocable WebMCP inventory: ${JSON.stringify({ topFrameId, eventFrameId, tools })}`);
+  }
+  return { ...toolsAdded, frameId: eventFrameId ?? topFrameId, tools };
 }
 
 async function waitForRegisteredToolResponse(toolName, invocation) {
@@ -1912,6 +2013,109 @@ function assertRunApprovalBinding(batch, approval) {
   };
 }
 
+async function verifyBrowserExportControls(saved) {
+  const evidenceExport = saved.data?.evidence_export;
+  const expectedFilename = saved.data?.export_filename;
+  if (!evidenceExport || typeof expectedFilename !== 'string' || !expectedFilename.endsWith('.flylab-evidence.json')) {
+    throw new Error(`Saved evidence did not publish a browser export filename: ${JSON.stringify(saved.data)}`);
+  }
+  const expectedSerialized = `${JSON.stringify(evidenceExport, null, 2)}\n`;
+  const expectedSerializedHash = `sha256:${createHash('sha256').update(expectedSerialized).digest('hex')}`;
+  const downloadDirectory = join(profile, 'verified-downloads');
+  const downloadedFile = join(downloadDirectory, expectedFilename);
+  await mkdir(downloadDirectory, { recursive: true });
+  await sendCommand('Browser.setDownloadBehavior', {
+    behavior: 'allow',
+    downloadPath: downloadDirectory,
+    eventsEnabled: true,
+  });
+  await sendCommand('Browser.grantPermissions', {
+    origin: new URL(targetUrl).origin,
+    permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'],
+  });
+  const uiResponse = await sendCommand('Runtime.evaluate', {
+    expression: `(async () => {
+      const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+      let modal = document.querySelector('.evidence-modal');
+      if (!modal) {
+        const ledger = [...document.querySelectorAll('button')].find((button) => button.textContent?.includes('Evidence ledger'));
+        ledger?.click();
+        await wait(100);
+        modal = document.querySelector('.evidence-modal');
+      }
+      const buttons = modal ? [...modal.querySelectorAll('button')] : [];
+      const download = buttons.find((button) => button.textContent?.includes('Download evidence JSON'));
+      const copy = buttons.find((button) => button.textContent?.includes('Copy bundle JSON'));
+      const textarea = modal?.querySelector('textarea[aria-label="Complete bundle JSON"]');
+      if (!(download instanceof HTMLButtonElement)
+        || !(copy instanceof HTMLButtonElement)
+        || !(textarea instanceof HTMLTextAreaElement)) {
+        return JSON.stringify({ ready: false, modal: Boolean(modal), download: Boolean(download), copy: Boolean(copy), textarea: Boolean(textarea) });
+      }
+      const digest = async (value) => {
+        const bytes = new TextEncoder().encode(value);
+        const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+        return 'sha256:' + [...hash].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+      };
+      const manualJson = textarea.value;
+      download.click();
+      copy.click();
+      await wait(120);
+      const clipboardJson = await navigator.clipboard.readText();
+      return JSON.stringify({
+        ready: true,
+        download_label: download.textContent?.replace(/\\s+/g, ' ').trim() ?? null,
+        copy_label: copy.textContent?.replace(/\\s+/g, ' ').trim() ?? null,
+        manual_bytes: new TextEncoder().encode(manualJson).byteLength,
+        manual_sha256: await digest(manualJson),
+        clipboard_matches_manual: clipboardJson === manualJson,
+      });
+    })()`,
+    returnByValue: true,
+    awaitPromise: true,
+  });
+  const uiValue = typeof uiResponse?.result?.value === 'string'
+    ? JSON.parse(uiResponse.result.value)
+    : null;
+  for (let attempt = 0; attempt < 100 && !existsSync(downloadedFile); attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  if (!existsSync(downloadedFile)) {
+    throw new Error(`Browser did not create the expected portable evidence file: ${JSON.stringify({ expectedFilename, uiValue })}`);
+  }
+  const downloadedBytes = await readFile(downloadedFile);
+  const downloadedText = downloadedBytes.toString('utf8');
+  let downloadedJson = null;
+  try {
+    downloadedJson = JSON.parse(downloadedText);
+  } catch {
+    // The assertion below reports the malformed output without printing its full contents.
+  }
+  if (uiValue?.ready !== true
+    || uiValue.manual_sha256 !== expectedSerializedHash
+    || uiValue.clipboard_matches_manual !== true
+    || downloadedText !== expectedSerialized
+    || JSON.stringify(downloadedJson) !== JSON.stringify(evidenceExport)) {
+    throw new Error(`Browser export controls diverged from the returned evidence envelope: ${JSON.stringify({
+      expectedFilename,
+      expectedSerializedHash,
+      uiValue,
+      downloadedBytes: downloadedBytes.byteLength,
+      downloadedHash: `sha256:${createHash('sha256').update(downloadedBytes).digest('hex')}`,
+    })}`);
+  }
+  await clickButton({ ariaLabel: 'Close evidence ledger' });
+  return {
+    browser_observable_download: true,
+    filename: expectedFilename,
+    bytes: downloadedBytes.byteLength,
+    sha256: expectedSerializedHash,
+    downloaded_envelope_exact: true,
+    clipboard_matches_manual_fallback: true,
+    manual_fallback_sha256: uiValue.manual_sha256,
+  };
+}
+
 function verifySavedEvidenceExport(saved, expected) {
   const bundle = saved.data?.bundle;
   const evidenceExport = saved.data?.evidence_export;
@@ -2204,15 +2408,15 @@ function verifySavedEvidenceExport(saved, expected) {
   const annotation = payload.annotation;
   const payloadManifest = payload.provenanceManifest;
   const allScientificallyIndexedIds = provenanceLabels.flatMap((label) => provenanceIndex[label]);
-  if (!annotation?.id
-    || annotation.trust !== 'untrusted_annotation'
-    || annotation.purpose !== 'administrative_annotation_not_evidence'
-    || !bundle.includedIds.includes(annotation.id)
-    || allScientificallyIndexedIds.includes(annotation.id)
+  if (annotation !== null
+    || bundle.annotation !== null
+    || bundle.includedIds.some((id) => id.startsWith('annotation_'))
+    || allScientificallyIndexedIds.some((id) => id.startsWith('annotation_'))
     || payloadManifest?.schema_version !== 'flylab.provenance-manifest.v1'
     || !payloadManifest.operational_paths?.includes('/annotation')
+    || !payloadManifest.operational_paths?.includes('/systemMetadata')
     || payloadManifest.entries?.some((entry) => entry.path === '/annotation' || entry.path.startsWith('/annotation/'))) {
-    throw new Error(`Untrusted annotation crossed the scientific provenance boundary: ${JSON.stringify({ annotation, provenanceIndex, payloadManifest })}`);
+    throw new Error(`Default evidence save invented or misclassified an administrative annotation: ${JSON.stringify({ annotation, bundleAnnotation: bundle.annotation, provenanceIndex, payloadManifest })}`);
   }
   assertSameStringSet(
     payloadManifest.entries.flatMap((entry) => entry.labels),
@@ -2276,7 +2480,7 @@ function verifySavedEvidenceExport(saved, expected) {
     }
   }
   if (!hasEdge(proposalId, 'proposed_from_comparison', payload.comparison.id)
-    || lineageEdges.some((edge) => edge.from === annotation.id || edge.to === annotation.id)) {
+    || lineageEdges.some((edge) => edge.from.startsWith('annotation_') || edge.to.startsWith('annotation_'))) {
     throw new Error(`Lineage graph mishandled the proposal or untrusted annotation: ${JSON.stringify(lineageEdges)}`);
   }
   if (expected.approval
@@ -2387,7 +2591,7 @@ async function verifyCompletedLineageIdempotency(tools, inputs, savedBundle) {
   }), 'run_fly_simulation', 'INVALID_INPUT', 'run_fly_simulation');
   const saveConflict = failedEnvelope(await invokeRegisteredTool(tools, 'save_fly_evidence', {
     ...inputs.save,
-    title: `${inputs.save.title} conflicting reuse`,
+    note: 'Conflicting operation reuse must fail without mutating the saved lineage.',
   }), 'save_fly_evidence', 'INVALID_INPUT', 'save_fly_evidence');
   const afterConflict = successfulEnvelope(
     await invokeRegisteredTool(tools, 'inspect_flylab_state', {}),
@@ -2598,13 +2802,11 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
 
   const saveInput = {
     scope: 'mission',
-    title: 'Adult MDN backward-walking verification run',
     hypothesis_id: drafted.data.hypothesis.id,
     experiment_id: experimentId,
     batch_ids: [run.data.id],
     analysis_ids: [analysis.data.analysis.id],
     comparison_id: comparison.data.comparison.id,
-    note: 'Automated live WebMCP verification with a DOM click at the visible non-WebMCP approval boundary.',
   };
   const evidenceCancellation = cleanCapture
     ? { skipped_for_clean_demo_capture: true }
@@ -2621,6 +2823,7 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
     analysis: analysis.data.analysis,
     comparison: comparison.data.comparison,
   });
+  const browserExportAudit = await verifyBrowserExportControls(saved);
   const completedContext = await inspectAgentContext(tools);
   const recoveredArtifacts = completedContext.artifact_manifest;
   if (completedContext.agent_status !== 'complete'
@@ -2701,6 +2904,7 @@ async function runFullWorkflow(tools, discoveryResponse, initialContext, options
     visible_comparison_verified: Boolean(visibleComparison),
     visible_bundle_verified: Boolean(visibleBundle),
     evidence_export_audit: evidenceExportAudit,
+    browser_export_audit: browserExportAudit,
     metric_definition_audit: metricDefinitionAudit,
     per_run_audit: perRunAudit,
     run_approval_audit: runApprovalAudit,
@@ -3030,13 +3234,11 @@ async function verifyGfShortModeWorkflow(tools, options = {}) {
   }
   const saveInput = {
     scope: 'mission',
-    title: 'Adult giant-fiber short-mode escape verification run',
     hypothesis_id: drafted.data.hypothesis.id,
     experiment_id: experiment.id,
     batch_ids: [run.data.id],
     analysis_ids: [analysis.data.analysis.id],
     comparison_id: comparison.data.comparison.id,
-    note: 'Automated GF WebMCP verification with the visible non-WebMCP approval boundary.',
   };
   const saved = successfulEnvelope(
     await invokeRegisteredTool(tools, 'save_fly_evidence', saveInput),
@@ -3052,6 +3254,7 @@ async function verifyGfShortModeWorkflow(tools, options = {}) {
     analysis: analysis.data.analysis,
     comparison: comparison.data.comparison,
   });
+  const browserExportAudit = await verifyBrowserExportControls(saved);
   const completed = await inspectAgentContext(tools);
   if (completed.agent_status !== 'complete'
     || completed.artifacts.selected_circuit_id !== 'circuit_gf_adult'
@@ -3164,6 +3367,7 @@ async function verifyGfShortModeWorkflow(tools, options = {}) {
     metric_definition_audit: metricDefinitionAudit,
     per_run_audit: perRunAudit,
     evidence_export_audit: evidenceExportAudit,
+    browser_export_audit: browserExportAudit,
     approval_hash_guard: approvalHashGuard,
     idempotency_audit: idempotency,
     run_approval_audit: runApprovalAudit,
@@ -3209,9 +3413,51 @@ try {
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
 
-  const toolsAdded = waitForEvent('WebMCP.toolsAdded');
+  await sendCommand('Page.enable');
+  const toolsAdded = waitForRegisteredToolInventory();
   await sendCommand('WebMCP.enable');
-  const registeredTools = await toolsAdded;
+  let registeredTools = await normalizeRegisteredTools(await toolsAdded);
+  let reloadBeforeExperimentAudit = {
+    performed: false,
+    reason: 'FLYLAB_VERIFY_WORKFLOW was not enabled',
+  };
+  if (process.env.FLYLAB_VERIFY_WORKFLOW === '1') {
+    const beforeReloadContext = await inspectAgentContext(registeredTools.tools);
+    const beforeReloadSessionId = status.agentRuntime.page_session_id;
+    const pageLoaded = waitForEvent('Page.loadEventFired');
+    const reloadedToolsAdded = waitForRegisteredToolInventory();
+    await sendCommand('Page.reload', { ignoreCache: true });
+    const [, reloadedTools] = await Promise.all([pageLoaded, reloadedToolsAdded]);
+    registeredTools = await normalizeRegisteredTools(reloadedTools);
+    let reloadedStatus = null;
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      reloadedStatus = await readRuntimeStatus();
+      if (reloadedStatus?.agentRuntime?.page_registration_status === 'registered'
+        && reloadedStatus?.agentRuntime?.registered_tool_count === 8
+        && reloadedStatus?.agentRuntime?.page_session_id !== beforeReloadSessionId) break;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    const afterReloadContext = await inspectAgentContext(registeredTools.tools);
+    if (beforeReloadContext.state?.revision !== 1
+      || afterReloadContext.state?.revision !== 1
+      || afterReloadContext.state?.stage !== 'discover'
+      || afterReloadContext.next_tool !== 'find_fly_circuits'
+      || reloadedStatus?.agentRuntime?.page_session_id === beforeReloadSessionId
+      || reloadedStatus?.agentRuntime?.registered_tool_count !== 8) {
+      throw new Error(`Reload-before-experiment did not create a fresh registered page session: ${JSON.stringify({ beforeReloadContext, afterReloadContext, reloadedStatus })}`);
+    }
+    status = reloadedStatus;
+    reloadBeforeExperimentAudit = {
+      performed: true,
+      before_page_session_id: beforeReloadSessionId,
+      before_state_revision: beforeReloadContext.state.revision,
+      after_page_session_id: reloadedStatus.agentRuntime.page_session_id,
+      after_state_revision: afterReloadContext.state.revision,
+      after_stage: afterReloadContext.state.stage,
+      registered_tools_after_reload: reloadedStatus.agentRuntime.registered_tool_count,
+      fresh_session_created: true,
+    };
+  }
   const actualToolNames = registeredTools.tools.map((tool) => tool.name).sort();
   const initialContext = await inspectAgentContext(registeredTools.tools);
   if (initialContext.next_tool !== 'find_fly_circuits'
@@ -3323,10 +3569,25 @@ try {
     throw new Error(`Could not parse the Chrome client version from Browser.getVersion: ${JSON.stringify(browserVersion)}.`);
   }
 
+  const observedInvokedTools = [...new Set(protocolInvocationLog
+    .filter((entry) => entry.status === 'Completed')
+    .map((entry) => entry.tool_name))].sort();
+  if (workflow && JSON.stringify(observedInvokedTools) !== JSON.stringify(expectedToolNames)) {
+    throw new Error(`Completed workflow invocation log did not contain the exact tool inventory: ${JSON.stringify({ observedInvokedTools, expectedToolNames, protocolInvocationLog })}`);
+  }
+  const invocationCounts = Object.fromEntries(expectedToolNames.map((toolName) => [
+    toolName,
+    protocolInvocationLog.filter((entry) => entry.tool_name === toolName && entry.status === 'Completed').length,
+  ]));
+  const servedArtifacts = await fetchServedArtifactEvidence(status.location);
+  const captureArtifacts = await Promise.all(capturedFrames.map(captureFileEvidence));
+
   const report = {
     ok: true,
     verified_at: new Date().toISOString(),
     url: status.location,
+    source_revision: captureSourceRevision(),
+    served_artifacts: servedArtifacts,
     browser_api: 'document.modelContext.registerTool',
     browser_client: {
       chrome_full_version: chromeFullVersion,
@@ -3339,8 +3600,14 @@ try {
       proof_capture_kind: 'automated_flag_enabled_chrome_protocol_capture',
     },
     registered_tools: actualToolNames,
-    invoked_tools: workflow ? expectedToolNames : ['inspect_flylab_state', 'find_fly_circuits'],
+    invoked_tools: observedInvokedTools,
+    invocation_evidence: {
+      source: 'observed WebMCP.toolResponded protocol events',
+      completed_event_count: protocolInvocationLog.filter((entry) => entry.status === 'Completed').length,
+      completed_counts_by_tool: invocationCounts,
+    },
     invocation_status: response.status,
+    reload_before_experiment_audit: reloadBeforeExperimentAudit,
     agent_transport: {
       status: status.agentRuntime.status,
       page_session_id: status.agentRuntime.page_session_id,
@@ -3371,6 +3638,7 @@ try {
   if (workflow) report.workflow = workflow;
   if (capturedFrames.length) {
     report.captured_frames = capturedFrames.map((filepath) => relative(process.cwd(), filepath));
+    report.capture_artifacts = captureArtifacts;
     report.capture_contract = {
       mode: cleanDemoCapture ? 'gf_competition_hero' : 'verification',
       frame_count: capturedFrames.length,

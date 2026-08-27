@@ -2,7 +2,7 @@
 
 FlyLab defines eight native site tools through `document.modelContext.registerTool(...)`: one read-only inspector plus seven scientific workflow mutations. This document distinguishes source-level checks, page registration, browser-mediated invocation, and a completed supported-runtime workflow. They are different evidence levels.
 
-No retained report in this repository currently proves that the candidate public URL is reachable or that a supported ChatGPT/Chrome runtime completed the current release candidate. Do not infer those claims from code, a configured URL, or static documentation.
+The repository retains a [local Chrome 151 report](release-evidence/chrome-151-v24.json) from the automated, flag-enabled native WebMCP protocol verifier. It records the source commit/tree, exact browser version, eight registered and invoked tools, the completed GF workflow, negative guards, and evidence audit. It is not a ChatGPT agent transcript and does not prove that the candidate public URL serves that revision. Public-deployment and ChatGPT Sol/Terra claims require separate retained evidence.
 
 ## Evidence levels
 

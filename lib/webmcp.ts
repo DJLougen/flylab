@@ -320,7 +320,7 @@ export const flyLabToolContracts = [
     inputSchema: objectSchema({
       ...mutationContextProperties,
       scope: { type: 'string', enum: ['experiment', 'mission'], description: 'experiment saves the exact selected lineage; mission additionally preserves the goal, discovery decision, alternatives, exclusions, and coverage gaps.' },
-      title: { type: 'string', minLength: 1, maxLength: 120 },
+      title: { type: 'string', minLength: 1, maxLength: 120, description: 'Optional caller-entered administrative title. Omit it to use FlyLab system metadata; it is never scientific evidence.' },
       hypothesis_id: { type: 'string', minLength: 1, maxLength: 100 },
       experiment_id: { type: 'string', minLength: 1, maxLength: 100 },
       batch_ids: { type: 'array', items: { type: 'string', minLength: 1, maxLength: 100 }, minItems: 1, maxItems: 1, uniqueItems: true },
@@ -328,7 +328,7 @@ export const flyLabToolContracts = [
       comparison_id: { type: 'string', minLength: 1, maxLength: 100 },
       note: { type: 'string', maxLength: 500 },
       operation_id: { type: 'string', minLength: 1, maxLength: 120, description: 'Stable caller-generated ID for one logical evidence-save operation. Retry the same operation with the same ID.' },
-    }, [...mutationContextRequired, 'scope', 'title', 'hypothesis_id', 'experiment_id', 'batch_ids', 'analysis_ids', 'comparison_id', 'operation_id']),
+    }, [...mutationContextRequired, 'scope', 'hypothesis_id', 'experiment_id', 'batch_ids', 'analysis_ids', 'comparison_id', 'operation_id']),
   },
 ] as const;
 
@@ -496,9 +496,10 @@ export function validateToolInput(toolName: string, rawInput: unknown): Record<s
       break;
     case 'save_fly_evidence':
       requireMutationContext(input);
-      requireEnum(input, 'scope', ['experiment', 'mission']); requireString(input, 'title', 1, 120); requireString(input, 'hypothesis_id', 1, 100); requireString(input, 'experiment_id', 1, 100);
+      requireEnum(input, 'scope', ['experiment', 'mission']); requireString(input, 'hypothesis_id', 1, 100); requireString(input, 'experiment_id', 1, 100);
       requireStringArray(input, 'batch_ids', 1, 1); requireStringArray(input, 'analysis_ids'); requireString(input, 'comparison_id', 1, 100);
       requireString(input, 'operation_id', 1, 120);
+      if (input.title !== undefined) requireString(input, 'title', 1, 120);
       if (input.note !== undefined) requireString(input, 'note', 0, 500);
       break;
   }

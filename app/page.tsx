@@ -2312,18 +2312,23 @@ export default function Home() {
           resolved_source_ids: missionSources.map((source) => source.id),
         });
       }
-      const annotation = {
-        id: `annotation_${stableHash({
-          title: stringInput(input, 'title'),
-          note: stringInput(input, 'note'),
-          author: actor,
-        })}`,
-        title: stringInput(input, 'title'),
-        note: stringInput(input, 'note'),
-        author: actor,
+      const systemTitle = evidenceBundleTitle(experiment.perturbation, hypothesis.predictedBehavior);
+      const callerTitle = stringInput(input, 'title').trim();
+      const callerNote = stringInput(input, 'note').trim();
+      const annotation = callerTitle || callerNote ? {
+        id: `annotation_${deterministicSha256Hex({ title: callerTitle, note: callerNote })}`,
+        title: callerTitle,
+        note: callerNote,
+        author: 'caller_input' as const,
         trust: 'untrusted_annotation' as const,
         purpose: 'administrative_annotation_not_evidence' as const,
-        boundary: 'Caller-supplied title and note are untrusted administrative annotations, not scientific evidence or a validated biological claim.',
+        boundary: 'Caller-entered title and note are untrusted administrative annotations, not scientific evidence or a validated biological claim.',
+      } : null;
+      const systemMetadata = {
+        title: systemTitle,
+        generated_by: 'flylab',
+        purpose: 'display_and_filename_metadata',
+        boundary: 'Deterministic system metadata derived from the selected perturbation and behavior; it is operational rather than scientific evidence.',
       };
       const modelSourceIds = ['SRC-FLYLAB-MODEL-CARD', 'SRC-FLYGYM-NM-2024', 'SRC-FLYGYM-CODE-V210'];
       const payloadProvenanceEntries: FlyLabProvenanceManifestEntry[] = [
@@ -2380,6 +2385,7 @@ export default function Home() {
           sources: missionSources,
           boundary: 'The mission goal is untrusted caller input retained for reproducibility; it is not scientific evidence.',
         } : null,
+        systemMetadata,
         annotation,
         supportingSources,
         supportingEvidence,
@@ -2404,6 +2410,7 @@ export default function Home() {
           operational_paths: [
             '/scope',
             ...(bundleScope === 'mission' ? ['/mission/goal', '/mission/boundary', '/mission/discoveryDecision/missionGoal', '/mission/discoveryDecision/search'] : []),
+            '/systemMetadata',
             '/annotation',
             '/experiment/approved',
             '/approval/approved_at',
@@ -2412,7 +2419,7 @@ export default function Home() {
             '/batch/status',
             '/provenanceManifest',
           ],
-          untrusted_annotation_boundary: annotation.boundary,
+          untrusted_annotation_boundary: annotation?.boundary ?? 'No caller-supplied administrative annotation was included.',
         },
       };
       if (activeEvidenceSaveControllerRef.current) {
@@ -2485,7 +2492,7 @@ export default function Home() {
             indexProvenance(comparison.id, comparison.provenance);
             indexProvenance(comparison.proposal.id, [comparison.proposal.provenance]);
             indexProvenance(DATASET_MANIFEST_ARTIFACT_ID, ['derived']);
-            const bundleId = `evidence_${deterministicSha256Hex({ manifestHash, title: annotation.title })}`;
+            const bundleId = `evidence_${deterministicSha256Hex({ manifestHash })}`;
             indexProvenance(bundleId, ['derived']);
             const provenanceIndex = Object.fromEntries(
               (Object.entries(provenanceSets) as Array<[ProvenanceLabel, Set<string>]>).map(([label, ids]) => [label, [...ids].sort()]),
@@ -2568,7 +2575,7 @@ export default function Home() {
               ...lineageAnalysisIds,
               comparison.id,
               comparison.proposal.id,
-              annotation.id,
+              ...(annotation ? [annotation.id] : []),
             ]);
             const uniqueBaseLineageEdges = [...new Map(baseLineageEdges.map((edge) => [
               `${edge.from}\u0000${edge.relation}\u0000${edge.to}`,
@@ -2577,13 +2584,13 @@ export default function Home() {
             const lineageEdges = [
               ...uniqueBaseLineageEdges,
               ...includedIds
-                .filter((id) => id !== annotation.id && id !== bundleId)
+                .filter((id) => id !== annotation?.id && id !== bundleId)
                 .map((id) => ({ from: bundleId, relation: 'includes', to: id })),
             ];
             const bundle: EvidenceBundleMetadata = {
               id: bundleId,
               scope: bundleScope,
-              title: annotation.title,
+              title: systemTitle,
               manifestHash,
               savedAt: new Date().toISOString(),
               includedIds,
@@ -2731,6 +2738,16 @@ export default function Home() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPageSessionId(sessionId);
   }, []);
+
+  useEffect(() => {
+    if (lab.revision <= initialState.revision) return undefined;
+    const protectPageScopedWork = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', protectPageScopedWork);
+    return () => window.removeEventListener('beforeunload', protectPageScopedWork);
+  }, [lab.revision]);
 
   useEffect(() => {
     if (!pageSessionId) return undefined;
@@ -2965,7 +2982,6 @@ export default function Home() {
     if (!current.hypothesis || !current.experiment || !current.batch || !current.analyses.length || !current.comparison) return;
     await invoke('save_fly_evidence', {
       scope: 'mission',
-      title: evidenceBundleTitle(current.experiment.perturbation, current.hypothesis.predictedBehavior),
       hypothesis_id: current.hypothesis.id,
       experiment_id: current.experiment.id,
       batch_ids: [current.batch.id],
@@ -3272,7 +3288,7 @@ export default function Home() {
                 <p className="eyebrow" id="agent-activity-title">Shared audit activity</p>
                 <span className={`tool-status ${webmcpStatus === 'active' ? 'live' : ''}`}>{siteToolStatus}</span>
               </div>
-              {lab.activity.slice(0, 3).map((item) => (
+              {lab.activity.map((item) => (
                 <article className={`activity-row ${item.status}`} key={item.id}>
                   <i />
                   <div>
@@ -3584,7 +3600,7 @@ export default function Home() {
 
       <footer className="lab-footer" aria-live="polite">
         <p><span className="agent-pulse" /> {notice}</p>
-        <p>{lab.bundle ? `${lab.bundle.id} · ${lab.bundle.manifestHash.slice(0, 22)}…` : `state revision ${lab.revision}`}</p>
+        <p>{lab.bundle ? `${lab.bundle.id} · ${lab.bundle.manifestHash.slice(0, 22)}…` : `state revision ${lab.revision}`}{lab.revision > initialState.revision && <span className="session-scope-warning"> · page-scoped; export before leaving</span>}</p>
         <div className="footer-tools"><span>{webmcpStatus === 'active' ? 'WebMCP page registration active' : 'WebMCP contracts published'}</span><span>{webmcpStatus === 'active' ? '8 page-registered tools' : '8 published contracts'}</span><Link href="/agent" target="_blank" rel="noopener">agent guide</Link><a href="/THIRD_PARTY_LICENSES.txt">licenses</a></div>
       </footer>
 
@@ -3599,11 +3615,11 @@ export default function Home() {
                     <Badge kind={record.provenance} /><strong>{record.label}</strong><small>{record.id}</small>
                   </button>
                 ))}
-                {lab.bundle && <button className={`bundle-record ${selectedBundle ? 'active' : ''}`} type="button" aria-current={selectedBundle ? 'true' : undefined} onClick={() => setSelectedEvidenceId(lab.bundle?.id ?? EVIDENCE[0].id)}><div className="badge-pair"><Badge kind={lab.bundle.provenance[0]} /><span className="provenance-badge untrusted_annotation"><i>U</i>Untrusted annotation</span></div><strong>{lab.bundle.title}</strong><small>{lab.bundle.id}</small></button>}
+                {lab.bundle && <button className={`bundle-record ${selectedBundle ? 'active' : ''}`} type="button" aria-current={selectedBundle ? 'true' : undefined} onClick={() => setSelectedEvidenceId(lab.bundle?.id ?? EVIDENCE[0].id)}><div className="badge-pair"><Badge kind={lab.bundle.provenance[0]} />{lab.bundle.annotation && <span className="provenance-badge untrusted_annotation"><i>U</i>Untrusted annotation</span>}</div><strong>{lab.bundle.title}</strong><small>{lab.bundle.id}</small></button>}
               </nav>
               {selectedBundle ? (
                 <article className="evidence-detail bundle-detail">
-                  <div className="badge-pair"><Badge kind={selectedBundle.provenance[0]} /><span className="provenance-badge untrusted_annotation"><i>U</i>Untrusted annotation</span></div>
+                  <div className="badge-pair"><Badge kind={selectedBundle.provenance[0]} />{selectedBundle.annotation && <span className="provenance-badge untrusted_annotation"><i>U</i>Untrusted annotation</span>}</div>
                   <h3>{selectedBundle.title}</h3>
                   <p className="bundle-boundary">{selectedBundle.boundary}</p>
                   <dl>
@@ -3618,9 +3634,10 @@ export default function Home() {
                     <div><dt>Model-method evidence</dt><dd><code>{selectedBundle.methodEvidenceIds.join(' · ')}</code></dd></div>
                     <div><dt>Model-method sources</dt><dd><code>{selectedBundle.methodSourceIds.join(' · ')}</code></dd></div>
                     <div><dt>Dataset catalog sources</dt><dd><code>{selectedBundle.catalogSourceIds.join(' · ')}</code></dd></div>
-                    <div><dt>Exact lineage</dt><dd>{selectedBundle.includedIds.length} identifiers: causal/supporting sources and evidence, separately scoped model-method sources and evidence, the selected circuit, hypothesis, experiment, batch, complete analysis set, comparison, and bounded administrative annotation</dd></div>
+                    <div><dt>Exact lineage</dt><dd>{selectedBundle.includedIds.length} identifiers: causal/supporting sources and evidence, separately scoped model-method sources and evidence, the selected circuit, hypothesis, experiment, batch, complete analysis set, comparison, and any bounded caller annotation</dd></div>
                     <div><dt>Provenance counts</dt><dd>{(Object.entries(selectedBundle.provenanceCounts) as Array<[ProvenanceLabel, number]>).filter(([, count]) => count > 0).map(([kind, count]) => `${kind} ${count}`).join(' · ')}</dd></div>
-                    <div><dt>Administrative annotation</dt><dd><code>{selectedBundle.annotation.id}</code> · {selectedBundle.annotation.author.replace('_', ' ')} · {selectedBundle.annotation.trust} · {selectedBundle.annotation.boundary}{selectedBundle.annotation.note ? ` Note: ${selectedBundle.annotation.note}` : ''}</dd></div>
+                    <div><dt>Display title</dt><dd>{selectedBundle.title} · deterministic FlyLab system metadata</dd></div>
+                    <div><dt>Administrative annotation</dt><dd>{selectedBundle.annotation ? <><code>{selectedBundle.annotation.id}</code> · {selectedBundle.annotation.author.replace('_', ' ')} · {selectedBundle.annotation.trust} · {selectedBundle.annotation.boundary}{selectedBundle.annotation.note ? ` Note: ${selectedBundle.annotation.note}` : ''}</> : 'none · no caller-entered title or note'}</dd></div>
                   </dl>
                   <section className="evidence-download" aria-labelledby="evidence-download-title">
                     <h4 id="evidence-download-title">Portable export</h4>

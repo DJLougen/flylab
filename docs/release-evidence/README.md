@@ -1,6 +1,6 @@
 # Local WebMCP release evidence
 
-`chrome-151-v24.json` is the retained report from FlyLab's automated, flag-enabled Chrome WebMCP protocol verifier. It records the exact eight registered and invoked tools, browser version, mutation guards, GF workflow, approval-hash rejection, idempotent run/save replays, stale-operation invalidation, metric audit, and globally source-closed mission bundle.
+`chrome-151-v24.json` is the retained report from FlyLab's automated, flag-enabled Chrome WebMCP protocol verifier. It records the source commit/tree and clean-worktree observation, exact eight registered and invoked tools, browser version, mutation guards, GF workflow, approval-hash rejection, idempotent run/save replays, stale-operation invalidation, metric audit, and globally source-closed mission bundle.
 
 This is reproducible local protocol evidence. It is **not** a ChatGPT agent transcript, identity proof for the person operating the approval control, or proof that the undeployed public URL serves this commit.
 

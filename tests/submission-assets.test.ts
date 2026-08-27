@@ -29,8 +29,45 @@ describe('FlyLab submission assets', () => {
     assert.match(guide, /Exact tool contracts/);
   });
 
+  it('warns before navigation can discard a mutated page session', () => {
+    const page = readFileSync('app/page.tsx', 'utf8');
+
+    assert.match(page, /addEventListener\(['"]beforeunload['"], protectPageScopedWork\)/);
+    assert.match(page, /removeEventListener\(['"]beforeunload['"], protectPageScopedWork\)/);
+    assert.match(page, /page-scoped; export before leaving/);
+  });
+
+  it('keeps the complete shared activity history inspectable', () => {
+    const page = readFileSync('app/page.tsx', 'utf8');
+
+    assert.match(page, /lab\.activity\.map\(\(item\)/);
+    assert.doesNotMatch(page, /lab\.activity\.slice\(0,\s*3\)/);
+  });
+
+  it('binds retained runtime evidence to a Git commit, tree, and clean-worktree observation', () => {
+    const verifier = readFileSync('scripts/verify-live-webmcp.mjs', 'utf8');
+
+    assert.match(verifier, /flylab\.source-revision\.v1/);
+    assert.match(verifier, /git_commit: gitCommit/);
+    assert.match(verifier, /git_tree: gitTree/);
+    assert.match(verifier, /worktree_clean: porcelain === ['"]['"]/);
+    assert.match(verifier, /waitForRegisteredToolInventory/);
+    assert.match(verifier, /Page\.reload/);
+    assert.match(verifier, /Browser\.setDownloadBehavior/);
+    assert.match(verifier, /clipboard_matches_manual_fallback/);
+    assert.match(verifier, /capture_artifacts/);
+  });
+
+  it('serves the generated tool contracts with immediate revalidation', () => {
+    const route = readFileSync('app/flylab-tool-contracts.json/route.ts', 'utf8');
+
+    assert.match(route, /['"]Cache-Control['"]:\s*['"]no-cache['"]/);
+    assert.doesNotMatch(route, /max-age=300/);
+  });
+
   it('requires rights-cleared narration instead of recording a macOS System Voice', () => {
     const builder = readFileSync('scripts/build-demo-video.mjs', 'utf8');
+    const attestation = readFileSync('docs/NARRATION_RIGHTS_ATTESTATION.md', 'utf8');
 
     assert.doesNotMatch(builder, /\/usr\/bin\/say|SAY_BIN|FLYLAB_DEMO_VOICE/);
     assert.match(builder, /FLYLAB_NARRATION_RIGHTS_CONFIRMED/);
@@ -38,6 +75,11 @@ describe('FlyLab submission assets', () => {
     assert.match(builder, /ui_approval/);
     assert.match(builder, /outputs\/demo\/v24/);
     assert.doesNotMatch(builder, /rm\(finalOutputReport/);
+    assert.match(attestation, /not a completed attestation/i);
+    assert.match(attestation, /00\.wav/);
+    assert.match(attestation, /14\.wav/);
+    assert.match(attestation, /\[complete before release\]/i);
+    assert.doesNotMatch(attestation, /commercial-publication permission verified:\s*\*\*yes\*\*/i);
   });
 
   it('fails the direct video build closed until the interface is explicitly approved', () => {
@@ -91,7 +133,7 @@ describe('FlyLab submission assets', () => {
         export: { format: string; source_closed: boolean };
       };
       segment_count: number;
-      segments: Array<{ audio_file: string; frame: string; narration: string }>;
+      segments: Array<{ audio_file: string; frame: string; narration: string; word_count: number }>;
     };
 
     assert.equal(plan.schema_version, 'flylab.demo-narration-plan.v2');
@@ -121,6 +163,8 @@ describe('FlyLab submission assets', () => {
     assert.deepEqual(plan.segments.map((segment) => segment.audio_file),
       Array.from({ length: 15 }, (_, index) => `${String(index).padStart(2, '0')}.wav`));
     const narration = plan.segments.map((segment) => segment.narration).join(' ');
+    const wordCount = plan.segments.reduce((total, segment) => total + segment.word_count, 0);
+    assert.ok(wordCount >= 320 && wordCount <= 350, `expected 320-350 narration words, received ${wordCount}`);
     assert.match(narration, /eight native FlyLab WebMCP tools/i);
     assert.match(narration, /giant-fiber pathway/i);
     assert.match(narration, /MDN as a rejected alternative/i);

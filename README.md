@@ -7,7 +7,7 @@ FlyLab is a WebMCP-enabled virtual neuroethology lab for investigating how an ad
 
 The competition story leads with the adult Giant Fiber/DNp01 rapid-escape slice: a literature-supported, bilateral short-mode controller with middle-leg jump and wing-depressor output. FlyLab also includes an adult MDN reverse-walking slice. Both use the deterministic **FlyLab mapped-motor model** `0.2.0` and `mapped-circuit-to-body-adapter.v1`; neither executes a connectome, synapses, muscles, aerodynamics, FlyGym, neural dynamics, or a complete fly.
 
-This repository contains a release candidate and verification tooling. It does not, by itself, prove that a public deployment is reachable or that a particular supported client completed the workflow. Record those claims only after a fresh run produces retained evidence.
+This repository contains a release candidate and verification tooling. A tracked [local Chrome 151 WebMCP report](docs/release-evidence/chrome-151-v24.json) records a complete automated native-protocol run for the source revision named inside that report. It is not a ChatGPT agent transcript and does not prove that the public deployment serves this revision. Public and ChatGPT Sol/Terra claims still require fresh retained evidence.
 
 ## Competition prompt
 

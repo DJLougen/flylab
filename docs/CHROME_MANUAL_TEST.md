@@ -2,7 +2,7 @@
 
 This is the direct Chrome protocol path for judges who want to inspect every request and response without a conversational agent. It uses Chrome's WebMCP debugging panel to call the same eight page-registered tools. It is a supported WebMCP execution surface, not a DOM or manifest fallback.
 
-No successful supported-runtime run is asserted by this document. Record one only after the inventory, invocations, state transitions, and final report have been observed in the current build.
+A [tracked automated Chrome 151 report](release-evidence/chrome-151-v24.json) records one successful local native-protocol run for the source revision named inside it. This manual sequence lets judges reproduce and inspect the calls themselves. The automated report is not a ChatGPT agent transcript, an identified-human approval record, or proof of the public deployment.
 
 ## Setup
 
@@ -218,13 +218,11 @@ Call `save_fly_evidence`:
   "page_session_id": "SESSION_ID",
   "expected_state_revision": "REVISION",
   "scope": "mission",
-  "title": "Adult giant-fiber rapid-escape competition run",
   "hypothesis_id": "HYPOTHESIS_ID",
   "experiment_id": "EXPERIMENT_ID",
   "batch_ids": ["BATCH_ID"],
   "analysis_ids": ["ANALYSIS_ID"],
   "comparison_id": "COMPARISON_ID",
-  "note": "Chrome 149+ native WebMCP protocol inspection with a visible person-owned approval boundary.",
   "operation_id": "judge-gf-save-91827"
 }
 ```
@@ -234,6 +232,7 @@ Confirm:
 - `data.bundle.scope` is `mission`;
 - `data.evidence_export.schemaVersion` is `3`;
 - `data.evidence_export.payload.format` is `flylab.mission-evidence-bundle.v3`;
+- the display title is deterministic system metadata and `payload.annotation` is `null` because no person entered an administrative title or note;
 - the mission section preserves the untrusted goal, discovery decision, all considered candidates, rejected alternatives, evidence/source context, and coverage boundary;
 - the selected lineage contains the exact approval, batch, formal analysis, comparison, and non-authorized proposal;
 - the bundle and integrity manifest hashes match the serialized payload checksum;

@@ -10,7 +10,7 @@ export interface EvidenceBundleAnnotation {
   id: string;
   title: string;
   note: string;
-  author: 'webmcp_agent' | 'human_ui' | 'guided_example';
+  author: 'caller_input';
   trust: 'untrusted_annotation';
   purpose: 'administrative_annotation_not_evidence';
   boundary: string;
@@ -39,7 +39,7 @@ export interface EvidenceBundleMetadata {
   }>;
   boundary: string;
   provenance: ['derived'];
-  annotation: EvidenceBundleAnnotation;
+  annotation: EvidenceBundleAnnotation | null;
 }
 
 export interface EvidenceExportEnvelope<TPayload extends Record<string, unknown> = Record<string, unknown>> {

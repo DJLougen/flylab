@@ -2,9 +2,9 @@
 
 ## Status and release gate
 
-The final v24 competition video has not been generated, uploaded, or verified. The candidate app URL and supported-runtime path also require a fresh recorded check. Do not describe either as public/working solely because a URL or capture script exists.
+The final v24 competition video has not been generated, uploaded, or verified. A tracked [local Chrome 151 native-protocol report](release-evidence/chrome-151-v24.json) and the complete 15-frame capture exist for the source revision named inside the report. They are automated local evidence, not a ChatGPT agent transcript or proof that the candidate public URL serves v24. The deployed URL and final uploaded video still require fresh recorded checks.
 
-The video builder requires explicit interface approval, all planned frames, rights-cleared narration, and a duration below three minutes. Its preflight checks file presence and media requirements; a human must also confirm that every frame actually shows the v3 GF-first story below.
+The video builder requires explicit interface approval, all planned frames, rights-cleared narration, and a duration below three minutes. Its preflight checks file presence and media requirements; a human must also confirm that every frame actually shows the v3 GF-first story below. Complete [NARRATION_RIGHTS_ATTESTATION.md](NARRATION_RIGHTS_ATTESTATION.md) before enabling the narration-rights gate.
 
 ## Story in one sentence
 

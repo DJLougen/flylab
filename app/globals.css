@@ -1887,6 +1887,7 @@ dd {
 }
 
 .lab-footer p:nth-child(2) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.lab-footer .session-scope-warning { color: var(--gold); }
 .footer-tools { display: flex; gap: 6px; }
 .footer-tools span,
 .footer-tools a { padding: 3px 6px; border: 1px solid var(--line); border-radius: 999px; }
@@ -2423,6 +2424,8 @@ body {
   margin: 0;
   padding: 10px 0 12px;
   border-top: 0;
+  max-height: 420px;
+  overflow-y: auto;
 }
 
 .tool-status,
