@@ -1,12 +1,12 @@
 {
   "ok": true,
-  "verified_at": "2026-08-27T13:37:32.025Z",
+  "verified_at": "2026-08-27T14:02:30.712Z",
   "url": "https://flylab-neuroethology.d-lougen.chatgpt.site/",
   "source_revision": {
     "schema_version": "flylab.source-revision.v1",
     "git_available": true,
-    "git_commit": "e97efbfdac2ff306b74773db8347963bdcb5b4c3",
-    "git_tree": "fed81f97da279796ac043e2065f839e49b678434",
+    "git_commit": "6b86d832580b463095234c90b09a3a056a019906",
+    "git_tree": "4b2b3d67838f08a0fca8dc10715d961bce36ebe2",
     "worktree_clean": true,
     "worktree_change_count": 0
   },
@@ -80,9 +80,9 @@
   "invocation_status": "Completed",
   "reload_before_experiment_audit": {
     "performed": true,
-    "before_page_session_id": "session_5143349b1927486a",
+    "before_page_session_id": "session_74c2d6917ad94b51",
     "before_state_revision": 1,
-    "after_page_session_id": "session_86fbdbe504b6425c",
+    "after_page_session_id": "session_09145575d29a4259",
     "after_state_revision": 1,
     "after_stage": "discover",
     "registered_tools_after_reload": 8,
@@ -90,7 +90,7 @@
   },
   "agent_transport": {
     "status": "active",
-    "page_session_id": "session_86fbdbe504b6425c",
+    "page_session_id": "session_09145575d29a4259",
     "registered_tool_count": 8,
     "workflow_next_tool": "find_fly_circuits",
     "invocable_next_tool_before_first_call": null,
@@ -119,7 +119,7 @@
   "origin_agent_cluster": true,
   "browser_user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36",
   "mutation_context_guards": {
-    "page_session_id": "session_86fbdbe504b6425c",
+    "page_session_id": "session_09145575d29a4259",
     "preserved_state_revision": 1,
     "wrong_session_error": "STALE_STATE",
     "stale_revision_error": "STALE_STATE",
@@ -163,7 +163,7 @@
     "evidence_export_audit": {
       "schema": "flylab.evidence-export",
       "schema_version": 3,
-      "manifest_hash": "sha256:46ac5f7543052f588daca8cff9278d7bd090e11fb2b886f1768a3e24cf537906",
+      "manifest_hash": "sha256:1acb62aa2c119ca0ed75edc30df1cf19c83f0cc1af6c816e1c40bbfae1a1ff47",
       "evidence_records": 9,
       "source_records": 14,
       "manifest_source_records": 14,
@@ -200,12 +200,12 @@
     },
     "browser_export_audit": {
       "browser_observable_download": true,
-      "filename": "evidence_0ec5b1c6114bf915443f4e88bfda1439242b6e6b43e4023a09b511571ef81cee.flylab-evidence.json",
+      "filename": "evidence_1f91b9f6a05b0f396314cc7fd7a4b0388626b7421a3d248430e1bb2793320f92.flylab-evidence.json",
       "bytes": 1512562,
-      "sha256": "sha256:2c84f51dfbfc1dbe56f4d1c6e5ba8d449c50e8fe99824eb976a2c23c8fcee6e0",
+      "sha256": "sha256:9f39a45de18c27d7575bc0947f88de01d51a97c9eb9afc4550f33c8c8f36ddb2",
       "downloaded_envelope_exact": true,
       "clipboard_matches_manual_fallback": true,
-      "manual_fallback_sha256": "sha256:2c84f51dfbfc1dbe56f4d1c6e5ba8d449c50e8fe99824eb976a2c23c8fcee6e0"
+      "manual_fallback_sha256": "sha256:9f39a45de18c27d7575bc0947f88de01d51a97c9eb9afc4550f33c8c8f36ddb2"
     },
     "metric_definition_audit": {
       "method_version": "flylab.behavior-metrics.v4",
@@ -226,7 +226,7 @@
     "approval": {
       "protocol_hash": "sha256:665acfc6c8b6835e668c0abcaa2b23a36a7e06898ea6596d30c9946bf72aff3d",
       "seed_manifest_hash": "sha256:17699f63b761b9d4b3f7c790b277c03d0433b188f8b88ff9d2d3a5061ede7170",
-      "approved_at": "2026-08-27T13:37:25.104Z",
+      "approved_at": "2026-08-27T14:02:23.559Z",
       "wrong_hash_guard": {
         "error": "EVIDENCE_MISMATCH",
         "expected_protocol_hash": "sha256:665acfc6c8b6835e668c0abcaa2b23a36a7e06898ea6596d30c9946bf72aff3d",
@@ -290,9 +290,9 @@
         "save_fly_evidence"
       ],
       "final_stage": "saved",
-      "stable_bundle_id": "evidence_0ec5b1c6114bf915443f4e88bfda1439242b6e6b43e4023a09b511571ef81cee",
-      "stable_manifest_hash": "sha256:46ac5f7543052f588daca8cff9278d7bd090e11fb2b886f1768a3e24cf537906",
-      "stable_saved_at": "2026-08-27T13:37:27.734Z",
+      "stable_bundle_id": "evidence_1f91b9f6a05b0f396314cc7fd7a4b0388626b7421a3d248430e1bb2793320f92",
+      "stable_manifest_hash": "sha256:1acb62aa2c119ca0ed75edc30df1cf19c83f0cc1af6c816e1c40bbfae1a1ff47",
+      "stable_saved_at": "2026-08-27T14:02:26.187Z",
       "replay_created_artifacts": 0,
       "operation_replays": {
         "run_fly_simulation": {
@@ -318,8 +318,8 @@
     "batch_id": "batch_d8e6870bfcbf6ef547cfe2838783cd03442d94f4328d94a0f0b66fab65937904",
     "analysis_id": "analysis_ebfaa7f7d9a3c2e5d72e1b25e70a16c60a2e6b48021f5c09f0641e9964bd5819",
     "comparison_id": "comparison_a359952b2755376c0fb2326d0f971623e6bba3851558fbcab19dd5a1441bf6e6",
-    "evidence_bundle_id": "evidence_0ec5b1c6114bf915443f4e88bfda1439242b6e6b43e4023a09b511571ef81cee",
-    "manifest_hash": "sha256:46ac5f7543052f588daca8cff9278d7bd090e11fb2b886f1768a3e24cf537906",
+    "evidence_bundle_id": "evidence_1f91b9f6a05b0f396314cc7fd7a4b0388626b7421a3d248430e1bb2793320f92",
+    "manifest_hash": "sha256:1acb62aa2c119ca0ed75edc30df1cf19c83f0cc1af6c816e1c40bbfae1a1ff47",
     "follow_up_execution_authorized": false,
     "protocol_edit_invalidation_verified": {
       "ui_cleared": true,
@@ -368,7 +368,7 @@
       "experiment_id": "exp_0698ed95f27700bf2537ecf43a4b48e09687b4612170323d7ac8e2ff9fa0d4f5",
       "batch_id": "batch_75335b76179170db9d472106ec9a6e35b3bc0092587b19378e5486320c6e7275",
       "analysis_id": "analysis_f6903c9fc0a5df89d8ac9ea865e3291f7f067015eb2324f9177359dbb84974c6",
-      "evidence_bundle_id": "evidence_1eb51d6080eaa5d074d98a578f2adf32698820bcf000db9a6f5b4e49adf41b87",
+      "evidence_bundle_id": "evidence_386c0512c5ed9332681392c9fd6570f9c1852821d3cf3dc4ffeb7c39e80f145a",
       "filter_to_inspector_parity": true,
       "motor_map_source_closure": true,
       "hero_candidate_count": 2,
@@ -388,7 +388,7 @@
       "evidence_export_audit": {
         "schema": "flylab.evidence-export",
         "schema_version": 3,
-        "manifest_hash": "sha256:e5783f1c59a503be71ec874de6d654a8a24826680d212221b75700c7b285ab24",
+        "manifest_hash": "sha256:d6bbbf5f2d69239eb5c10286d4b3ca77227658ba3dce0164ce93b56bf188b5fc",
         "evidence_records": 4,
         "source_records": 13,
         "manifest_source_records": 17,
@@ -423,12 +423,12 @@
       },
       "browser_export_audit": {
         "browser_observable_download": true,
-        "filename": "evidence_1eb51d6080eaa5d074d98a578f2adf32698820bcf000db9a6f5b4e49adf41b87.flylab-evidence.json",
+        "filename": "evidence_386c0512c5ed9332681392c9fd6570f9c1852821d3cf3dc4ffeb7c39e80f145a.flylab-evidence.json",
         "bytes": 1434076,
-        "sha256": "sha256:02121ccf36ab5c839a254a26caf4b3952a368879f6ca9991a66f74a0d498d722",
+        "sha256": "sha256:ba9a2f237b087e920da480d80d0aae31f650bc9a09911240be272f8a56f15af8",
         "downloaded_envelope_exact": true,
         "clipboard_matches_manual_fallback": true,
-        "manual_fallback_sha256": "sha256:02121ccf36ab5c839a254a26caf4b3952a368879f6ca9991a66f74a0d498d722"
+        "manual_fallback_sha256": "sha256:ba9a2f237b087e920da480d80d0aae31f650bc9a09911240be272f8a56f15af8"
       },
       "approval_hash_guard": {
         "error": "EVIDENCE_MISMATCH",
@@ -451,9 +451,9 @@
           "save_fly_evidence"
         ],
         "final_stage": "saved",
-        "stable_bundle_id": "evidence_1eb51d6080eaa5d074d98a578f2adf32698820bcf000db9a6f5b4e49adf41b87",
-        "stable_manifest_hash": "sha256:e5783f1c59a503be71ec874de6d654a8a24826680d212221b75700c7b285ab24",
-        "stable_saved_at": "2026-08-27T13:37:31.069Z",
+        "stable_bundle_id": "evidence_386c0512c5ed9332681392c9fd6570f9c1852821d3cf3dc4ffeb7c39e80f145a",
+        "stable_manifest_hash": "sha256:d6bbbf5f2d69239eb5c10286d4b3ca77227658ba3dce0164ce93b56bf188b5fc",
+        "stable_saved_at": "2026-08-27T14:02:29.598Z",
         "replay_created_artifacts": 0,
         "operation_replays": {
           "run_fly_simulation": {

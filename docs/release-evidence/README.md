@@ -4,7 +4,7 @@
 
 The same report hashes both served v3 contract artifacts and all 15 exact demo frames. Its browser-export audit clicks the download and copy controls, verifies the exact filename and downloaded JSON envelope, and confirms that the clipboard and visible manual fallback serialize the same bytes. Those checks bind the evidence to observable release behavior rather than an expected-only inventory.
 
-`public-chrome-151-v24.json` repeats the full verifier against `https://flylab-neuroethology.d-lougen.chatgpt.site/`. It records an anonymous HTTPS target, both served v3 artifacts, eight registered and invoked tools, a fresh page session after reload, exact browser download/copy parity for the MDN and GF workflows, and source revision `e97efbfdac2ff306b74773db8347963bdcb5b4c3`, which was the deployed Sites version 26 source.
+`public-chrome-151-v24.json` repeats the full verifier against `https://flylab-neuroethology.d-lougen.chatgpt.site/`. It records an anonymous HTTPS target, both served v3 artifacts, eight registered and invoked tools, a fresh page session after reload, exact browser download/copy parity for the MDN and GF workflows, and source revision `6b86d832580b463095234c90b09a3a056a019906`, which was the deployed Sites version 27 source.
 
 These are reproducible automated protocol captures. They are **not** ChatGPT agent transcripts or identity proof for the person operating the approval control.
 
